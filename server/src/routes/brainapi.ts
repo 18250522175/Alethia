@@ -177,4 +177,172 @@ app.get('/api/conversations/:id', async (c) => {
   }
 });
 
+// Task 7.6: 提交反馈
+app.post('/api/feedback', async (c) => {
+  try {
+    const body = await c.req.json().catch(() => ({}));
+    const { conversationId, messageId, feedback, note } = body;
+
+    if (!conversationId || !messageId || !feedback) {
+      return c.json({
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: '缺少必要参数'
+        }
+      }, 400);
+    }
+
+    if (feedback !== 'helpful' && feedback !== 'wrong') {
+      return c.json({
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'feedback 取值必须为 helpful 或 wrong'
+        }
+      }, 400);
+    }
+
+    const result = await brainAPI.submitFeedback({ conversationId, messageId, feedback, note });
+    return c.json(result);
+  } catch (err) {
+    loggerInstance.error({ err }, '提交反馈失败');
+    return c.json({
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: getErrorMessage('INTERNAL_ERROR')
+      }
+    }, 500);
+  }
+});
+
+// Task 7.6: 列出观察到的文件
+app.get('/api/observed-files', async (c) => {
+  try {
+    const result = await brainAPI.listObservedFiles();
+    return c.json(result);
+  } catch (err) {
+    loggerInstance.error({ err }, '获取观察文件列表失败');
+    return c.json({
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: getErrorMessage('INTERNAL_ERROR')
+      }
+    }, 500);
+  }
+});
+
+// Task 7.6: 触发观察文件的事实抽取
+app.post('/api/observed-files/:hash/extract', async (c) => {
+  try {
+    const fileHash = c.req.param('hash');
+    if (!fileHash) {
+      return c.json({
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: '文件 hash 不能为空'
+        }
+      }, 400);
+    }
+    const result = await brainAPI.triggerObservedExtraction(fileHash);
+    return c.json(result);
+  } catch (err) {
+    loggerInstance.error({ err }, '触发事实抽取失败');
+    return c.json({
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: getErrorMessage('INTERNAL_ERROR')
+      }
+    }, 500);
+  }
+});
+
+// Task 7.7: 翻译证据片段
+app.post('/api/translate-evidence', async (c) => {
+  try {
+    const body = await c.req.json().catch(() => ({}));
+    const { spanIds, targetLang } = body;
+
+    if (!spanIds || !Array.isArray(spanIds) || spanIds.length === 0) {
+      return c.json({
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'spanIds 不能为空'
+        }
+      }, 400);
+    }
+
+    const result = await brainAPI.translateEvidence(spanIds, targetLang);
+    return c.json({ items: result, total: result.length });
+  } catch (err) {
+    loggerInstance.error({ err }, '翻译证据失败');
+    return c.json({
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: getErrorMessage('INTERNAL_ERROR')
+      }
+    }, 500);
+  }
+});
+
+// Task 7.8: 归档知识版本
+app.post('/api/archive-versions', async (c) => {
+  try {
+    const body = await c.req.json().catch(() => ({}));
+    const { slug } = body;
+    const result = await brainAPI.archiveVersions(slug);
+    return c.json(result);
+  } catch (err) {
+    loggerInstance.error({ err }, '归档版本失败');
+    return c.json({
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: getErrorMessage('INTERNAL_ERROR')
+      }
+    }, 500);
+  }
+});
+
+// Task 7.8: 清理幽灵关系
+app.post('/api/clean-ghost-relations', async (c) => {
+  try {
+    const result = await brainAPI.cleanGhostRelations();
+    return c.json(result);
+  } catch (err) {
+    loggerInstance.error({ err }, '清理幽灵关系失败');
+    return c.json({
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: getErrorMessage('INTERNAL_ERROR')
+      }
+    }, 500);
+  }
+});
+
+// Task 7.10: 生成 wiki 页面草稿
+app.post('/api/generate-draft', async (c) => {
+  try {
+    const body = await c.req.json().catch(() => ({}));
+    const { title, type, contexts, sources } = body;
+
+    if (!title || typeof title !== 'string') {
+      return c.json({
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: '标题不能为空'
+        }
+      }, 400);
+    }
+
+    const result = await brainAPI.generateDraft({ title, type, contexts, sources });
+    return c.json(result);
+  } catch (err) {
+    loggerInstance.error({ err }, '生成草稿失败');
+    return c.json({
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: getErrorMessage('INTERNAL_ERROR')
+      }
+    }, 500);
+  }
+});
+
 export default app;

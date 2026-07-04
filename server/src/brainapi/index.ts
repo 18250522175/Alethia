@@ -5,6 +5,9 @@ import { retrieve } from '../agents/retriever';
 import { grade } from '../agents/grader';
 import { generate } from '../agents/generator';
 import { reflector } from '../agents/reflector';
+import { submitFeedback as submitFeedbackAgent } from '../agents/feedback';
+import { extractFacts } from '../agents/observe';
+import { translateEvidence as translateEvidenceAgent } from '../agents/translate';
 import { getPool } from '../db/pool';
 import { llmRouter } from '../llm/router';
 import { loadEnv } from '../config/loader';
@@ -361,6 +364,169 @@ class BrainAPI {
       restoredFiles: [],
       rebuildTriggered: false
     };
+  }
+
+  // Task 7.6: 提交反馈
+  async submitFeedback(params: {
+    conversationId: string;
+    messageId: string;
+    feedback: 'helpful' | 'wrong';
+    note?: string;
+  }): Promise<{ success: boolean }> {
+    try {
+      await submitFeedbackAgent(params);
+      return { success: true };
+    } catch (err) {
+      logger.error({ err }, '提交反馈失败');
+      return { success: false };
+    }
+  }
+
+  // Task 7.6: 列出观察到的文件
+  async listObservedFiles(): Promise<{ items: any[]; total: number }> {
+    try {
+      const pool = getPool();
+      const result = await pool.query(
+        `SELECT o.file_hash, o.reference_count, o.first_referenced_at, o.last_referenced_at,
+                lf.mime, lf.original_name, lf.size, lf.status
+         FROM observed_files o
+         LEFT JOIN library_files lf ON o.file_hash = lf.hash
+         ORDER BY o.reference_count DESC`
+      );
+      return { items: result.rows, total: result.rows.length };
+    } catch (err) {
+      logger.error({ err }, '查询观察文件列表失败');
+      return { items: [], total: 0 };
+    }
+  }
+
+  // Task 7.6: 触发观察文件的事实抽取
+  async triggerObservedExtraction(fileHash: string): Promise<{ diffsCreated: number }> {
+    const result = await extractFacts(fileHash);
+    return result;
+  }
+
+  // Task 7.7: 翻译证据片段
+  async translateEvidence(spanIds: string[], targetLang?: string): Promise<any[]> {
+    const translations = await translateEvidenceAgent(spanIds, targetLang);
+    return translations;
+  }
+
+  // Task 7.8: 归档活跃版本超过 50 条的 slug 最早 N-20 条记录
+  async archiveVersions(entitySlug?: string): Promise<{ archived: number }> {
+    const pool = getPool();
+    let archivedCount = 0;
+
+    try {
+      const query = entitySlug
+        ? `SELECT slug, COUNT(*) as cnt FROM knowledge_versions
+           WHERE slug = $1 AND archived = false
+           GROUP BY slug HAVING COUNT(*) > 50`
+        : `SELECT slug, COUNT(*) as cnt FROM knowledge_versions
+           WHERE archived = false
+           GROUP BY slug HAVING COUNT(*) > 50`;
+
+      const result = await pool.query(query, entitySlug ? [entitySlug] : []);
+
+      for (const row of result.rows) {
+        const count = parseInt(row.cnt, 10);
+        const limit = Math.max(count - 20, 0);
+        if (limit <= 0) continue;
+
+        const toArchive = await pool.query(
+          `UPDATE knowledge_versions SET archived = true
+           WHERE id IN (
+             SELECT id FROM knowledge_versions
+             WHERE slug = $1 AND archived = false
+             ORDER BY ts ASC LIMIT $2
+           )
+           RETURNING id`,
+          [row.slug, limit]
+        );
+        archivedCount += toArchive.rowCount || 0;
+      }
+
+      logger.info({ archivedCount }, '版本归档完成');
+      return { archived: archivedCount };
+    } catch (err) {
+      logger.error({ err }, '版本归档失败');
+      return { archived: 0 };
+    }
+  }
+
+  // Task 7.8: 清理已解决的幽灵关系或超期的 pending 关系
+  async cleanGhostRelations(): Promise<{ cleaned: number }> {
+    const pool = getPool();
+    try {
+      const result = await pool.query(
+        `DELETE FROM ghost_relations
+         WHERE status = 'resolved'
+            OR (status = 'pending' AND discovered_at < NOW() - INTERVAL '30 days')`
+      );
+      const cleaned = result.rowCount || 0;
+      logger.info({ cleaned }, '幽灵关系清理完成');
+      return { cleaned };
+    } catch (err) {
+      logger.error({ err }, '幽灵关系清理失败');
+      return { cleaned: 0 };
+    }
+  }
+
+  // Task 7.10: 生成 wiki 页面草稿
+  async generateDraft(params: {
+    title: string;
+    type?: string;
+    contexts?: string[];
+    sources?: string[];
+  }): Promise<{ slug: string; content: string }> {
+    const slug = params.title
+      .toLowerCase()
+      .replace(/[^\w\u4e00-\u9fa5]+/g, '-')
+      .replace(/^-|-$/g, '');
+    const type = params.type || 'concept';
+    const contexts = params.contexts || [];
+    const sources = params.sources || [];
+    const today = new Date().toISOString().split('T')[0];
+
+    const relationsBlock = sources.length
+      ? sources.map((s) => `- [[${s}]] 相关`).join('\n')
+      : '（无）';
+
+    const content = `---
+title: ${params.title}
+type: ${type}
+contexts: [${contexts.join(', ')}]
+---
+
+# ${params.title}
+
+## State
+（待填写：当前状态描述）
+
+## Assessment
+（待填写：评估信息）
+
+## Open Threads
+- [ ] 需要补充核心定义
+- [ ] 需要建立关联关系
+
+## Relations
+${relationsBlock}
+
+## Timeline
+- ${today} 创建草稿
+
+## Version History
+- v1 ${today} 初始创建
+
+## Evidence
+（无证据）
+
+## Semantic Rings Archive
+（无）
+`;
+
+    return { slug, content };
   }
 
   async getConversation(conversationId: string): Promise<any[]> {

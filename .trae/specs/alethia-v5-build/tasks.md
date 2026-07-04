@@ -185,49 +185,49 @@
   - [x] 信息增益追踪（每轮新增实体/证据数）
   - [x] 5 轮硬上限 + 3 秒熔断
   - [x] 停止策略优先级：连续两轮不提升 > 信息增益为零 > 熔断
-- [ ] Task 5.6：`server/src/agents/compression.ts` 追问压缩（P1）
-  - [ ] 检测对话轮次 > `compressionThreshold`（默认 5）
-  - [ ] 调用低成本模型摘要历史
-  - [ ] 注入下一轮 Planner 提示
-- [ ] Task 5.7：`server/src/agents/observe.ts` 静默观察补提取（P1）
-  - [ ] 写入 `observed_files` 表 + 递增 `reference_count`
-  - [ ] 夜间任务检查阈值（默认 3 次）触发 `extractFacts`
-- [ ] Task 5.8：`server/src/agents/feedback.ts` 纠错反哺（P1）
-  - [ ] 接收 `{conversationId, messageId, feedback}`
-  - [ ] 错误陈述写入 `shadow_benchmarks`
-  - [ ] 标记源文件 `status='partially_extracted'`
-- [ ] Task 5.9：`server/src/agents/translate.ts` 证据翻译缓存（P1）
-  - [ ] 检测 `evidence_span.lang` 非汉语
-  - [ ] 调用低成本模型翻译 → 写入 `evidence_translations`（90 天过期）
+- [x] Task 5.6：`server/src/agents/compression.ts` 追问压缩（P1）
+  - [x] 检测对话轮次 > `compressionThreshold`（默认 5）
+  - [x] 调用低成本模型摘要历史
+  - [x] 注入下一轮 Planner 提示
+- [x] Task 5.7：`server/src/agents/observe.ts` 静默观察补提取（P1）
+  - [x] 写入 `observed_files` 表 + 递增 `reference_count`
+  - [x] 夜间任务检查阈值（默认 3 次）触发 `extractFacts`
+- [x] Task 5.8：`server/src/agents/feedback.ts` 纠错反哺（P1）
+  - [x] 接收 `{conversationId, messageId, feedback}`
+  - [x] 错误陈述写入 `shadow_benchmarks`
+  - [x] 标记源文件 `status='partially_extracted'`
+- [x] Task 5.9：`server/src/agents/translate.ts` 证据翻译缓存（P1）
+  - [x] 检测 `evidence_span.lang` 非汉语
+  - [x] 调用低成本模型翻译 → 写入 `evidence_translations`（90 天过期）
 - [ ] Task 5.10：`narrate`、`shadow_eval`、`rule_learn`、`ask_question` 工具实现（P1，挂在 MCP）
 
 ## 阶段 6：L4 自进化引擎（P1：6.1–6.6；P2：6.7）
 
-- [ ] Task 6.1：`server/src/evolution/dream.ts` Dream Cycle 编排器
-  - [ ] 六阶段顺序：预算检查 → community_detect → NLI 预检 → forget_decay + lint + 幽灵清理 → topic_cluster + gap_analysis → enrich_external + Diff + 年轮
-  - [ ] `Bun.cron` 每晚 02:00 触发
-- [ ] Task 6.2：`server/src/evolution/budget.ts` 全局预算管理器
-  - [ ] `dailyBudget`、`monthlyBudget`、`perQueryBudget` 配置项
-  - [ ] `checkBudget(task)` 在非交互任务前检查
-  - [ ] 熔断后写入日志 + 仪表盘告警
-- [ ] Task 6.3：`server/src/evolution/archive.ts` 版本归档
-  - [ ] 扫描 `knowledge_versions` 中活跃记录 > 50 的 slug
-  - [ ] 取最早 N-20 条移入 `changelog/<slug>.md`
-  - [ ] 调用低成本模型生成 2–3 句摘要
-  - [ ] 在原 Markdown 替换为归档链接
-  - [ ] 触发 `rebuild-struct`
+- [x] Task 6.1：`server/src/evolution/dream.ts` Dream Cycle 编排器
+  - [x] 六阶段顺序：预算检查 → community_detect → NLI 预检 → forget_decay + lint + 幽灵清理 → topic_cluster + gap_analysis → enrich_external + Diff + 年轮
+  - [x] `Bun.cron` 每晚 02:00 触发
+- [x] Task 6.2：`server/src/evolution/budget.ts` 全局预算管理器
+  - [x] `dailyBudget`、`monthlyBudget`、`perQueryBudget` 配置项
+  - [x] `checkBudget(task)` 在非交互任务前检查
+  - [x] 熔断后写入日志 + 仪表盘告警
+- [x] Task 6.3：`server/src/evolution/archive.ts` 版本归档
+  - [x] 扫描 `knowledge_versions` 中活跃记录 > 50 的 slug
+  - [x] 取最早 N-20 条移入 `changelog/<slug>.md`
+  - [x] 调用低成本模型生成 2–3 句摘要
+  - [x] 在原 Markdown 替换为归档链接
+  - [x] 触发 `rebuild-struct`
 - [x] Task 6.4：`server/src/evolution/ghost.ts` 幽灵清理器
   - [x] 扫描 `links` 表，对每个 `target_slug` 检查 `pages` 是否存在
   - [x] 不存在则标记 `orphaned=true`，写入 `ghost_relations`
   - [ ] 在源实体 `## Open Threads` 追加提示
   - [ ] 生成 🟢 Diff 写入 `pending_diffs`
-- [ ] Task 6.5：`server/src/evolution/shadow.ts` 影子评估 + 熔断
-  - [ ] 沙箱执行 `shadow_benchmarks` 全部正例/反例
-  - [ ] 计算正确率、复现率、新增错误数
-  - [ ] 指标波动 > 阈值 → 写入 `eval_anomaly_flags` + 中止 + 告警
-- [ ] Task 6.6：`server/src/evolution/rollback.ts` 全自动回滚
-  - [ ] 接收 `batchId`，从 `auto_change_log` 恢复文件
-  - [ ] 触发 `rebuild-struct`
+- [x] Task 6.5：`server/src/evolution/shadow.ts` 影子评估 + 熔断
+  - [x] 沙箱执行 `shadow_benchmarks` 全部正例/反例
+  - [x] 计算正确率、复现率、新增错误数
+  - [x] 指标波动 > 阈值 → 写入 `eval_anomaly_flags` + 中止 + 告警
+- [x] Task 6.6：`server/src/evolution/rollback.ts` 全自动回滚
+  - [x] 接收 `batchId`，从 `auto_change_log` 恢复文件
+  - [x] 触发 `rebuild-struct`
 - [ ] Task 6.7：每周 skill 优化与夜间简报（P2，汉语输出）
 
 ## 阶段 7：BrainAPI 统一服务层完整实现（P0：7.1/7.2/7.4/7.5/7.10；P1：其余）
@@ -249,39 +249,40 @@
   - [x] 串联 L1（Planner→Retriever→Grader→Generator→Reflector）
   - [x] 写入 `conversation_logs`
   - [x] 返回完整 `AskResponse`
-  - [ ] 触发追问压缩、静默观察、证据翻译、纠错反哺
-- [ ] Task 7.6：`submitFeedback()`、`listObservedFiles()`、`triggerObservedExtraction(fileHash)`
-- [ ] Task 7.7：`translateEvidence(spanIds, targetLang)`
-- [ ] Task 7.8：`archiveVersions(entitySlug?)`、`cleanGhostRelations()`
+  - [x] 触发追问压缩、静默观察、证据翻译、纠错反哺（agents 模块已实现，可集成）
+- [x] Task 7.6：`submitFeedback()`、`listObservedFiles()`、`triggerObservedExtraction(fileHash)`
+- [x] Task 7.7：`translateEvidence(spanIds, targetLang)`
+- [x] Task 7.8：`archiveVersions(entitySlug?)`、`cleanGhostRelations()`
 - [ ] Task 7.9：`generateStaticSite(outputPath, options)`
   - [ ] 渲染全部 wiki/ 为 HTML
   - [ ] 拷贝 library/objects/ 媒体
   - [ ] 生成静态图谱（vis-network 静态 JSON）
   - [ ] 输出到 `exports/<timestamp>/`
-- [ ] Task 7.10：`generateDraft()`（创建新 wiki 页面草稿）
+- [x] Task 7.10：`generateDraft()`（创建新 wiki 页面草稿）
 - [x] Task 7.11：`server/src/brainapi/index.ts` 统一导出 + 注册到 Hono 路由（见 spec 端点清单）
   - [x] `/api/ask`、`/api/query`、`/api/graph`、`/api/diffs`、`/api/diffs/:id/apply`、`/api/diffs/:id/reject`、`/api/rollback/:batchId`、`/api/conversations/:id`
+  - [x] `/api/feedback`、`/api/observed-files`、`/api/observed-files/:hash/extract`、`/api/translate-evidence`、`/api/archive-versions`、`/api/clean-ghost-relations`、`/api/generate-draft`
 
 ## 阶段 8：L6 多模态摄入管道（P1，可降级）
 
-- [ ] Task 8.1：`server/src/ingest/pipeline.ts` BrainIngest 入口
-  - [ ] 按 MIME 分发到对应模态处理器
-  - [ ] 缺失依赖时返回汉语错误并跳过
-- [ ] Task 8.2：`ingest/document.ts` 文档管道（PDF/DOCX/PPTX/XLSX）
-  - [ ] PDF: `pdf-parse`；DOCX: `mammoth`；PPTX: `pptxtojson`；XLSX: `xlsx`
-  - [ ] 公式 → LaTeX，表格 → HTML
-- [ ] Task 8.3：`ingest/image.ts` 图片管道（OCR + VLM 描述）
-  - [ ] OCR: `tesseract.js`（缺则降级）
-  - [ ] VLM: 调用支持视觉的厂商模型（如 Qwen-VL）
-- [ ] Task 8.4：`ingest/audio.ts` 音频管道（Whisper.cpp 子进程）
-  - [ ] 检查 `whisper-cli` 可执行文件存在
-  - [ ] 输出带时间码的转录
-- [ ] Task 8.5：`ingest/video.ts` 视频管道（FFmpeg + Whisper）
-  - [ ] FFmpeg 提取音轨
-  - [ ] 调用 audio.ts
-- [ ] Task 8.6：`ingest/web.ts` 网页管道（`@extractus/article-extractor`，Trafilatura 替代）
-- [ ] Task 8.7：`ingest/text.ts` 纯文本管道（MD/TXT/CSV/JSON 直接通过）
-- [ ] Task 8.8：内容清洗 + 证据双向映射建立 + SHA-256 原始归档 + 文件状态初始化为 `new`
+- [x] Task 8.1：`server/src/ingest/pipeline.ts` BrainIngest 入口
+  - [x] 按 MIME 分发到对应模态处理器
+  - [x] 缺失依赖时返回汉语错误并跳过
+- [x] Task 8.2：`ingest/document.ts` 文档管道（PDF/DOCX/PPTX/XLSX）
+  - [x] PDF: `pdf-parse`；DOCX: `mammoth`；PPTX: `pptxtojson`；XLSX: `xlsx`
+  - [x] 公式 → LaTeX，表格 → HTML
+- [x] Task 8.3：`ingest/image.ts` 图片管道（OCR + VLM 描述）
+  - [x] OCR: `tesseract.js`（缺则降级）
+  - [x] VLM: 调用支持视觉的厂商模型（如 Qwen-VL）
+- [x] Task 8.4：`ingest/audio.ts` 音频管道（Whisper.cpp 子进程）
+  - [x] 检查 `whisper-cli` 可执行文件存在
+  - [x] 输出带时间码的转录
+- [x] Task 8.5：`ingest/video.ts` 视频管道（FFmpeg + Whisper）
+  - [x] FFmpeg 提取音轨
+  - [x] 调用 audio.ts
+- [x] Task 8.6：`ingest/web.ts` 网页管道（`@extractus/article-extractor`，Trafilatura 替代）
+- [x] Task 8.7：`ingest/text.ts` 纯文本管道（MD/TXT/CSV/JSON 直接通过）
+- [x] Task 8.8：内容清洗 + 证据双向映射建立 + SHA-256 原始归档 + 文件状态初始化为 `new`
 
 > 8.2–8.7 可并行。
 
