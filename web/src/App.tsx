@@ -17,6 +17,9 @@ import WikiEntryPage from './routes/WikiEntryPage';
 import OnboardingPage from './routes/OnboardingPage';
 import ChangelogPage from './routes/ChangelogPage';
 import EvalReportPage from './routes/EvalReportPage';
+import TimelineFullPage from './routes/TimelineFullPage';
+import SearchResultPage from './routes/SearchResultPage';
+import LibraryFilePage from './routes/LibraryFilePage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();
@@ -54,6 +57,9 @@ function AppRoutes() {
         <Route path="settings/:section" element={<SettingsPage />} />
         <Route path="changelog" element={<ChangelogPage />} />
         <Route path="eval-report" element={<EvalReportPage />} />
+        <Route path="timeline" element={<TimelineFullPage />} />
+        <Route path="search" element={<SearchResultPage />} />
+        <Route path="library" element={<LibraryFilePage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

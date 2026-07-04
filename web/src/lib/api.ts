@@ -270,6 +270,54 @@ export const api = {
       newErrors: number;
       errors: string[];
     }>('/shadow-eval', { method: 'POST' });
+  },
+
+  getTimeline(params?: { slug?: string; limit?: number; offset?: number }) {
+    const query = new URLSearchParams();
+    if (params?.slug) query.set('slug', params.slug);
+    if (params?.limit) query.set('limit', String(params.limit));
+    if (params?.offset) query.set('offset', String(params.offset));
+    return request<{
+      items: {
+        id: number;
+        slug: string;
+        type: string;
+        payload: any;
+        ts: string;
+        title?: string;
+        description?: string;
+      }[];
+      total: number;
+    }>(`/timeline?${query.toString()}`);
+  },
+
+  search(query: string) {
+    return request<{
+      pages: { slug: string; title: string; snippet: string; type: string }[];
+      files: { hash: string; originalName: string; mime: string; size: number; status: string }[];
+      conversations: { id: string; question: string; answer: string; ts: string }[];
+      total: number;
+    }>(`/search?q=${encodeURIComponent(query)}`);
+  },
+
+  getLibraryFile(hash: string) {
+    return request<{
+      file: {
+        hash: string;
+        mime: string;
+        originalName: string;
+        size: number;
+        status: string;
+        ingestedAt: string;
+      };
+      evidenceSpans: {
+        spanId: string;
+        originalLocation: string;
+        spanText: string;
+        sourceType: string;
+      }[];
+      contentUrl: string;
+    }>(`/library-files/${hash}`);
   }
 };
 
