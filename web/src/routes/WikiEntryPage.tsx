@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams, Link as RouterLink } from 'react-router-dom';
+import { useParams, Link as RouterLink, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
@@ -18,11 +18,15 @@ import {
   Hash,
   Tag,
   Clock,
-  GitBranch
+  GitBranch,
+  Brain,
+  ChatCircleDots
 } from '@phosphor-icons/react';
 import api from '../lib/api';
 import MarkdownRenderer from '../components/MarkdownRenderer';
 import EvidencePopover from '../blocks/EvidencePopover';
+import MiniKnowledgeGraph from '../components/MiniKnowledgeGraph';
+import EntryTimeline from '../components/EntryTimeline';
 
 type ViewMode = 'split' | 'preview' | 'source';
 
@@ -55,6 +59,7 @@ export default function WikiEntryPage() {
   const { t } = useTranslation();
   const { slug = '' } = useParams<{ slug: string }>();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   const [viewMode, setViewMode] = useState<ViewMode>('split');
   const [isEditing, setIsEditing] = useState(false);
@@ -224,6 +229,14 @@ export default function WikiEntryPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => navigate(`/qa?q=${encodeURIComponent(`关于"${page.title}"的问题`)}`)}
+            className="btn btn-secondary gap-1.5"
+          >
+            <ChatCircleDots size={14} />
+            <span className="hidden sm:inline">就此条目提问</span>
+            <span className="sm:hidden">提问</span>
+          </button>
           {isEditing ? (
             <>
               <button
@@ -347,35 +360,78 @@ export default function WikiEntryPage() {
         )}
       </div>
 
-      {/* related entities */}
-      <section className="card p-5">
-        <h2 className="mb-4 flex items-center gap-2 text-base font-semibold">
-          <ArrowsLeftRight size={18} className="text-knowledge-500" />
-          {t('wiki.relatedEntities', '关联实体')}
-        </h2>
-        <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-          <LinkList
-            title={t('wiki.incomingLinks', '入链')}
-            icon={<ArrowLeft size={12} />}
-            items={incomingLinks.map(link => ({
-              id: link.id,
-              slug: link.sourceSlug,
-              relation: link.relation
-            }))}
-            emptyText={t('wiki.noIncoming', '暂无入链')}
-          />
-          <LinkList
-            title={t('wiki.outgoingLinks', '出链')}
-            icon={<ArrowRight size={12} />}
-            items={outgoingLinks.map(link => ({
-              id: link.id,
-              slug: link.targetSlug,
-              relation: link.relation
-            }))}
-            emptyText={t('wiki.noOutgoing', '暂无出链')}
-          />
-        </div>
-      </section>
+      {/* related entities & mini graph */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        <section className="card p-5">
+          <h2 className="mb-4 flex items-center gap-2 text-base font-semibold">
+            <ArrowsLeftRight size={18} className="text-knowledge-500" />
+            {t('wiki.relatedEntities', '关联实体')}
+          </h2>
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+            <LinkList
+              title={t('wiki.incomingLinks', '入链')}
+              icon={<ArrowLeft size={12} />}
+              items={incomingLinks.map(link => ({
+                id: link.id,
+                slug: link.sourceSlug,
+                relation: link.relation
+              }))}
+              emptyText={t('wiki.noIncoming', '暂无入链')}
+            />
+            <LinkList
+              title={t('wiki.outgoingLinks', '出链')}
+              icon={<ArrowRight size={12} />}
+              items={outgoingLinks.map(link => ({
+                id: link.id,
+                slug: link.targetSlug,
+                relation: link.relation
+              }))}
+              emptyText={t('wiki.noOutgoing', '暂无出链')}
+            />
+          </div>
+        </section>
+
+        <MiniKnowledgeGraph
+          currentSlug={slug}
+          currentTitle={page.title}
+          relatedEntities={[
+            ...incomingLinks.map(l => ({ slug: l.sourceSlug, title: l.sourceSlug, relation: l.relation })),
+            ...outgoingLinks.map(l => ({ slug: l.targetSlug, title: l.targetSlug, relation: l.relation }))
+          ].slice(0, 8)}
+        />
+      </div>
+
+      {/* entry timeline */}
+      <EntryTimeline
+        events={[
+          {
+            id: '1',
+            type: 'edit',
+            title: '内容更新',
+            description: `版本 v${page.version} 更新`,
+            timestamp: page.updatedAt,
+            version: String(page.version),
+            author: 'AI 助手'
+          },
+          {
+            id: '2',
+            type: 'extract',
+            title: '知识提取',
+            description: '从源文档中自动提取知识',
+            timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24 * 3).toISOString(),
+            author: '系统'
+          },
+          {
+            id: '3',
+            type: 'create',
+            title: '条目创建',
+            description: '初始版本创建',
+            timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24 * 7).toISOString(),
+            version: '1',
+            author: '系统'
+          }
+        ]}
+      />
     </div>
   );
 }

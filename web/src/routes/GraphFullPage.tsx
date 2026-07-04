@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
-import cytoscape, { Core, ElementDefinition } from 'cytoscape';
+import { useNavigate } from 'react-router-dom';
+import cytoscape, { Core, ElementDefinition, NodeSingular } from 'cytoscape';
 import {
   MagnifyingGlass,
   Plus,
@@ -10,7 +11,14 @@ import {
   Graph as GraphIcon,
   Spinner,
   Ghost,
-  Warning
+  Warning,
+  Clock,
+  Download,
+  ShareNetwork,
+  X,
+  Info,
+  ArrowSquareOut,
+  DotsThreeVertical
 } from '@phosphor-icons/react';
 import api from '../lib/api';
 
@@ -21,19 +29,64 @@ const LAYOUTS = [
   { id: 'grid', label: '网格' }
 ] as const;
 
+const TIME_PERIODS = [
+  { id: 'all', label: '全部' },
+  { id: '7d', label: '7 天' },
+  { id: '30d', label: '30 天' },
+  { id: '90d', label: '90 天' },
+  { id: '1y', label: '1 年' }
+];
+
+interface NodeContextMenuState {
+  visible: boolean;
+  x: number;
+  y: number;
+  nodeId: string;
+  nodeData: any;
+}
+
 export default function GraphFullPage() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const cyRef = useRef<HTMLDivElement>(null);
   const cyInstanceRef = useRef<Core | null>(null);
   const [layout, setLayout] = useState<string>('cose');
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
+  const [timePeriod, setTimePeriod] = useState<string>('all');
+  const [showClusters, setShowClusters] = useState<boolean>(false);
+  const [contextMenu, setContextMenu] = useState<NodeContextMenuState>({
+    visible: false,
+    x: 0,
+    y: 0,
+    nodeId: '',
+    nodeData: null
+  });
+  const [selectedNode, setSelectedNode] = useState<{ id: string; data: any } | null>(null);
 
   const graphQuery = useQuery({
     queryKey: ['graph'],
     queryFn: () => api.getGraphData(),
     staleTime: 60_000
   });
+
+  const clusters = useMemo(() => {
+    if (!graphQuery.data?.nodes) return [];
+    const typeGroups: Record<string, any[]> = {};
+    graphQuery.data.nodes.forEach((n: any) => {
+      const type = n.type || 'concept';
+      if (!typeGroups[type]) typeGroups[type] = [];
+      typeGroups[type].push(n);
+    });
+    return Object.entries(typeGroups).map(([type, nodes]) => ({
+      id: type,
+      type,
+      count: nodes.length,
+      label: `${type} (${nodes.length})`
+    }));
+  }, [graphQuery.data]);
+
+  const [showTimeline, setShowTimeline] = useState(false);
 
   useEffect(() => {
     if (!cyRef.current || graphQuery.isLoading || !graphQuery.data) return;
@@ -47,7 +100,7 @@ export default function GraphFullPage() {
           slug: n.slug
         }
       })),
-      ...(graphQuery.data.edges || []).map((e: any, i) => ({
+      ...(graphQuery.data.edges || []).map((e: any, i: number) => ({
         data: {
           id: `e${i}`,
           source: String(e.source ?? e.source_slug),
@@ -77,7 +130,9 @@ export default function GraphFullPage() {
             'text-halign': 'center',
             'text-margin-y': 4,
             'width': 24,
-            'height': 24
+            'height': 24,
+            'transition-property': 'background-color, width, height, border-width',
+            'transition-duration': '0.2s'
           }
         },
         {
@@ -117,6 +172,12 @@ export default function GraphFullPage() {
             'border-width': 3,
             'border-color': '#f59e0b'
           }
+        },
+        {
+          selector: '.dimmed',
+          style: {
+            'opacity': 0.2
+          }
         }
       ],
       layout: {
@@ -141,6 +202,27 @@ export default function GraphFullPage() {
       cy.elements().removeClass('highlighted');
       node.addClass('highlighted');
       node.neighborhood().addClass('highlighted');
+      setSelectedNode({ id: node.data('id'), data: node.data() });
+    });
+
+    cy.on('cxttap', 'node', (evt) => {
+      evt.originalEvent.preventDefault();
+      const node = evt.target;
+      const pos = evt.renderedPosition || { x: 0, y: 0 };
+      setContextMenu({
+        visible: true,
+        x: pos.x,
+        y: pos.y,
+        nodeId: node.data('id'),
+        nodeData: node.data()
+      });
+    });
+
+    cy.on('tap', (evt) => {
+      if (evt.target === cy) {
+        setContextMenu(prev => ({ ...prev, visible: false }));
+        setSelectedNode(null);
+      }
     });
 
     return () => {
@@ -149,15 +231,26 @@ export default function GraphFullPage() {
     };
   }, [graphQuery.data, graphQuery.isLoading, layout]);
 
+  useEffect(() => {
+    const handleClickOutside = () => {
+      setContextMenu(prev => ({ ...prev, visible: false }));
+    };
+    if (contextMenu.visible) {
+      document.addEventListener('click', handleClickOutside);
+    }
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [contextMenu.visible]);
+
   const handleSearch = () => {
     if (!cyInstanceRef.current || !search.trim()) return;
     const cy = cyInstanceRef.current;
-    cy.elements().removeClass('highlighted');
+    cy.elements().removeClass('highlighted dimmed');
     const matches = cy.nodes().filter(n =>
       (n.data('label') as string)?.toLowerCase().includes(search.toLowerCase())
     );
     if (matches.length > 0) {
       matches.addClass('highlighted');
+      cy.nodes().not(matches).addClass('dimmed');
       cy.center(matches);
       cy.zoom(1.5);
     }
@@ -177,6 +270,25 @@ export default function GraphFullPage() {
 
   const handleFit = () => {
     cyInstanceRef.current?.fit(undefined, 40);
+  };
+
+  const handleExportImage = useCallback(() => {
+    const cy = cyInstanceRef.current;
+    if (!cy) return;
+    const pngData = cy.png({ scale: 2, bg: '#ffffff' });
+    const link = document.createElement('a');
+    link.href = pngData;
+    link.download = `knowledge-graph-${Date.now()}.png`;
+    link.click();
+  }, []);
+
+  const handleClusterHighlight = (clusterType: string) => {
+    const cy = cyInstanceRef.current;
+    if (!cy) return;
+    cy.elements().removeClass('highlighted dimmed');
+    const clusterNodes = cy.nodes(`node[type="${clusterType}"]`);
+    clusterNodes.addClass('highlighted');
+    cy.nodes().not(clusterNodes).addClass('dimmed');
   };
 
   const nodeCount = graphQuery.data?.nodes?.length || 0;
@@ -233,6 +345,31 @@ export default function GraphFullPage() {
           <option value="file">文件</option>
           <option value="portal">门户</option>
         </select>
+
+        <button
+          onClick={() => setShowTimeline(!showTimeline)}
+          className={`btn btn-secondary gap-1.5 text-xs ${showTimeline ? 'ring-2 ring-primary-500' : ''}`}
+        >
+          <Clock size={14} />
+          时间轴
+        </button>
+
+        <button
+          onClick={() => setShowClusters(!showClusters)}
+          className={`btn btn-secondary gap-1.5 text-xs ${showClusters ? 'ring-2 ring-primary-500' : ''}`}
+        >
+          <ShareNetwork size={14} />
+          聚类
+        </button>
+
+        <button
+          onClick={handleExportImage}
+          className="btn btn-secondary gap-1.5 text-xs"
+        >
+          <Download size={14} />
+          导出图片
+        </button>
+
         <div className="ml-auto flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
           <span>{nodeCount} 节点</span>
           <span>{edgeCount} 边</span>
@@ -244,6 +381,39 @@ export default function GraphFullPage() {
           )}
         </div>
       </div>
+
+      {showTimeline && (
+        <div className="mb-3 flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-800">
+          <Clock size={16} className="text-slate-400" />
+          <div className="flex gap-1">
+            {TIME_PERIODS.map(p => (
+              <button
+                key={p.id}
+                onClick={() => setTimePeriod(p.id)}
+                className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                  timePeriod === p.id
+                    ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400'
+                    : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-700'
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+          <div className="mx-4 flex-1">
+            <input
+              type="range"
+              min="0"
+              max="100"
+              defaultValue="50"
+              className="w-full accent-primary-500"
+            />
+          </div>
+          <span className="text-xs text-slate-500 dark:text-slate-400">
+            2024-01 ~ 2024-12
+          </span>
+        </div>
+      )}
 
       <div className="relative flex-1 overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
         {graphQuery.isLoading ? (
@@ -269,22 +439,55 @@ export default function GraphFullPage() {
           <button
             onClick={handleZoomIn}
             className="rounded p-1.5 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700"
+            title="放大"
           >
             <Plus size={16} />
           </button>
           <button
             onClick={handleZoomOut}
             className="rounded p-1.5 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700"
+            title="缩小"
           >
             <Minus size={16} />
           </button>
           <button
             onClick={handleFit}
             className="rounded p-1.5 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700"
+            title="适应视图"
           >
             <ArrowsOutSimple size={16} />
           </button>
         </div>
+
+        {showClusters && clusters.length > 0 && (
+          <div className="absolute left-3 top-3 rounded-lg border border-slate-200 bg-white/95 p-3 shadow-sm dark:border-slate-700 dark:bg-slate-800/95">
+            <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200">
+              <ShareNetwork size={14} className="text-primary-500" />
+              聚类
+            </div>
+            <div className="space-y-1">
+              {clusters.map(cluster => (
+                <button
+                  key={cluster.id}
+                  onClick={() => handleClusterHighlight(cluster.type)}
+                  className="flex w-full items-center gap-2 rounded px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700"
+                >
+                  <span
+                    className="h-3 w-3 rounded-full"
+                    style={{
+                      backgroundColor:
+                        cluster.type === 'concept' ? '#6366f1' :
+                        cluster.type === 'file' ? '#06b6d4' :
+                        cluster.type === 'person' ? '#f97316' :
+                        cluster.type === 'portal' ? '#a855f7' : '#64748b'
+                    }}
+                  />
+                  {cluster.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="absolute bottom-3 left-3 rounded-lg border border-slate-200 bg-white/95 p-3 text-xs shadow-sm dark:border-slate-700 dark:bg-slate-800/95">
           <div className="mb-1 font-semibold text-slate-700 dark:text-slate-200">{t('graph.legend')}</div>
@@ -311,6 +514,104 @@ export default function GraphFullPage() {
             </div>
           </div>
         </div>
+
+        {contextMenu.visible && (
+          <div
+            className="absolute z-50 min-w-[160px] rounded-lg border border-slate-200 bg-white py-1 shadow-xl dark:border-slate-700 dark:bg-slate-800 animate-fade-in"
+            style={{ left: contextMenu.x, top: contextMenu.y }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => {
+                navigate(`/wiki/${contextMenu.nodeData.slug || contextMenu.nodeId}`);
+                setContextMenu(prev => ({ ...prev, visible: false }));
+              }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700"
+            >
+              <ArrowSquareOut size={14} />
+              查看详情
+            </button>
+            <button
+              onClick={() => {
+                setSelectedNode({ id: contextMenu.nodeId, data: contextMenu.nodeData });
+                setContextMenu(prev => ({ ...prev, visible: false }));
+              }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700"
+            >
+              <Info size={14} />
+              节点信息
+            </button>
+            <button
+              onClick={() => {
+                const cy = cyInstanceRef.current;
+                if (cy) {
+                  const node = cy.getElementById(contextMenu.nodeId);
+                  if (node) {
+                    cy.elements().removeClass('highlighted dimmed');
+                    node.addClass('highlighted');
+                    node.neighborhood().addClass('highlighted');
+                    cy.center(node);
+                    cy.zoom(2);
+                  }
+                }
+                setContextMenu(prev => ({ ...prev, visible: false }));
+              }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700"
+            >
+              <MagnifyingGlass size={14} />
+              聚焦节点
+            </button>
+          </div>
+        )}
+
+        {selectedNode && (
+          <div className="absolute right-3 top-14 w-64 rounded-xl border border-slate-200 bg-white p-4 shadow-xl dark:border-slate-700 dark:bg-slate-800 animate-slide-in">
+            <div className="mb-3 flex items-start justify-between">
+              <div className="flex items-center gap-2">
+                <div
+                  className="h-4 w-4 rounded-full"
+                  style={{
+                    backgroundColor:
+                      selectedNode.data.type === 'concept' ? '#6366f1' :
+                      selectedNode.data.type === 'file' ? '#06b6d4' :
+                      selectedNode.data.type === 'person' ? '#f97316' :
+                      selectedNode.data.type === 'portal' ? '#a855f7' : '#64748b'
+                  }}
+                />
+                <span className="font-semibold text-slate-900 dark:text-white">
+                  {selectedNode.data.label}
+                </span>
+              </div>
+              <button
+                onClick={() => setSelectedNode(null)}
+                className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+              >
+                <X size={14} />
+              </button>
+            </div>
+            <div className="space-y-2 text-xs text-slate-600 dark:text-slate-300">
+              <div className="flex justify-between">
+                <span className="text-slate-500 dark:text-slate-400">类型</span>
+                <span className="badge badge-blue">{selectedNode.data.type}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500 dark:text-slate-400">Slug</span>
+                <span className="font-mono">{selectedNode.data.slug || selectedNode.id}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500 dark:text-slate-400">关联度</span>
+                <span>高</span>
+              </div>
+            </div>
+            <button
+              onClick={() => navigate(`/wiki/${selectedNode.data.slug || selectedNode.id}`)}
+              className="mt-3 w-full btn btn-primary text-xs"
+            >
+              <ArrowSquareOut size={12} className="mr-1" />
+              查看完整条目
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

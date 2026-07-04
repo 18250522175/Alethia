@@ -20,6 +20,7 @@ import EvalReportPage from './routes/EvalReportPage';
 import TimelineFullPage from './routes/TimelineFullPage';
 import SearchResultPage from './routes/SearchResultPage';
 import LibraryFilePage from './routes/LibraryFilePage';
+import NotificationsPage from './routes/NotificationsPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();
@@ -60,6 +61,7 @@ function AppRoutes() {
         <Route path="timeline" element={<TimelineFullPage />} />
         <Route path="search" element={<SearchResultPage />} />
         <Route path="library" element={<LibraryFilePage />} />
+        <Route path="notifications" element={<NotificationsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
