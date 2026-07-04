@@ -73,6 +73,23 @@ alethia/
 
 ---
 
+## 📚 技术文档
+
+详细技术文档请查阅 `docs/` 目录：
+
+| 编号 | 文档 | 说明 |
+|------|------|------|
+| 01 | [系统架构总览](docs/01_ARCHITECTURE.md) | 设计哲学、分层架构、核心数据流、技术栈总览 |
+| 02 | [API 接口参考](docs/02_API_REFERENCE.md) | 36 个 REST API 端点详解，含请求/响应字段、错误码 |
+| 03 | [数据库 Schema 详解](docs/03_DATABASE_SCHEMA.md) | 26 张表逐表说明、22 个索引总览、向量迁移机制 |
+| 04 | [知识模型规范](docs/04_KNOWLEDGE_MODEL.md) | Compiled Truth Markdown 八区段规范、关系模型、版本控制 |
+| 05 | [AI 流水线详解](docs/05_AI_PIPELINE.md) | Agent 五阶段编排、Dream Cycle、分级审核、预算控制 |
+| 06 | [检索引擎技术详解](docs/06_RETRIEVAL_ENGINE.md) | 向量/全文/RRF/图谱/重排序/NER/NLI/意图路由 |
+| 07 | [部署与运维指南](docs/07_DEPLOYMENT.md) | Docker 部署、本地开发、CLI/MCP、监控故障排查 |
+| 08 | [开发指南](docs/08_DEV_GUIDE.md) | 项目结构、代码规范、调试技巧、测试指南、贡献规范 |
+
+---
+
 ## 快速开始（Docker 一键部署）
 
 ### 1. 准备环境变量

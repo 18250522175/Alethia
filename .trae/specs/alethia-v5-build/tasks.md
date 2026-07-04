@@ -393,6 +393,16 @@
   - [x] 开发模式：bun install、bun dev:server、bun dev:web
   - [x] API 端点清单
   - [x] 技术栈
+  - [x] 技术文档导航（8 份文档）
+- [x] Task 12.7：技术文档体系
+  - [x] 01_ARCHITECTURE.md — 系统架构总览
+  - [x] 02_API_REFERENCE.md — API 接口参考
+  - [x] 03_DATABASE_SCHEMA.md — 数据库 Schema 详解
+  - [x] 04_KNOWLEDGE_MODEL.md — 知识模型规范
+  - [x] 05_AI_PIPELINE.md — AI 流水线详解
+  - [x] 06_RETRIEVAL_ENGINE.md — 检索引擎技术详解
+  - [x] 07_DEPLOYMENT.md — 部署与运维指南
+  - [x] 08_DEV_GUIDE.md — 开发指南
 
 ## 阶段 13：闭环验证（最后执行）
 
