@@ -63,7 +63,7 @@
   - [x] `knowledge_versions (slug, version)` 唯一约束
   - [x] `_migrations(name, applied_at)` 表用于追踪已执行迁移
   - [x] 提供 `server/scripts/migrate.ts` 包装器：按文件名顺序执行 migrations/*.sql，已执行的跳过
-  - [ ] 启动时检测 `settings.embedding.provider` 与 DB 列维度不匹配 → 自动 `ALTER TABLE ... TYPE vector(N)` + 重建 HNSW 索引（手动配置维度）
+  - [x] 启动时检测 `settings.embedding.provider` 与 DB 列维度不匹配 → 自动 `ALTER TABLE ... TYPE vector(N)` + 重建 HNSW 索引（手动配置维度）
 - [x] Task 1.7：种子数据脚本 `server/scripts/seed.ts`
   - [x] 写入 `wiki/index.md`、`wiki/AGENTS.md`、`wiki/portals/science.md`
   - [x] `wiki/concepts/entropy.md`（用架构 4.5.2 完整示例）
@@ -92,7 +92,7 @@
   - [x] 解析 `## Version History` → 写入 `knowledge_versions`
   - [x] 解析 `## Semantic Rings Archive` → 写入 `semantic_rings`
   - [x] 解析 `## Evidence` → 写入 `evidence_spans`
-  - [ ] 解析 `summaries/*.md` → 写入 `clusters` + `cluster_members`
+  - [x] 解析 `summaries/*.md` → 写入 `clusters` + `cluster_members`
 - [x] Task 2.5：`BrainAPI.rebuildStruct()` 实现
   - [x] `TRUNCATE` 所有缓存表
   - [x] 重新解析全部 Markdown（含 `changelog/`）
@@ -100,9 +100,9 @@
   - [x] 调用 `evolution/ghost.detectAndMark()` 标记 orphaned
   - [x] 返回 `RebuildReport { pages, links, ghostCount, durationMs }`
 - [x] Task 2.6：`BrainAPI.extractPending()` 实现
-  - [ ] 扫描 `library_files` 中 `status='new'` 的文件
-  - [ ] 调用 `agents.retriever` 触发 LLM 提取
-  - [ ] 生成 `PendingDiff` 写入 `pending_diffs` 表
+  - [x] 扫描 `library_files` 中 `status='new'` 的文件
+  - [x] 调用 `agents.retriever` 触发 LLM 提取
+  - [x] 生成 `PendingDiff` 写入 `pending_diffs` 表
 
 ## 阶段 3：国内大模型适配层（P0：3.1–3.13 全部）
 
@@ -127,7 +127,7 @@
 - [x] Task 3.13：`server/src/llm/embed.ts` 嵌入生成（含本地退化与维度对齐）
   - [x] 优先调用配置的厂商 embed 端点（如 `text-embedding-3-small` 1536 维）
   - [x] 失败或未配置时退化到 `@xenova/transformers` all-MiniLM-L6-v2（输出 384 维，默认）
-  - [ ] 启动时调用 `ensureEmbeddingDimension(dim)`：若 `settings.embedding.dimension` 与 DB 列 `pg_typeof(embedding)` 不一致，执行 `ALTER TABLE page_embeddings ALTER COLUMN embedding TYPE vector(N)` + 清空该表 + 重建 HNSW 索引 + 写入 `auto_change_log`
+  - [x] 启动时调用 `ensureEmbeddingDimension(dim)`：若 `settings.embedding.dimension` 与 DB 列 `pg_typeof(embedding)` 不一致，执行 `ALTER TABLE page_embeddings ALTER COLUMN embedding TYPE vector(N)` + 清空该表 + 重建 HNSW 索引 + 写入 `auto_change_log`
   - [x] 模型名 + 维度持久化到 `settings.embedding.{provider, model, dimension}`
 - [x] Task 3.14：`server/src/routes/llm.ts` 注册 `POST /api/llm/test` 与 `GET /api/llm/adapters`
   - [x] body: `{adapterId: string}`，调用 `adapter.probe()`
@@ -239,7 +239,7 @@
 - [x] Task 7.1：`applyDiff(diffId, approved)`、`rollbackAutoChange(batchId)` 实现
   - [x] applyDiff 通过则标记 resolved + approved
   - [x] rollback 从 auto_change_log 查询
-  - [ ] extractFacts 调用 LLM 提取 → 生成 `PendingDiff`
+  - [x] extractFacts 调用 LLM 提取 → 生成 `PendingDiff`
 - [x] Task 7.2：`query(params)` 实现
   - [x] query 调用 L2 router
   - [ ] getMedia 支持 HTTP 206 Range 请求

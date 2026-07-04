@@ -151,6 +151,26 @@ async function bootstrap() {
 
   await waitForDatabase();
 
+  // 启动时检测 embedding 维度
+  try {
+    const { ensureEmbeddingDimension } = await import('./db/dimension');
+    const settingsResult = await getPool().query(
+      "SELECT value FROM settings WHERE key = 'embedding.dimension'"
+    );
+    const targetDim = settingsResult.rows.length > 0
+      ? parseInt(settingsResult.rows[0].value)
+      : 384; // 默认 all-MiniLM-L6-v2 维度
+    if (targetDim > 0) {
+      const result = await ensureEmbeddingDimension(targetDim);
+      if (result.migrated) {
+        loggerInstance.info({ oldDim: result.oldDim, newDim: result.newDim },
+          '嵌入维度已自动迁移');
+      }
+    }
+  } catch (err) {
+    loggerInstance.warn({ err }, '嵌入维度检测失败，跳过自动迁移');
+  }
+
   const port = env.BRAIN_PORT;
   loggerInstance.info(`服务启动完成，监听端口: ${port}`);
 

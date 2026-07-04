@@ -1,11 +1,29 @@
 import { storage } from './markdown';
 import { parser, type ParsedPage } from './parser';
+import { syncSummaries } from './summary';
 import { getPool } from '../db/pool';
 import logger from '../i18n/logger';
-import { createHash } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
+import { llmRouter } from '../llm/router';
+
+const EXTRACTABLE_MIME_PREFIXES = ['text/', 'application/json', 'application/xml'];
+const LIBRARY_EXTRACTION_PROMPT = `请从以下文本中提取知识实体和关系，输出 JSON 格式：
+{
+  "entities": [{"slug": "实体名", "type": "概念/人物/事件", "summary": "简述"}],
+  "relations": [{"source": "实体A", "target": "实体B", "relation": "关系类型"}]
+}
+
+要求：
+1. 仅输出 JSON，不要附加任何解释性文本
+2. 实体 slug 使用简洁的唯一标识
+3. type 只能是 概念、人物、事件 之一
+4. 没有明确实体或关系时返回空数组
+
+文本内容：
+`;
 
 export class SyncEngine {
-  async syncAll(): Promise<{ pages: number; links: number; timeline: number; versions: number }> {
+  async syncAll(): Promise<{ pages: number; links: number; timeline: number; versions: number; clusters: number }> {
     const wikiFiles = storage.listWikiFiles();
     let pageCount = 0;
     let linkCount = 0;
@@ -41,7 +59,8 @@ export class SyncEngine {
       client.release();
     }
 
-    return { pages: pageCount, links: linkCount, timeline: timelineCount, versions: versionCount };
+    const summaryResult = await syncSummaries();
+    return { pages: pageCount, links: linkCount, timeline: timelineCount, versions: versionCount, clusters: summaryResult.clusters };
   }
 
   private async syncPage(client: any, parsed: ParsedPage): Promise<void> {
@@ -163,6 +182,201 @@ export class SyncEngine {
       return result.rowCount || 0;
     } finally {
       client.release();
+    }
+  }
+
+  async extractNewLibraryFiles(): Promise<{
+    scanned: number;
+    extracted: number;
+    diffsCreated: number;
+    errors: string[];
+  }> {
+    const pool = getPool();
+    const client = await pool.connect();
+
+    try {
+      const result = await client.query(
+        `SELECT hash, mime, original_name FROM library_files WHERE status = 'new' LIMIT 50`
+      );
+      const rows = result.rows;
+      const scanned = rows.length;
+      let extracted = 0;
+      let diffsCreated = 0;
+      const errors: string[] = [];
+
+      if (scanned === 0) {
+        logger.info('无可提取的新文件');
+        return { scanned, extracted, diffsCreated, errors };
+      }
+
+      logger.info({ scanned }, '开始扫描新文件提取知识');
+
+      for (const row of rows) {
+        const { hash, mime, original_name } = row;
+
+        try {
+          // 根据 MIME 类型判断是否可提取
+          if (!EXTRACTABLE_MIME_PREFIXES.some(prefix => mime.startsWith(prefix))) {
+            await client.query(
+              `UPDATE library_files SET status = 'unsupported' WHERE hash = $1`,
+              [hash]
+            );
+            logger.debug({ hash, mime }, '跳过不支持的 MIME 类型');
+            continue;
+          }
+
+          // 读取文件内容
+          const filePath = `${storage.getLibraryPath()}/${hash}`;
+          const content = storage.readFile(filePath);
+
+          if (!content || content.trim().length === 0) {
+            await client.query(
+              `UPDATE library_files SET status = 'error' WHERE hash = $1`,
+              [hash]
+            );
+            errors.push(`${original_name}: 文件内容为空`);
+            continue;
+          }
+
+          // 调用 LLM 提取知识
+          if (!llmRouter.hasAnyConfigured()) {
+            errors.push('无可用的 LLM 适配器');
+            break;
+          }
+
+          const adapter = llmRouter.route('fact_extract');
+          const response = await adapter.chat({
+            messages: [{ role: 'user', content: LIBRARY_EXTRACTION_PROMPT + content }],
+            jsonMode: true,
+            temperature: 0.1,
+            maxTokens: 2000
+          });
+
+          // 解析 LLM 返回的 JSON
+          const parsed = this.parseExtractionResponse(response.content);
+
+          // 为每个实体生成 PendingDiff
+          for (const entity of parsed.entities) {
+            try {
+              const diffId = randomUUID();
+              const slug = entity.slug || `lib:${hash.slice(0, 12)}`;
+              const payload = {
+                action: 'create',
+                content: { type: entity.type, summary: entity.summary },
+                source_file: hash,
+                original_name
+              };
+
+              await client.query(
+                `INSERT INTO pending_diffs (id, slug, type, payload, confidence, impact, tier, created_at, resolved)
+                 VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, NOW(), false)`,
+                [
+                  diffId,
+                  slug,
+                  'library_extraction',
+                  JSON.stringify(payload),
+                  entity.confidence ?? 0.7,
+                  'medium',
+                  'yellow'
+                ]
+              );
+              diffsCreated++;
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : String(err);
+              logger.warn({ err, slug: entity.slug }, '写入实体 PendingDiff 失败');
+              errors.push(`${original_name}: 写入实体 ${entity.slug} 失败 - ${msg}`);
+            }
+          }
+
+          // 为每个关系生成 PendingDiff
+          for (const rel of parsed.relations) {
+            try {
+              const diffId = randomUUID();
+              const slug = rel.source || `lib:${hash.slice(0, 12)}`;
+              const payload = {
+                action: 'link',
+                content: { target: rel.target, relation: rel.relation },
+                source_file: hash,
+                original_name
+              };
+
+              await client.query(
+                `INSERT INTO pending_diffs (id, slug, type, payload, confidence, impact, tier, created_at, resolved)
+                 VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, NOW(), false)`,
+                [
+                  diffId,
+                  slug,
+                  'library_extraction',
+                  JSON.stringify(payload),
+                  0.7,
+                  'medium',
+                  'yellow'
+                ]
+              );
+              diffsCreated++;
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : String(err);
+              logger.warn({ err, source: rel.source }, '写入关系 PendingDiff 失败');
+              errors.push(`${original_name}: 写入关系 ${rel.source}->${rel.target} 失败 - ${msg}`);
+            }
+          }
+
+          // 标记文件为已提取
+          await client.query(
+            `UPDATE library_files SET status = 'extracted' WHERE hash = $1`,
+            [hash]
+          );
+          extracted++;
+
+          logger.debug({ hash, original_name, diffs: parsed.entities.length + parsed.relations.length }, '文件提取完成');
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          logger.warn({ err, hash, original_name }, '文件提取失败');
+
+          try {
+            await client.query(
+              `UPDATE library_files SET status = 'error' WHERE hash = $1`,
+              [hash]
+            );
+          } catch {
+            // 状态更新失败不阻塞
+          }
+
+          errors.push(`${original_name}: ${msg}`);
+        }
+      }
+
+      logger.info({ scanned, extracted, diffsCreated, errorCount: errors.length }, '新文件提取完成');
+      return { scanned, extracted, diffsCreated, errors };
+    } finally {
+      client.release();
+    }
+  }
+
+  private parseExtractionResponse(content: string): {
+    entities: Array<{ slug: string; type: string; summary: string; confidence?: number }>;
+    relations: Array<{ source: string; target: string; relation: string }>;
+  } {
+    try {
+      const trimmed = content.trim();
+      const jsonMatch = trimmed.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        logger.warn('LLM 返回内容无法匹配 JSON 对象');
+        return { entities: [], relations: [] };
+      }
+
+      const parsed = JSON.parse(jsonMatch[0]);
+      const entities = Array.isArray(parsed.entities)
+        ? parsed.entities.filter((e: any) => e.slug && e.type && e.summary)
+        : [];
+      const relations = Array.isArray(parsed.relations)
+        ? parsed.relations.filter((r: any) => r.source && r.target && r.relation)
+        : [];
+
+      return { entities, relations };
+    } catch (err) {
+      logger.warn({ err }, '解析 LLM 提取响应失败');
+      return { entities: [], relations: [] };
     }
   }
 

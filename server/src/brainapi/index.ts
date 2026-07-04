@@ -49,7 +49,25 @@ class BrainAPI {
 
   async extractPending(): Promise<ExtractReport> {
     logger.info('扫描待提取文件...');
-    return { processed: 0, pendingDiffsCreated: 0, errors: [] };
+
+    let processed = 0;
+    let pendingDiffsCreated = 0;
+    const errors: { filePath: string; message: string }[] = [];
+
+    // 扫描 library_files 中 status='new' 的文件并提取
+    const libResult = await syncEngine.extractNewLibraryFiles();
+    processed += libResult.extracted;
+    pendingDiffsCreated += libResult.diffsCreated;
+    for (const msg of libResult.errors) {
+      const colonIdx = msg.indexOf(': ');
+      errors.push({
+        filePath: colonIdx > 0 ? msg.slice(0, colonIdx) : '',
+        message: colonIdx > 0 ? msg.slice(colonIdx + 2) : msg
+      });
+    }
+
+    logger.info({ processed, pendingDiffsCreated, errorCount: errors.length }, '待提取文件处理完成');
+    return { processed, pendingDiffsCreated, errors };
   }
 
   async query(params: QueryParams): Promise<QueryResult> {
