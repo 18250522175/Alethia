@@ -10,6 +10,7 @@ import { waitForDatabase, getPool } from './db/pool';
 import llmRoutes from './routes/llm';
 import settingsRoutes from './routes/settings';
 import healthRoutes from './routes/health';
+import brainapiRoutes from './routes/brainapi';
 import { llmRouter } from './llm/router';
 
 const VERSION = '5.0.0';
@@ -105,6 +106,7 @@ app.post('/api/auth/login', async (c) => {
 app.route('/', llmRoutes);
 app.route('/', settingsRoutes);
 app.route('/', healthRoutes);
+app.route('/', brainapiRoutes);
 
 app.onError((err, c) => {
   if (err instanceof HTTPException) {

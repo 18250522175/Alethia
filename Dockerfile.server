@@ -1,0 +1,39 @@
+# Alethia Brain API 服务端 Dockerfile
+# 基于 Bun 运行时
+
+FROM oven/bun:1.1 AS base
+WORKDIR /app
+
+# 拷贝 workspace 配置与各 package 的 manifest
+COPY package.json bun.lock tsconfig.base.json ./
+COPY shared/package.json ./shared/package.json
+COPY server/package.json ./server/package.json
+COPY web/package.json ./web/package.json
+
+# 安装依赖（仅 server + shared 所需）
+RUN bun install --frozen-lockfile --filter @alethia/server... --filter @alethia/shared...
+
+# 拷贝源码
+COPY shared ./shared
+COPY server ./server
+COPY wiki ./wiki
+
+# 默认环境变量（可被 .env 覆盖）
+ENV NODE_ENV=production
+ENV BRAIN_PORT=3000
+ENV LANGUAGE=zh-CN
+ENV DATABASE_URL=postgres://alethia:alethia@postgres:5432/alethia
+ENV EMBEDDING_PROVIDER=local
+ENV NLI_PROVIDER=local
+
+# 数据卷：wiki、library、changelog、raw、summaries 持久化
+VOLUME ["/app/wiki", "/app/server/data/library", "/app/server/data/changelog", "/app/server/data/raw", "/app/server/data/summaries"]
+
+EXPOSE 3000
+
+# 健康检查：每 30s 探测 /health
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD curl -fs http://localhost:3000/health || exit 1
+
+# 启动命令：直接以 Bun 运行 TypeScript 源码
+CMD ["bun", "run", "src/index.ts"]

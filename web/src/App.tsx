@@ -8,6 +8,10 @@ import Shell from './layouts/Shell';
 import LoginPage from './routes/LoginPage';
 import WikiHomePage from './routes/WikiHomePage';
 import SettingsPage from './routes/SettingsPage';
+import QAPanelPage from './routes/QAPanelPage';
+import DiffReviewPage from './routes/DiffReviewPage';
+import GraphFullPage from './routes/GraphFullPage';
+import DashboardPage from './routes/DashboardPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();
@@ -30,6 +34,11 @@ function AppRoutes() {
         }
       >
         <Route index element={<WikiHomePage />} />
+        <Route path="qa" element={<QAPanelPage />} />
+        <Route path="qa/:conversationId" element={<QAPanelPage />} />
+        <Route path="graph" element={<GraphFullPage />} />
+        <Route path="review" element={<DiffReviewPage />} />
+        <Route path="dashboard" element={<DashboardPage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="settings/:section" element={<SettingsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />

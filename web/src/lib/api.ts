@@ -123,6 +123,60 @@ export const api = {
 
   getHealthDashboard() {
     return request<any>('/health-dashboard');
+  },
+
+  askQuestion(question: string, options?: { conversationId?: string; maxReflections?: number }) {
+    return request<{
+      answer: string;
+      sources: any[];
+      confidence: number;
+      relatedEntities: { slug: string; title: string }[];
+      conversationId: string;
+      tokensUsed: number;
+      estimatedCost: number;
+    }>('/ask', {
+      method: 'POST',
+      body: JSON.stringify({ question, ...options })
+    });
+  },
+
+  queryKnowledge(query: string, options?: { intent?: string; topK?: number; contexts?: string[] }) {
+    return request<{
+      items: Array<{ slug: string; title: string; snippet: string; score: number }>;
+      intent: string;
+      tier: string;
+      durationMs: number;
+    }>('/query', {
+      method: 'POST',
+      body: JSON.stringify({ query, ...options })
+    });
+  },
+
+  getGraphData() {
+    return request<{ nodes: any[]; edges: any[] }>('/graph');
+  },
+
+  getPendingDiffs(tier?: string) {
+    const qs = tier ? `?tier=${tier}` : '';
+    return request<{ items: any[]; total: number }>(`/diffs${qs}`);
+  },
+
+  applyDiff(diffId: string) {
+    return request<{ diffId: string; applied: boolean; newVersion: number; modifiedFiles: string[] }>(
+      `/diffs/${diffId}/apply`,
+      { method: 'POST' }
+    );
+  },
+
+  rejectDiff(diffId: string) {
+    return request<{ diffId: string; applied: boolean }>(
+      `/diffs/${diffId}/reject`,
+      { method: 'POST' }
+    );
+  },
+
+  getConversation(conversationId: string) {
+    return request<{ items: any[]; total: number }>(`/conversations/${conversationId}`);
   }
 };
 
