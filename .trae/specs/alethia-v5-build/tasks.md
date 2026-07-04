@@ -253,15 +253,16 @@
 - [x] Task 7.6：`submitFeedback()`、`listObservedFiles()`、`triggerObservedExtraction(fileHash)`
 - [x] Task 7.7：`translateEvidence(spanIds, targetLang)`
 - [x] Task 7.8：`archiveVersions(entitySlug?)`、`cleanGhostRelations()`
-- [ ] Task 7.9：`generateStaticSite(outputPath, options)`
-  - [ ] 渲染全部 wiki/ 为 HTML
-  - [ ] 拷贝 library/objects/ 媒体
-  - [ ] 生成静态图谱（vis-network 静态 JSON）
-  - [ ] 输出到 `exports/<timestamp>/`
+- [x] Task 7.9：`generateStaticSite(outputPath, options)`
+  - [x] 渲染全部 wiki/ 为 HTML
+  - [x] 拷贝 library/objects/ 媒体
+  - [x] 生成静态图谱（vis-network 静态 JSON）
+  - [x] 输出到 `exports/<timestamp>/`
 - [x] Task 7.10：`generateDraft()`（创建新 wiki 页面草稿）
 - [x] Task 7.11：`server/src/brainapi/index.ts` 统一导出 + 注册到 Hono 路由（见 spec 端点清单）
   - [x] `/api/ask`、`/api/query`、`/api/graph`、`/api/diffs`、`/api/diffs/:id/apply`、`/api/diffs/:id/reject`、`/api/rollback/:batchId`、`/api/conversations/:id`
   - [x] `/api/feedback`、`/api/observed-files`、`/api/observed-files/:hash/extract`、`/api/translate-evidence`、`/api/archive-versions`、`/api/clean-ghost-relations`、`/api/generate-draft`
+  - [x] `/api/changelog`、`/api/eval-report`、`/api/shadow-eval`、`/api/generate-static-site`
 
 ## 阶段 8：L6 多模态摄入管道（P1，可降级）
 
@@ -316,7 +317,7 @@
   - [x] `TopBar.tsx`：Branding + 搜索框 + 快捷提问 + BudgetBadge + 通知铃铛 + 用户菜单
   - [x] `Sidebar.tsx`：可折叠导航 + 徽标（审核数、幽灵红点）+ 快速操作三按钮
   - [x] `StatusBar.tsx`：后台任务进度 + 最后更新时间 + 连接状态
-  - [ ] `NotificationCenter.tsx`：浮层面板分组（审核/系统/补提取/异常）
+  - [x] `NotificationCenter.tsx`：浮层面板分组（审核/系统/补提取/异常）
 - [x] Task 10.5：`web/src/App.tsx` 路由配置 + 守卫
   - [x] 注册核心路由（登录、首页、问答、图谱、审核、仪表盘、设置、Wiki 条目、引导）
   - [x] 未登录访问受保护路由重定向至 `/login`
@@ -328,7 +329,7 @@
 - [x] Task 10.7：`web/src/store/` 全局状态 Context
   - [x] AuthContext（用户、token、登录/登出）
   - [x] SettingsContext（拉取并缓存设置）
-  - [ ] NotificationContext（消息列表）
+  - [x] NotificationContext（消息列表）
 
 ## 阶段 11：前端核心页面
 
@@ -342,8 +343,8 @@
 - [x] Task 11.6：`DiffReviewPage`（P0）— 🟢🟡🔴 三级分流 + Diff 卡片 + 批量合并
 - [x] Task 11.7：`QAPanelPage`（P0）— 多轮对话 + 脚注溯源 + 置信度 + 相关实体 + token/费用 + 反馈按钮
 - [x] Task 11.8：`DashboardPage`（P1）— 规模指标 + 审核待办 + 预算进度 + AI 质量 + 幽灵关系 + 归档状态
-- [ ] Task 11.9：`ChangelogPage`（P1）— 24h 变更批次 + 回滚 + 归档批次 archive- 前缀
-- [ ] Task 11.10：`EvalReportPage`（P1）— 回归表 + 异常熔断告警区 + Git commit 关联
+- [x] Task 11.9：`ChangelogPage`（P1）— 24h 变更批次 + 回滚 + 归档批次 archive- 前缀
+- [x] Task 11.10：`EvalReportPage`（P1）— 回归表 + 异常熔断告警区 + Git commit 关联
 - [ ] Task 11.11：`TimelineFullPage`（P1）— 实体/集群中心 + 🗣 问答日志 + 媒体原地渲染
 - [ ] Task 11.12：`SearchResultPage`（P1）— 条目 + 文件 + 问答记录分组
 - [ ] Task 11.13：`LibraryFilePage`（P1）— PDF 预览 + 音视频播放器 + 时间码跳转

@@ -345,4 +345,83 @@ app.post('/api/generate-draft', async (c) => {
   }
 });
 
+// Task 7.9: 生成静态站点
+app.post('/api/generate-static-site', async (c) => {
+  try {
+    const body = await c.req.json().catch(() => ({}));
+    const { outputPath, includeMedia, includeGraph, theme } = body;
+
+    const options: any = {};
+    if (outputPath !== undefined) options.outputPath = outputPath;
+    if (includeMedia !== undefined) options.includeMedia = includeMedia;
+    if (includeGraph !== undefined) options.includeGraph = includeGraph;
+    if (theme !== undefined) options.theme = theme;
+
+    const result = await brainAPI.generateStaticSite(options);
+    return c.json(result);
+  } catch (err) {
+    loggerInstance.error({ err }, '生成静态站点失败');
+    const message = err instanceof Error ? err.message : getErrorMessage('INTERNAL_ERROR');
+    return c.json({
+      error: {
+        code: 'INTERNAL_ERROR',
+        message
+      }
+    }, 500);
+  }
+});
+
+// Changelog
+app.get('/api/changelog', async (c) => {
+  try {
+    const limit = c.req.query('limit');
+    const op = c.req.query('op');
+    const result = await brainAPI.getChangeLog({
+      limit: limit ? parseInt(limit) : undefined,
+      op: op || undefined
+    });
+    return c.json(result);
+  } catch (err) {
+    loggerInstance.error({ err }, '获取变更日志失败');
+    return c.json({
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: getErrorMessage('INTERNAL_ERROR')
+      }
+    }, 500);
+  }
+});
+
+// Eval report
+app.get('/api/eval-report', async (c) => {
+  try {
+    const result = await brainAPI.getEvalReport();
+    return c.json(result);
+  } catch (err) {
+    loggerInstance.error({ err }, '获取评估报告失败');
+    return c.json({
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: getErrorMessage('INTERNAL_ERROR')
+      }
+    }, 500);
+  }
+});
+
+// Shadow eval
+app.post('/api/shadow-eval', async (c) => {
+  try {
+    const result = await brainAPI.runShadowEval();
+    return c.json(result);
+  } catch (err) {
+    loggerInstance.error({ err }, '执行影子评估失败');
+    return c.json({
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: getErrorMessage('INTERNAL_ERROR')
+      }
+    }, 500);
+  }
+});
+
 export default app;

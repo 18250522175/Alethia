@@ -529,6 +529,146 @@ ${relationsBlock}
     return { slug, content };
   }
 
+  async generateStaticSite(options?: any): Promise<any> {
+    const { generateStaticSite } = await import('./static');
+    return generateStaticSite(options);
+  }
+
+  async getChangeLog(params?: { limit?: number; op?: string }): Promise<{ batches: any[]; total: number }> {
+    try {
+      const pool = getPool();
+      const limit = params?.limit || 100;
+      const opFilter = params?.op;
+
+      const whereClause = opFilter ? 'WHERE op = $2' : '';
+      const queryParams = opFilter ? [opFilter, limit] : [limit];
+
+      const result = await pool.query(
+        `SELECT batch_id, 
+                MIN(ts) as batch_ts,
+                COUNT(*) as total_ops,
+                json_object_agg(op, cnt) as op_counts,
+                array_agg(DISTINCT target) as targets
+         FROM (
+           SELECT batch_id, op, target, ts,
+                  COUNT(*) OVER (PARTITION BY batch_id, op) as cnt
+           FROM auto_change_log
+           ${whereClause}
+           ORDER BY ts DESC
+           LIMIT $${opFilter ? '3' : '1'} * 1000
+         ) sub
+         GROUP BY batch_id
+         ORDER BY batch_ts DESC
+         LIMIT $${opFilter ? '2' : '1'}`,
+        queryParams
+      );
+
+      const batches = result.rows.map(row => ({
+        batchId: row.batch_id,
+        ts: row.batch_ts,
+        opCounts: row.op_counts || {},
+        totalOps: parseInt(row.total_ops),
+        targets: row.targets || []
+      }));
+
+      const totalResult = await pool.query(
+        `SELECT COUNT(DISTINCT batch_id) as count FROM auto_change_log${opFilter ? ' WHERE op = $1' : ''}`,
+        opFilter ? [opFilter] : []
+      );
+
+      return {
+        batches: batches.slice(0, limit),
+        total: parseInt(totalResult.rows[0]?.count || '0')
+      };
+    } catch (err) {
+      logger.warn({ err }, '获取变更日志失败');
+      return { batches: [], total: 0 };
+    }
+  }
+
+  async getEvalReport(): Promise<{
+    benchmarks: any[];
+    anomalies: any[];
+    summary: any;
+    trend: any[];
+  }> {
+    try {
+      const pool = getPool();
+
+      const [benchResult, anomalyResult] = await Promise.all([
+        pool.query('SELECT id, type, slug, source_text, expected_output, git_commit FROM shadow_benchmarks ORDER BY id DESC LIMIT 100'),
+        pool.query('SELECT id, metric, threshold, actual, ts, message FROM eval_anomaly_flags ORDER BY ts DESC LIMIT 20')
+      ]);
+
+      const benchmarks = benchResult.rows.map(row => ({
+        id: row.id,
+        type: row.type,
+        slug: row.slug,
+        sourceText: row.source_text,
+        expectedOutput: row.expected_output,
+        gitCommit: row.git_commit,
+        passed: null,
+        score: null
+      }));
+
+      const anomalies = anomalyResult.rows.map(row => ({
+        id: row.id,
+        metric: row.metric,
+        threshold: row.threshold,
+        actual: row.actual,
+        ts: row.ts,
+        message: row.message
+      }));
+
+      const passed = benchmarks.filter((b: any) => b.passed === true).length;
+      const total = benchmarks.length;
+
+      return {
+        benchmarks,
+        anomalies,
+        summary: {
+          total,
+          passed,
+          accuracy: total > 0 ? passed / total : 0,
+          reproductionRate: 0,
+          newErrors: 0,
+          lastRun: null
+        },
+        trend: []
+      };
+    } catch (err) {
+      logger.warn({ err }, '获取评估报告失败');
+      return {
+        benchmarks: [],
+        anomalies: [],
+        summary: { total: 0, passed: 0, accuracy: 0, reproductionRate: 0, newErrors: 0 },
+        trend: []
+      };
+    }
+  }
+
+  async runShadowEval(): Promise<{
+    passed: boolean;
+    accuracy: number;
+    reproductionRate: number;
+    newErrors: number;
+    errors: string[];
+  }> {
+    try {
+      const { runShadowEval } = await import('../evolution/shadow');
+      return runShadowEval();
+    } catch (err) {
+      logger.error({ err }, '影子评估执行失败');
+      return {
+        passed: false,
+        accuracy: 0,
+        reproductionRate: 0,
+        newErrors: 0,
+        errors: [err instanceof Error ? err.message : '未知错误']
+      };
+    }
+  }
+
   async getConversation(conversationId: string): Promise<any[]> {
     try {
       const pool = getPool();

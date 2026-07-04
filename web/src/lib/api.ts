@@ -205,6 +205,71 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify({ content })
     });
+  },
+
+  getChangeLog(params?: { limit?: number; op?: string }) {
+    const query = new URLSearchParams();
+    if (params?.limit) query.set('limit', String(params.limit));
+    if (params?.op) query.set('op', params.op);
+    return request<{
+      batches: {
+        batchId: string;
+        ts: string;
+        opCounts: Record<string, number>;
+        totalOps: number;
+        targets: string[];
+      }[];
+      total: number;
+    }>(`/changelog?${query.toString()}`);
+  },
+
+  rollbackBatch(batchId: string) {
+    return request<{ restored: boolean; files: string[]; rebuildTriggered: boolean }>(
+      `/rollback/${batchId}`,
+      { method: 'POST' }
+    );
+  },
+
+  getEvalReport() {
+    return request<{
+      benchmarks: {
+        id: number;
+        type: string;
+        slug?: string;
+        sourceText: string;
+        expectedOutput: string;
+        gitCommit?: string;
+        passed?: boolean;
+        score?: number;
+      }[];
+      anomalies: {
+        id: string;
+        metric: string;
+        threshold: number;
+        actual: number;
+        ts: string;
+        message: string;
+      }[];
+      summary: {
+        total: number;
+        passed: number;
+        accuracy: number;
+        reproductionRate: number;
+        newErrors: number;
+        lastRun?: string;
+      };
+      trend: { date: string; accuracy: number }[];
+    }>('/eval-report');
+  },
+
+  runShadowEval() {
+    return request<{
+      passed: boolean;
+      accuracy: number;
+      reproductionRate: number;
+      newErrors: number;
+      errors: string[];
+    }>('/shadow-eval', { method: 'POST' });
   }
 };
 

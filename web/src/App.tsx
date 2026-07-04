@@ -4,6 +4,7 @@ import { queryClient } from './lib/query';
 import { AuthProvider, useAuth } from './store/AuthContext';
 import { ThemeProvider } from './store/ThemeContext';
 import { SettingsProvider } from './store/SettingsContext';
+import { NotificationProvider } from './contexts/NotificationContext';
 import Shell from './layouts/Shell';
 import LoginPage from './routes/LoginPage';
 import WikiHomePage from './routes/WikiHomePage';
@@ -14,6 +15,8 @@ import GraphFullPage from './routes/GraphFullPage';
 import DashboardPage from './routes/DashboardPage';
 import WikiEntryPage from './routes/WikiEntryPage';
 import OnboardingPage from './routes/OnboardingPage';
+import ChangelogPage from './routes/ChangelogPage';
+import EvalReportPage from './routes/EvalReportPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();
@@ -49,6 +52,8 @@ function AppRoutes() {
         <Route path="dashboard" element={<DashboardPage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="settings/:section" element={<SettingsPage />} />
+        <Route path="changelog" element={<ChangelogPage />} />
+        <Route path="eval-report" element={<EvalReportPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
@@ -61,9 +66,11 @@ function App() {
       <ThemeProvider>
         <AuthProvider>
           <SettingsProvider>
-            <BrowserRouter>
-              <AppRoutes />
-            </BrowserRouter>
+            <NotificationProvider>
+              <BrowserRouter>
+                <AppRoutes />
+              </BrowserRouter>
+            </NotificationProvider>
           </SettingsProvider>
         </AuthProvider>
       </ThemeProvider>
