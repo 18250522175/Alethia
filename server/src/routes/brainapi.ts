@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { brainAPI } from '../brainapi';
 import loggerInstance from '../i18n/logger';
 import { getErrorMessage } from '../i18n/errors.zh-CN';
+import { getPool } from '../db/pool';
 import type { AskRequest, QueryParams } from '@shared/index';
 
 const app = new Hono();
@@ -421,6 +422,70 @@ app.post('/api/shadow-eval', async (c) => {
         message: getErrorMessage('INTERNAL_ERROR')
       }
     }, 500);
+  }
+});
+
+// Timeline
+app.get('/api/timeline', async (c) => {
+  try {
+    const slug = c.req.query('slug');
+    const limit = c.req.query('limit');
+    const offset = c.req.query('offset');
+    const result = await brainAPI.getTimeline({
+      slug: slug || undefined,
+      limit: limit ? parseInt(limit) : undefined,
+      offset: offset ? parseInt(offset) : undefined
+    });
+    return c.json(result);
+  } catch (err) {
+    loggerInstance.error({ err }, '获取时间线失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+// Search
+app.get('/api/search', async (c) => {
+  try {
+    const q = c.req.query('q') || '';
+    if (!q.trim()) {
+      return c.json({ pages: [], files: [], conversations: [], total: 0 });
+    }
+    const result = await brainAPI.search(q.trim());
+    return c.json(result);
+  } catch (err) {
+    loggerInstance.error({ err }, '搜索失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+// Library file
+app.get('/api/library-files/:hash', async (c) => {
+  try {
+    const hash = c.req.param('hash');
+    const result = await brainAPI.getLibraryFile(hash);
+    if (!result) {
+      return c.json({ error: { code: 'NOT_FOUND', message: '文件不存在' } }, 404);
+    }
+    return c.json(result);
+  } catch (err) {
+    loggerInstance.error({ err }, '获取库文件失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+// Library file content (media streaming)
+app.get('/api/library-files/:hash/content', async (c) => {
+  try {
+    const hash = c.req.param('hash');
+    const pool = getPool();
+    const result = await pool.query('SELECT mime FROM library_files WHERE hash = $1', [hash]);
+    if (result.rows.length === 0) {
+      return c.json({ error: { code: 'NOT_FOUND', message: '文件不存在' } }, 404);
+    }
+    // 返回重定向到实际文件路径（简化实现）
+    return c.json({ error: { code: 'NOT_IMPLEMENTED', message: '媒体流服务尚未实现，请直接访问文件系统' } }, 501);
+  } catch (err) {
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
   }
 });
 

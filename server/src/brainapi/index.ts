@@ -669,6 +669,149 @@ ${relationsBlock}
     }
   }
 
+  // Timeline
+  async getTimeline(params?: { slug?: string; limit?: number; offset?: number }): Promise<{ items: any[]; total: number }> {
+    try {
+      const pool = getPool();
+      const limit = params?.limit || 20;
+      const offset = params?.offset || 0;
+
+      let query = 'SELECT id, slug, type, payload, ts FROM timeline_entries';
+      let countQuery = 'SELECT COUNT(*) as count FROM timeline_entries';
+      const queryParams: any[] = [];
+
+      if (params?.slug) {
+        query += ' WHERE slug = $1';
+        countQuery += ' WHERE slug = $1';
+        queryParams.push(params.slug);
+      }
+
+      query += ' ORDER BY ts DESC LIMIT $' + (queryParams.length + 1) + ' OFFSET $' + (queryParams.length + 2);
+      queryParams.push(limit, offset);
+
+      const [result, countResult] = await Promise.all([
+        pool.query(query, queryParams),
+        pool.query(countQuery, params?.slug ? [params.slug] : [])
+      ]);
+
+      const items = result.rows.map((row: any) => ({
+        id: row.id,
+        slug: row.slug,
+        type: row.type,
+        payload: row.payload,
+        ts: row.ts,
+        title: row.payload?.title || '',
+        description: row.payload?.description || ''
+      }));
+
+      return {
+        items,
+        total: parseInt(countResult.rows[0]?.count || '0')
+      };
+    } catch (err) {
+      logger.warn({ err }, '获取时间线失败');
+      return { items: [], total: 0 };
+    }
+  }
+
+  // Search
+  async search(query: string): Promise<{ pages: any[]; files: any[]; conversations: any[]; total: number }> {
+    try {
+      const pool = getPool();
+      const queryString = `%${query}%`;
+
+      const [pageResult, fileResult, convResult] = await Promise.all([
+        pool.query(
+          `SELECT slug, title, type,
+                  LEFT(content_md, 200) as snippet
+           FROM pages
+           WHERE title ILIKE $1 OR content_md ILIKE $1 OR slug ILIKE $1
+           LIMIT 10`,
+          [queryString]
+        ),
+        pool.query(
+          `SELECT hash, mime, original_name, size, status
+           FROM library_files
+           WHERE original_name ILIKE $1 OR hash ILIKE $1
+           LIMIT 10`,
+          [queryString]
+        ),
+        pool.query(
+          `SELECT conversation_id, content, ts, role
+           FROM conversation_logs
+           WHERE content ILIKE $1
+           ORDER BY ts DESC
+           LIMIT 10`,
+          [queryString]
+        )
+      ]);
+
+      const pages = pageResult.rows.map((r: any) => ({
+        slug: r.slug, title: r.title, snippet: r.snippet, type: r.type
+      }));
+      const files = fileResult.rows.map((r: any) => ({
+        hash: r.hash, originalName: r.original_name, mime: r.mime, size: r.size, status: r.status
+      }));
+      const conversations = convResult.rows.filter((r: any) => r.role === 'user').map((r: any) => ({
+        id: r.conversation_id, question: r.content, answer: '', ts: r.ts
+      }));
+
+      return {
+        pages, files, conversations,
+        total: pages.length + files.length + conversations.length
+      };
+    } catch (err) {
+      logger.warn({ err }, '搜索失败');
+      return { pages: [], files: [], conversations: [], total: 0 };
+    }
+  }
+
+  // Library file
+  async getLibraryFile(hash: string): Promise<any> {
+    try {
+      const pool = getPool();
+      const fileResult = await pool.query(
+        'SELECT hash, mime, original_name, size, status, ingested_at FROM library_files WHERE hash = $1',
+        [hash]
+      );
+
+      if (fileResult.rows.length === 0) {
+        return null;
+      }
+
+      const file = fileResult.rows[0];
+
+      const evidenceResult = await pool.query(
+        `SELECT span_id, original_location, span_text, source_type
+         FROM evidence_spans
+         WHERE source_file_hash = $1
+         LIMIT 50`,
+        [hash]
+      );
+
+      return {
+        file: {
+          hash: file.hash,
+          mime: file.mime,
+          originalName: file.original_name,
+          size: file.size,
+          status: file.status,
+          ingestedAt: file.ingested_at
+        },
+        evidenceSpans: evidenceResult.rows.map((r: any) => ({
+          spanId: r.span_id,
+          originalLocation: r.original_location,
+          spanText: r.span_text,
+          sourceType: r.source_type
+        })),
+        contentUrl: `/api/library-files/${hash}/content`
+      };
+    } catch (err) {
+      logger.warn({ err }, '获取库文件失败');
+      return null;
+    }
+  }
+
   async getConversation(conversationId: string): Promise<any[]> {
     try {
       const pool = getPool();

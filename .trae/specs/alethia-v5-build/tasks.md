@@ -289,13 +289,13 @@
 
 ## 阶段 9：CLI 与 MCP Server（P2）
 
-- [ ] Task 9.1：`server/src/cli/brain.ts` CLI 命令
-  - [ ] `brain ask "问题"` → 输出 Markdown + 来源
-  - [ ] `brain rebuild-struct` / `extract-pending` / `archive-versions` / `clean-ghost-relations` / `translate-evidence` / `generate-static-site` / `dashboard-snapshot`
-- [ ] Task 9.2：`server/src/mcp/server.ts` MCP Server
-  - [ ] stdio + HTTP 双模式
-  - [ ] 35+ 工具（包括 `ask_question`、`narrate`、`shadow_eval`、`rule_learn`、`translate_evidence`、`list_observed_files` 等）
-  - [ ] 全部经 BrainAPI 调用
+- [x] Task 9.1：`server/src/cli/brain.ts` CLI 命令
+  - [x] `brain ask "问题"` → 输出 Markdown + 来源
+  - [x] `brain rebuild-struct` / `extract-pending` / `archive-versions` / `clean-ghost-relations` / `translate-evidence` / `generate-static-site` / `dashboard-snapshot`
+- [x] Task 9.2：`server/src/mcp/server.ts` MCP Server
+  - [x] stdio + HTTP 双模式
+  - [x] 36 个工具（包括 `ask_question`、`narrate`、`run_shadow_eval`、`rule_learn`、`translate_evidence`、`list_observed_files` 等）
+  - [x] 全部经 BrainAPI 调用
 
 ## 阶段 10：前端基础设施（P0）
 
