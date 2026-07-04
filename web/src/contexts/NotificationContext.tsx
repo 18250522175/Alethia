@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, ReactNode, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import {
   Bell,
   CheckCircle,
@@ -196,6 +197,7 @@ type TabType = 'all' | NotificationType;
 
 export function NotificationCenter({ isOpen, onClose }: NotificationCenterProps) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotification();
   const [activeTab, setActiveTab] = useState<TabType>('all');
   const panelRef = useRef<HTMLDivElement>(null);
@@ -356,7 +358,10 @@ export function NotificationCenter({ isOpen, onClose }: NotificationCenterProps)
             <Check size={14} />
             全部标为已读
           </button>
-          <button className="flex items-center gap-1.5 text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 font-medium">
+          <button
+            onClick={(e) => { e.stopPropagation(); onClose(); navigate('/notifications'); }}
+            className="flex items-center gap-1.5 text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 font-medium"
+          >
             查看全部
             <ArrowRight size={14} />
           </button>

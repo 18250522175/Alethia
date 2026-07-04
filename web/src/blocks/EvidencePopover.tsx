@@ -41,10 +41,12 @@ export default function EvidencePopover({
   const { t } = useTranslation();
   const triggerRef = useRef<HTMLSpanElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
+  const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [isPinned, setIsPinned] = useState(false);
   const [placement, setPlacement] = useState<Placement>('top');
   const [copied, setCopied] = useState(false);
+  const [showOriginal, setShowOriginal] = useState(false);
 
   const computePlacement = () => {
     if (!triggerRef.current) return;
@@ -60,8 +62,33 @@ export default function EvidencePopover({
     }
   };
 
+  const handleMouseEnter = () => {
+    if (isPinned) return;
+    if (hoverTimerRef.current) {
+      clearTimeout(hoverTimerRef.current);
+    }
+    hoverTimerRef.current = setTimeout(() => {
+      computePlacement();
+      setIsOpen(true);
+      setShowOriginal(false);
+    }, 200);
+  };
+
+  const handleMouseLeave = () => {
+    if (isPinned) return;
+    if (hoverTimerRef.current) {
+      clearTimeout(hoverTimerRef.current);
+      hoverTimerRef.current = null;
+    }
+    setIsOpen(false);
+  };
+
   const togglePin = (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (hoverTimerRef.current) {
+      clearTimeout(hoverTimerRef.current);
+      hoverTimerRef.current = null;
+    }
     if (!isOpen) {
       computePlacement();
       setIsOpen(true);
@@ -142,12 +169,14 @@ export default function EvidencePopover({
       : evidence.source_file_hash;
   const libraryLink = buildLibraryLink(evidence);
 
+  const hasTranslation = isNonChinese(evidence.lang) && !!translation;
+
   return (
     <span
       ref={triggerRef}
-      className="relative inline-block"
-      onMouseEnter={() => !isPinned && open()}
-      onMouseLeave={() => !isPinned && setIsOpen(false)}
+      className="relative inline-block cursor-help"
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
     >
       {children}
       {isOpen && (
@@ -204,28 +233,8 @@ export default function EvidencePopover({
               </div>
             </div>
 
-            {/* original text */}
-            <div className="mb-2">
-              <div className="mb-1 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-                {showTranslation ? (
-                  <>
-                    <Translate size={11} />
-                    {t('evidence.original', '原文')} · {evidence.lang}
-                  </>
-                ) : (
-                  <>
-                    <FileText size={11} />
-                    {t('evidence.original', '原文')}
-                  </>
-                )}
-              </div>
-              <blockquote className="max-h-40 overflow-y-auto rounded-md border-l-2 border-primary-300 bg-slate-50 p-2 text-sm leading-relaxed text-slate-700 dark:border-primary-700 dark:bg-slate-900/50 dark:text-slate-200">
-                {evidence.span_text}
-              </blockquote>
-            </div>
-
-            {/* translation (only when source is non-Chinese and a translation exists) */}
-            {showTranslation && (
+            {/* translation (shown first by default when available) */}
+            {hasTranslation && (
               <div className="mb-2">
                 <div className="mb-1 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
                   <Translate size={11} />
@@ -236,6 +245,40 @@ export default function EvidencePopover({
                 </blockquote>
               </div>
             )}
+
+            {/* original text - collapsible when translation exists */}
+            <div className="mb-2">
+              {hasTranslation ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setShowOriginal(!showOriginal); }}
+                    className="mb-1 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+                  >
+                    <Translate size={11} />
+                    {t('evidence.original', '原文')} · {evidence.lang}
+                    <span className="ml-auto text-[9px]">
+                      {showOriginal ? '▲ 收起' : '▼ 展开'}
+                    </span>
+                  </button>
+                  {showOriginal && (
+                    <blockquote className="max-h-40 overflow-y-auto rounded-md border-l-2 border-primary-300 bg-slate-50 p-2 text-sm leading-relaxed text-slate-700 dark:border-primary-700 dark:bg-slate-900/50 dark:text-slate-200 animate-fade-in">
+                      {evidence.span_text}
+                    </blockquote>
+                  )}
+                </>
+              ) : (
+                <>
+                  <div className="mb-1 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                    <FileText size={11} />
+                    {t('evidence.original', '原文')}
+                  </div>
+                  <blockquote className="max-h-40 overflow-y-auto rounded-md border-l-2 border-primary-300 bg-slate-50 p-2 text-sm leading-relaxed text-slate-700 dark:border-primary-700 dark:bg-slate-900/50 dark:text-slate-200">
+                    {evidence.span_text}
+                  </blockquote>
+                </>
+              )}
+            </div>
 
             {/* meta badges: source type / location / lang / confidence */}
             <div className="mb-2 flex flex-wrap items-center gap-1.5">

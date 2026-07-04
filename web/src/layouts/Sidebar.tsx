@@ -1,6 +1,7 @@
-import { House, Graph, CheckCircle, ChatsCircle, Gauge, Clock, ClockCounterClockwise, Gear, BookOpen, Brain, Bell, User } from '@phosphor-icons/react';
+import { House, Graph, CheckCircle, ChatsCircle, Gauge, Clock, ClockCounterClockwise, Gear, BookOpen, Brain, Bell, User, ChevronDown, ChevronRight, Ghost } from '@phosphor-icons/react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { useState } from 'react';
 import type { ComponentType } from 'react';
 
 interface SidebarProps {
@@ -14,6 +15,148 @@ interface NavItem {
   label: string;
   badge?: string;
   badgeColor?: 'green' | 'yellow' | 'red' | 'blue';
+  children?: SubNavItem[];
+}
+
+interface SubNavItem {
+  path: string;
+  label: string;
+}
+
+function NavItemWithTooltip({
+  item,
+  open,
+  isActive
+}: {
+  item: NavItem;
+  open: boolean;
+  isActive: boolean;
+}) {
+  const Icon = item.icon;
+  const [showTooltip, setShowTooltip] = useState(false);
+
+  if (open) {
+    return (
+      <NavLink
+        to={item.path}
+        className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+          isActive
+            ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400'
+            : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700'
+        }`}
+      >
+        <Icon size={20} className="flex-shrink-0" />
+        <span className="flex-1 truncate">{item.label}</span>
+        {item.badge && (
+          <span className={`badge badge-${item.badgeColor || 'blue'}`}>
+            {item.badge}
+          </span>
+        )}
+      </NavLink>
+    );
+  }
+
+  return (
+    <div className="relative">
+      <NavLink
+        to={item.path}
+        onMouseEnter={() => setShowTooltip(true)}
+        onMouseLeave={() => setShowTooltip(false)}
+        className={`flex items-center justify-center rounded-lg py-2.5 text-sm font-medium transition-colors ${
+          isActive
+            ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400'
+            : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700'
+        }`}
+      >
+        <Icon size={20} />
+      </NavLink>
+      {showTooltip && (
+        <div className="absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-xs text-white shadow-lg dark:bg-slate-700">
+          {item.label}
+          <div className="absolute left-0 top-1/2 -translate-x-1 -translate-y-1/2 h-2 w-2 rotate-45 bg-slate-900 dark:bg-slate-700" />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function WikiNavGroup({ open }: { open: boolean }) {
+  const { t } = useTranslation();
+  const location = useLocation();
+  const [expanded, setExpanded] = useState(true);
+  const [showTooltip, setShowTooltip] = useState(false);
+
+  const portals: SubNavItem[] = [
+    { path: '/wiki/portal-product', label: '产品门户' },
+    { path: '/wiki/portal-engineering', label: '工程门户' },
+    { path: '/wiki/portal-research', label: '研究门户' },
+    { path: '/wiki/portal-operations', label: '运营门户' },
+  ];
+
+  const isWikiActive = location.pathname.startsWith('/wiki');
+
+  if (open) {
+    return (
+      <div className="space-y-1">
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+            isWikiActive
+              ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400'
+              : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700'
+          }`}
+        >
+          <BookOpen size={20} className="flex-shrink-0" />
+          <span className="flex-1 truncate text-left">{t('nav.wiki', '百科')}</span>
+          {expanded ? (
+            <ChevronDown size={16} />
+          ) : (
+            <ChevronRight size={16} />
+          )}
+        </button>
+        {expanded && (
+          <div className="ml-5 space-y-1 border-l border-slate-200 dark:border-slate-700 pl-2">
+            {portals.map(portal => (
+              <NavLink
+                key={portal.path}
+                to={portal.path}
+                className={`block rounded-md px-3 py-2 text-sm transition-colors ${
+                  location.pathname === portal.path
+                    ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400'
+                    : 'text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-700'
+                }`}
+              >
+                {portal.label}
+              </NavLink>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative">
+      <NavLink
+        to="/"
+        onMouseEnter={() => setShowTooltip(true)}
+        onMouseLeave={() => setShowTooltip(false)}
+        className={`flex items-center justify-center rounded-lg py-2.5 text-sm font-medium transition-colors ${
+          isWikiActive
+            ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400'
+            : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700'
+        }`}
+      >
+        <BookOpen size={20} />
+      </NavLink>
+      {showTooltip && (
+        <div className="absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-xs text-white shadow-lg dark:bg-slate-700">
+          {t('nav.wiki', '百科')}
+          <div className="absolute left-0 top-1/2 -translate-x-1 -translate-y-1/2 h-2 w-2 rotate-45 bg-slate-900 dark:bg-slate-700" />
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function Sidebar({ open }: SidebarProps) {
@@ -31,6 +174,8 @@ export default function Sidebar({ open }: SidebarProps) {
     { path: '/settings', icon: Gear, label: t('nav.settings') }
   ];
 
+  const ghostCount = 2;
+
   return (
     <aside
       className={`${
@@ -38,31 +183,47 @@ export default function Sidebar({ open }: SidebarProps) {
       } flex flex-col border-r border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800 transition-all duration-300`}
     >
       <nav className="flex-1 space-y-1 px-2 py-4">
-        {navItems.map((item) => {
-          const Icon = item.icon;
+        {navItems.slice(0, 1).map((item) => {
           const isActive = location.pathname === item.path ||
             (item.path !== '/' && location.pathname.startsWith(item.path));
-
           return (
-            <NavLink
+            <NavItemWithTooltip
               key={item.path}
-              to={item.path}
-              className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-                isActive
-                  ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400'
-                  : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700'
-              }`}
-            >
-              <Icon size={20} className="flex-shrink-0" />
-              {open && <span className="flex-1 truncate">{item.label}</span>}
-              {open && item.badge && (
-                <span className={`badge badge-${item.badgeColor || 'blue'}`}>
-                  {item.badge}
-                </span>
-              )}
-            </NavLink>
+              item={item}
+              open={open}
+              isActive={isActive}
+            />
           );
         })}
+
+        <WikiNavGroup open={open} />
+
+        {navItems.slice(1).map((item) => {
+          const isActive = location.pathname === item.path ||
+            (item.path !== '/' && location.pathname.startsWith(item.path));
+          return (
+            <NavItemWithTooltip
+              key={item.path}
+              item={item}
+              open={open}
+              isActive={isActive}
+            />
+          );
+        })}
+
+        {ghostCount > 0 && (
+          <div className={`mt-2 ${open ? 'px-3' : 'flex justify-center'}`}>
+            <div
+              className={`flex items-center gap-2 rounded-lg bg-red-50 px-2 py-1.5 text-xs text-red-600 dark:bg-red-900/20 dark:text-red-400 ${
+                open ? '' : 'justify-center w-8'
+              }`}
+              title={`${ghostCount} 条幽灵关系待处理`}
+            >
+              <Ghost size={14} />
+              {open && <span>{ghostCount} 幽灵关系</span>}
+            </div>
+          </div>
+        )}
       </nav>
 
       {open && (

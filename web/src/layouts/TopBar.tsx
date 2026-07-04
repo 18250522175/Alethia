@@ -1,9 +1,12 @@
-import { Bell, Gauge, User, List, MagnifyingGlass, ChatsCircle } from '@phosphor-icons/react';
+import { Bell, Gauge, User, List, ChatsCircle, CurrencyDollar } from '@phosphor-icons/react';
 import { useTheme } from '../store/ThemeContext';
 import { useAuth } from '../store/AuthContext';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { useNotification, NotificationCenter } from '../contexts/NotificationContext';
+import SearchCombobox from '../blocks/SearchCombobox';
+import { Popover, PopoverButton, PopoverPanel } from '@headlessui/react';
 
 interface TopBarProps {
   onToggleSidebar: () => void;
@@ -15,10 +18,16 @@ export default function TopBar({ onToggleSidebar }: TopBarProps) {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const navigate = useNavigate();
   const { t } = useTranslation();
+  const { unreadCount } = useNotification();
 
   const handleLogout = () => {
     logout();
     navigate('/login');
+  };
+
+  const budgetData = {
+    daily: { used: 2.35, total: 5 },
+    monthly: { used: 45.8, total: 100 }
   };
 
   return (
@@ -42,17 +51,7 @@ export default function TopBar({ onToggleSidebar }: TopBarProps) {
       </div>
 
       <div className="flex flex-1 max-w-xl mx-8">
-        <div className="relative w-full">
-          <MagnifyingGlass
-            size={18}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-          />
-          <input
-            type="text"
-            placeholder="搜索知识、文档、问答记录..."
-            className="input pl-10"
-          />
-        </div>
+        <SearchCombobox />
       </div>
 
       <div className="flex items-center gap-2">
@@ -64,10 +63,68 @@ export default function TopBar({ onToggleSidebar }: TopBarProps) {
           <span className="hidden sm:inline">快速提问</span>
         </button>
 
-        <button className="btn btn-ghost p-2 relative" aria-label="通知">
-          <Bell size={20} />
-          <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-red-500"></span>
-        </button>
+        <Popover className="relative">
+          <PopoverButton
+            className="btn btn-ghost p-2 relative"
+            aria-label="通知"
+          >
+            <Bell size={20} />
+            {unreadCount > 0 && (
+              <span className="absolute right-1.5 top-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
+          </PopoverButton>
+          <PopoverPanel
+            anchor="bottom end"
+            className="z-50 mt-2 w-96"
+          >
+            {({ close }) => (
+              <NotificationCenter
+                isOpen={true}
+                onClose={close}
+              />
+            )}
+          </PopoverPanel>
+        </Popover>
+
+        <Popover className="relative">
+          <PopoverButton
+            className="btn btn-ghost p-2 relative"
+            aria-label="预算"
+          >
+            <CurrencyDollar size={20} />
+          </PopoverButton>
+          <PopoverPanel
+            anchor="bottom end"
+            className="z-50 mt-2 w-64"
+          >
+            <div className="card p-3 shadow-xl animate-fade-in">
+              <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-slate-700 dark:text-slate-200">
+                <CurrencyDollar size={16} className="text-primary-500" />
+                {t('health.budget', '预算使用')}
+              </div>
+              <div className="space-y-2">
+                <BudgetMiniBar
+                  label={t('health.daily', '每日')}
+                  used={budgetData.daily.used}
+                  total={budgetData.daily.total}
+                />
+                <BudgetMiniBar
+                  label={t('health.monthly', '每月')}
+                  used={budgetData.monthly.used}
+                  total={budgetData.monthly.total}
+                />
+              </div>
+              <button
+                onClick={() => navigate('/dashboard')}
+                className="mt-3 w-full text-xs text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 font-medium text-right"
+              >
+                查看详情 →
+              </button>
+            </div>
+          </PopoverPanel>
+        </Popover>
 
         <div className="relative">
           <button
@@ -87,7 +144,10 @@ export default function TopBar({ onToggleSidebar }: TopBarProps) {
                 {isDark ? '浅色模式' : '深色模式'}
               </button>
               <button
-                onClick={() => navigate('/settings')}
+                onClick={() => {
+                  navigate('/settings');
+                  setShowUserMenu(false);
+                }}
                 className="flex w-full items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700"
               >
                 {t('nav.settings')}
@@ -104,5 +164,40 @@ export default function TopBar({ onToggleSidebar }: TopBarProps) {
         </div>
       </div>
     </header>
+  );
+}
+
+function BudgetMiniBar({
+  label,
+  used,
+  total
+}: {
+  label: string;
+  used: number;
+  total: number;
+}) {
+  const pct = total > 0 ? Math.round((used / total) * 100) : 0;
+  const exceeded = used > total;
+  const barColor = exceeded
+    ? 'bg-red-500'
+    : pct >= 80
+      ? 'bg-yellow-500'
+      : 'bg-primary-500';
+
+  return (
+    <div>
+      <div className="mb-1 flex items-center justify-between text-xs">
+        <span className="text-slate-500 dark:text-slate-400">{label}</span>
+        <span className={exceeded ? 'font-medium text-red-600 dark:text-red-400' : 'text-slate-600 dark:text-slate-300'}>
+          {exceeded ? '超额' : `${pct}%`}
+        </span>
+      </div>
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+        <div
+          className={`h-full rounded-full transition-all ${barColor}`}
+          style={{ width: `${Math.min(pct, 100)}%` }}
+        />
+      </div>
+    </div>
   );
 }

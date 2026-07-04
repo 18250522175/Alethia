@@ -12,9 +12,36 @@ import {
   Brain,
   Warning,
   Files,
-  TrendUp
+  TrendUp,
+  ChartLine,
+  ChartPie
 } from '@phosphor-icons/react';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  ArcElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+} from 'chart.js';
+import { Line, Pie } from 'react-chartjs-2';
 import api from '../lib/api';
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  ArcElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+);
 
 export default function DashboardPage() {
   const { t } = useTranslation();
@@ -37,6 +64,93 @@ export default function DashboardPage() {
   const data = healthQuery.data;
   const isLoading = healthQuery.isLoading;
   const isError = healthQuery.isError;
+
+  const trendData = {
+    labels: ['周一', '周二', '周三', '周四', '周五', '周六', '周日'],
+    datasets: [
+      {
+        label: '新增页面',
+        data: [12, 19, 8, 15, 22, 10, 5],
+        borderColor: '#6366f1',
+        backgroundColor: 'rgba(99, 102, 241, 0.1)',
+        fill: true,
+        tension: 0.4
+      },
+      {
+        label: '新增关系',
+        data: [25, 35, 20, 40, 55, 30, 15],
+        borderColor: '#06b6d4',
+        backgroundColor: 'rgba(6, 182, 212, 0.1)',
+        fill: true,
+        tension: 0.4
+      }
+    ]
+  };
+
+  const costPieData = {
+    labels: ['问答', '提取', '审核', '其他'],
+    datasets: [
+      {
+        data: [45, 30, 15, 10],
+        backgroundColor: [
+          'rgba(99, 102, 241, 0.8)',
+          'rgba(6, 182, 212, 0.8)',
+          'rgba(249, 115, 22, 0.8)',
+          'rgba(148, 163, 184, 0.8)'
+        ],
+        borderColor: [
+          'rgb(99, 102, 241)',
+          'rgb(6, 182, 212)',
+          'rgb(249, 115, 22)',
+          'rgb(148, 163, 184)'
+        ],
+        borderWidth: 2
+      }
+    ]
+  };
+
+  const chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'bottom' as const,
+        labels: {
+          boxWidth: 12,
+          padding: 15,
+          font: { size: 11 }
+        }
+      }
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+        grid: {
+          color: 'rgba(148, 163, 184, 0.1)'
+        }
+      },
+      x: {
+        grid: {
+          display: false
+        }
+      }
+    }
+  };
+
+  const pieOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'bottom' as const,
+        labels: {
+          boxWidth: 12,
+          padding: 15,
+          font: { size: 11 }
+        }
+      }
+    }
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -101,6 +215,33 @@ export default function DashboardPage() {
               />
             </div>
           </section>
+
+          {/* Charts Section */}
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+            <div className="card p-5 lg:col-span-2">
+              <div className="mb-4 flex items-center gap-2">
+                <ChartLine size={18} className="text-primary-500" />
+                <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                  增长趋势
+                </h3>
+              </div>
+              <div className="h-64">
+                <Line data={trendData} options={chartOptions} />
+              </div>
+            </div>
+
+            <div className="card p-5">
+              <div className="mb-4 flex items-center gap-2">
+                <ChartPie size={18} className="text-emerald-500" />
+                <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                  成本分布
+                </h3>
+              </div>
+              <div className="h-64">
+                <Pie data={costPieData} options={pieOptions} />
+              </div>
+            </div>
+          </div>
 
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
             <section className="card p-5">
