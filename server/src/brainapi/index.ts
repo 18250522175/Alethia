@@ -13,6 +13,7 @@ import { llmRouter } from '../llm/router';
 import { loadEnv } from '../config/loader';
 import logger from '../i18n/logger';
 import { getErrorMessage } from '../i18n/errors.zh-CN';
+import { budgetManager } from '../evolution/budget';
 import type {
   RebuildReport,
   ExtractReport,
@@ -842,6 +843,39 @@ ${relationsBlock}
       logger.warn({ err }, '获取对话记录失败');
       return [];
     }
+  }
+
+  async setDailyBudget(amount: number): Promise<{ success: boolean; dailyBudget: number }> {
+    try {
+      budgetManager.setDailyBudget(amount);
+      const snapshot = budgetManager.getSnapshot();
+      return { success: true, dailyBudget: snapshot.dailyBudget };
+    } catch (err) {
+      logger.error({ err }, '设置日预算失败');
+      return { success: false, dailyBudget: 0 };
+    }
+  }
+
+  async getRemainingBudget(): Promise<{
+    daily: number;
+    monthly: number;
+    dailyLimit: number;
+    monthlyLimit: number;
+    tripped: boolean;
+  }> {
+    const snapshot = budgetManager.getSnapshot();
+    return {
+      daily: snapshot.remaining.daily,
+      monthly: snapshot.remaining.monthly,
+      dailyLimit: snapshot.dailyBudget,
+      monthlyLimit: snapshot.monthlyBudget,
+      tripped: snapshot.tripped
+    };
+  }
+
+  async getBudgetAlerts(): Promise<{ items: any[]; total: number }> {
+    const alerts = budgetManager.getAlerts();
+    return { items: alerts, total: alerts.length };
   }
 }
 

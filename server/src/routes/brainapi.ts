@@ -3,6 +3,9 @@ import { brainAPI } from '../brainapi';
 import loggerInstance from '../i18n/logger';
 import { getErrorMessage } from '../i18n/errors.zh-CN';
 import { getPool } from '../db/pool';
+import { storage } from '../storage/markdown';
+import { join } from 'path';
+import { existsSync, statSync } from 'fs';
 import type { AskRequest, QueryParams } from '@shared/index';
 
 const app = new Hono();
@@ -482,10 +485,169 @@ app.get('/api/library-files/:hash/content', async (c) => {
     if (result.rows.length === 0) {
       return c.json({ error: { code: 'NOT_FOUND', message: '文件不存在' } }, 404);
     }
-    // 返回重定向到实际文件路径（简化实现）
-    return c.json({ error: { code: 'NOT_IMPLEMENTED', message: '媒体流服务尚未实现，请直接访问文件系统' } }, 501);
+    const mime = result.rows[0].mime;
+    const filePath = join(storage.getLibraryPath(), hash);
+
+    if (!existsSync(filePath)) {
+      return c.json({ error: { code: 'NOT_FOUND', message: '文件不存在' } }, 404);
+    }
+
+    const totalSize = statSync(filePath).size;
+    const rangeHeader = c.req.header('range');
+
+    if (!rangeHeader) {
+      const file = Bun.file(filePath);
+      return new Response(file, {
+        status: 200,
+        headers: {
+          'Accept-Ranges': 'bytes',
+          'Content-Type': mime || 'application/octet-stream',
+          'Content-Length': totalSize.toString()
+        }
+      });
+    }
+
+    const rangeMatch = rangeHeader.match(/^bytes=(\d*)-(\d*)$/);
+    if (!rangeMatch) {
+      return new Response(null, {
+        status: 416,
+        headers: {
+          'Accept-Ranges': 'bytes',
+          'Content-Type': mime || 'application/octet-stream',
+          'Content-Range': `bytes */${totalSize}`
+        }
+      });
+    }
+
+    const startStr = rangeMatch[1];
+    const endStr = rangeMatch[2];
+
+    if (startStr === '' && endStr === '') {
+      return new Response(null, {
+        status: 416,
+        headers: {
+          'Accept-Ranges': 'bytes',
+          'Content-Type': mime || 'application/octet-stream',
+          'Content-Range': `bytes */${totalSize}`
+        }
+      });
+    }
+
+    let start: number;
+    let end: number;
+
+    if (startStr === '') {
+      const suffixLength = parseInt(endStr, 10);
+      if (isNaN(suffixLength) || suffixLength <= 0) {
+        return new Response(null, {
+          status: 416,
+          headers: {
+            'Accept-Ranges': 'bytes',
+            'Content-Type': mime || 'application/octet-stream',
+            'Content-Range': `bytes */${totalSize}`
+          }
+        });
+      }
+      start = Math.max(0, totalSize - suffixLength);
+      end = totalSize - 1;
+    } else {
+      start = parseInt(startStr, 10);
+      if (isNaN(start) || start < 0 || start >= totalSize) {
+        return new Response(null, {
+          status: 416,
+          headers: {
+            'Accept-Ranges': 'bytes',
+            'Content-Type': mime || 'application/octet-stream',
+            'Content-Range': `bytes */${totalSize}`
+          }
+        });
+      }
+      if (endStr === '') {
+        end = totalSize - 1;
+      } else {
+        end = parseInt(endStr, 10);
+        if (isNaN(end) || end < start || end >= totalSize) {
+          end = totalSize - 1;
+        }
+      }
+    }
+
+    const contentLength = end - start + 1;
+    const file = Bun.file(filePath);
+    const sliced = file.slice(start, end + 1);
+
+    return new Response(sliced, {
+      status: 206,
+      headers: {
+        'Accept-Ranges': 'bytes',
+        'Content-Type': mime || 'application/octet-stream',
+        'Content-Length': contentLength.toString(),
+        'Content-Range': `bytes ${start}-${end}/${totalSize}`
+      }
+    });
   } catch (err) {
+    loggerInstance.error({ err }, '获取库文件内容失败');
     return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+// Budget: 设置日预算
+app.post('/api/settings/daily-budget', async (c) => {
+  try {
+    const body = await c.req.json().catch(() => ({}));
+    const { amount } = body;
+
+    if (amount === undefined || typeof amount !== 'number' || amount < 0) {
+      return c.json({
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'amount 必须为非负数字'
+        }
+      }, 400);
+    }
+
+    const result = await brainAPI.setDailyBudget(amount);
+    return c.json(result);
+  } catch (err) {
+    loggerInstance.error({ err }, '设置日预算失败');
+    return c.json({
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: getErrorMessage('INTERNAL_ERROR')
+      }
+    }, 500);
+  }
+});
+
+// Budget: 获取剩余预算
+app.get('/api/budget/remaining', async (c) => {
+  try {
+    const result = await brainAPI.getRemainingBudget();
+    return c.json(result);
+  } catch (err) {
+    loggerInstance.error({ err }, '获取剩余预算失败');
+    return c.json({
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: getErrorMessage('INTERNAL_ERROR')
+      }
+    }, 500);
+  }
+});
+
+// Budget: 获取预算告警列表
+app.get('/api/budget/alerts', async (c) => {
+  try {
+    const result = await brainAPI.getBudgetAlerts();
+    return c.json(result);
+  } catch (err) {
+    loggerInstance.error({ err }, '获取预算告警失败');
+    return c.json({
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: getErrorMessage('INTERNAL_ERROR')
+      }
+    }, 500);
   }
 });
 

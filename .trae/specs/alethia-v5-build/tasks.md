@@ -79,7 +79,7 @@
   - [x] `unified` + `remark-parse` 解析 Markdown AST
   - [x] 提取 `## State` / `## Assessment` / `## Open Threads` / `## Relations` / `## Timeline` / `## Version History` / `## Semantic Rings Archive` / `## Evidence` 区块
   - [x] 支持多语境 `[context] [tag]` 解构
-  - [ ] 单元测试：解析 `entropy.md` 全部字段正确
+  - [x] 单元测试：解析 `entropy.md` 全部字段正确
 - [x] Task 2.3：`server/src/storage/manifest.ts` Delta 追踪
   - [x] `.manifest.json` 记录每个文件的 sha256 + mtime
   - [x] `detectDelta()` 返回新增/修改/删除列表
@@ -219,8 +219,8 @@
 - [x] Task 6.4：`server/src/evolution/ghost.ts` 幽灵清理器
   - [x] 扫描 `links` 表，对每个 `target_slug` 检查 `pages` 是否存在
   - [x] 不存在则标记 `orphaned=true`，写入 `ghost_relations`
-  - [ ] 在源实体 `## Open Threads` 追加提示
-  - [ ] 生成 🟢 Diff 写入 `pending_diffs`
+  - [x] 在源实体 `## Open Threads` 追加提示
+  - [x] 生成 🟢 Diff 写入 `pending_diffs`
 - [x] Task 6.5：`server/src/evolution/shadow.ts` 影子评估 + 熔断
   - [x] 沙箱执行 `shadow_benchmarks` 全部正例/反例
   - [x] 计算正确率、复现率、新增错误数
@@ -242,13 +242,13 @@
   - [x] extractFacts 调用 LLM 提取 → 生成 `PendingDiff`
 - [x] Task 7.2：`query(params)` 实现
   - [x] query 调用 L2 router
-  - [ ] getMedia 支持 HTTP 206 Range 请求
+  - [x] getMedia 支持 HTTP 206 Range 请求
 - [x] Task 7.3：`rebuildStruct()`、`extractPending()`（已在阶段 2 完成，此处仅注册到 BrainAPI）
 - [x] Task 7.4：`getHealth()`
   - [x] getHealth 聚合全部仪表盘指标（节点数、边数、待审核数、预算消耗、幽灵数、归档状态等）
-  - [ ] shadowEval()
-  - [ ] setDailyBudget()
-  - [ ] getRemainingBudget()
+  - [x] shadowEval()
+  - [x] setDailyBudget()
+  - [x] getRemainingBudget()
 - [x] Task 7.5：`askQuestion(request)` 完整实现
   - [x] 串联 L1（Planner→Retriever→Grader→Generator→Reflector）
   - [x] 写入 `conversation_logs`
