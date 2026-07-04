@@ -150,19 +150,19 @@
   - [x] `graphTraverse(slug: string, depth: number): Promise<Link[]>`
   - [x] 用 `WITH RECURSIVE`
   - [x] `getGraphNodes()` / `getGraphEdges()`
-- [ ] Task 4.5：`server/src/retrieval/rerank.ts` zerank-2 重排序（可关闭）
-  - [ ] 配置 `reranker.enabled=false` 时直接 passthrough
-  - [ ] 启用时调用 ZeroEntropy API
+- [x] Task 4.5：`server/src/retrieval/rerank.ts` zerank-2 重排序（可关闭）
+  - [x] 配置 `reranker.enabled=false` 时直接 passthrough
+  - [x] 启用时调用 ZeroEntropy API
 - [x] Task 4.6：`server/src/retrieval/source.ts` 来源感知加权
   - [x] 配置 `sourceWeights: {pdf: 1.0, audio: 0.9, web: 0.7, ...}`
   - [x] 在 RRF 后按来源类型二次加权
-- [ ] Task 4.7：`server/src/retrieval/entity.ts` 命名实体 + 学习路由
-  - [ ] 正则识别 `[[wikilink]]` 与显式实体
-  - [ ] 读取 `user_rules` 表应用别名映射
-- [ ] Task 4.8：`server/src/retrieval/nli.ts` RoBERTa-mnli 预检
-  - [ ] 优先调用 HF Inference API（`https://api-inference.huggingface.co/models/roberta-large-mnli`）
-  - [ ] 失败时退化到本地 `@xenova/transformers` `Xenova/roberta-large-mnli`
-  - [ ] 缓存到 `nli_cache` 表
+- [x] Task 4.7：`server/src/retrieval/entity.ts` 命名实体 + 学习路由
+  - [x] 正则识别 `[[wikilink]]` 与显式实体
+  - [x] 读取 `user_rules` 表应用别名映射
+- [x] Task 4.8：`server/src/retrieval/nli.ts` RoBERTa-mnli 预检
+  - [x] 优先调用 HF Inference API（`https://api-inference.huggingface.co/models/roberta-large-mnli`）
+  - [x] 失败时退化到本地 `@xenova/transformers` `Xenova/roberta-large-mnli`
+  - [x] 缓存到 `nli_cache` 表
 - [x] Task 4.9：`server/src/retrieval/router.ts` 意图路由分类器
   - [x] 5 类：具体事实 / 全局主题 / 跨领域综合 / 原始文件搜索 / AI 问答
   - [x] 简单规则分类（关键词 + 长度）
@@ -345,12 +345,12 @@
 - [x] Task 11.8：`DashboardPage`（P1）— 规模指标 + 审核待办 + 预算进度 + AI 质量 + 幽灵关系 + 归档状态
 - [x] Task 11.9：`ChangelogPage`（P1）— 24h 变更批次 + 回滚 + 归档批次 archive- 前缀
 - [x] Task 11.10：`EvalReportPage`（P1）— 回归表 + 异常熔断告警区 + Git commit 关联
-- [ ] Task 11.11：`TimelineFullPage`（P1）— 实体/集群中心 + 🗣 问答日志 + 媒体原地渲染
-- [ ] Task 11.12：`SearchResultPage`（P1）— 条目 + 文件 + 问答记录分组
-- [ ] Task 11.13：`LibraryFilePage`（P1）— PDF 预览 + 音视频播放器 + 时间码跳转
+- [x] Task 11.11：`TimelineFullPage`（P1）— 实体/集群中心 + 🗣 问答日志 + 媒体原地渲染
+- [x] Task 11.12：`SearchResultPage`（P1）— 条目 + 文件 + 问答记录分组
+- [x] Task 11.13：`LibraryFilePage`（P1）— PDF 预览 + 音视频播放器 + 时间码跳转
 - [x] Task 11.14：`SettingsPage`（P0）— 9 组驾驶舱 + 模型适配器列表 + 危险二次确认
 - [x] Task 11.15：`blocks/EvidencePopover.tsx`（P0）— 悬停 + 钉住 + 双语 + 复制 library:// 链接
-- [ ] Task 11.16：`components/brain-media.ts` Web Component（P1）— 音视频播放 + start 时间戳 + 引用角标
+- [x] Task 11.16：`components/brain-media.tsx` Web Component（P1）— 音视频播放 + start 时间戳 + 引用角标
 - [x] Task 11.17：`components/MarkdownRenderer.tsx`（P0）— markdown-it + 自定义媒体插件 + Version History / Semantic Rings 折叠 + evidence_span 着色
 - [x] Task 11.18：`blocks/` 通用分子组件（P0）
   - [x] `BudgetBadge`、`QuickAskButton`、`GlobalSearch`、`UserMenu`、`DiffCard`、`GraphNodeCard`、`MessageBubble`
