@@ -1,3 +1,6 @@
+import type { EvidenceSpan } from '@shared/evidence';
+import type { Link } from '@shared/entities';
+
 const API_BASE = '/api';
 
 function getToken(): string | null {
@@ -177,6 +180,31 @@ export const api = {
 
   getConversation(conversationId: string) {
     return request<{ items: any[]; total: number }>(`/conversations/${conversationId}`);
+  },
+
+  getWikiPage(slug: string) {
+    return request<{
+      page: {
+        slug: string;
+        title: string;
+        type: string;
+        contexts: string[];
+        rawMd: string;
+        contentMd: string;
+        hash: string;
+        updatedAt: string;
+        version: number;
+      };
+      evidenceSpans: EvidenceSpan[];
+      links: { incoming: Link[]; outgoing: Link[] };
+    }>(`/pages/${slug}`);
+  },
+
+  updateWikiPage(slug: string, content: string) {
+    return request<{ success: boolean; hash: string }>(`/pages/${slug}`, {
+      method: 'PUT',
+      body: JSON.stringify({ content })
+    });
   }
 };
 

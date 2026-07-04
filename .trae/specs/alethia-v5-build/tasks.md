@@ -317,9 +317,9 @@
   - [x] `StatusBar.tsx`：后台任务进度 + 最后更新时间 + 连接状态
   - [ ] `NotificationCenter.tsx`：浮层面板分组（审核/系统/补提取/异常）
 - [x] Task 10.5：`web/src/App.tsx` 路由配置 + 守卫
-  - [x] 注册核心路由（登录、首页、问答、图谱、审核、仪表盘、设置）
+  - [x] 注册核心路由（登录、首页、问答、图谱、审核、仪表盘、设置、Wiki 条目、引导）
   - [x] 未登录访问受保护路由重定向至 `/login`
-  - [ ] Onboarding 首次进入自动跳转
+  - [x] Onboarding 首次进入自动跳转
 - [x] Task 10.6：`web/src/lib/api.ts` API 客户端
   - [x] fetch 封装，Bearer Token 自动注入（从 localStorage/sessionStorage）
   - [x] 统一错误处理 → 汉语映射
@@ -334,9 +334,9 @@
 > P0：11.1、11.2、11.3、11.4、11.5、11.6、11.7、11.14；P1：其余。可按页面拆分给不同子代理并行。
 
 - [x] Task 11.1：`LoginPage`（P0）— API Key 输入 + 记住设备 + 跳转
-- [ ] Task 11.2：`OnboardingPage`（P0）— 3–5 步引导浮窗，可跳过
+- [x] Task 11.2：`OnboardingPage`（P0）— 3–5 步引导浮窗，可跳过
 - [x] Task 11.3：`WikiHomePage`（P0）— HeroSection + FeaturedArticleCard + PortalGrid + TimelineFeed + QuickActions
-- [ ] Task 11.4：`WikiEntryPage`（P0）— 双栏：渲染后富媒体预览 + 原始 Markdown；EvidencePopover 内嵌
+- [x] Task 11.4：`WikiEntryPage`（P0）— 双栏：渲染后富媒体预览 + 原始 Markdown；EvidencePopover 内嵌
 - [x] Task 11.5：`GraphFullPage`（P0）— Cytoscape.js + 布局切换 + 节点搜索 + 幽灵虚线 + 图例
 - [x] Task 11.6：`DiffReviewPage`（P0）— 🟢🟡🔴 三级分流 + Diff 卡片 + 批量合并
 - [x] Task 11.7：`QAPanelPage`（P0）— 多轮对话 + 脚注溯源 + 置信度 + 相关实体 + token/费用 + 反馈按钮
@@ -347,12 +347,12 @@
 - [ ] Task 11.12：`SearchResultPage`（P1）— 条目 + 文件 + 问答记录分组
 - [ ] Task 11.13：`LibraryFilePage`（P1）— PDF 预览 + 音视频播放器 + 时间码跳转
 - [x] Task 11.14：`SettingsPage`（P0）— 9 组驾驶舱 + 模型适配器列表 + 危险二次确认
-- [ ] Task 11.15：`blocks/EvidencePopover.tsx`（P0）— 悬停 + 钉住 + 双语 + 复制 library:// 链接
+- [x] Task 11.15：`blocks/EvidencePopover.tsx`（P0）— 悬停 + 钉住 + 双语 + 复制 library:// 链接
 - [ ] Task 11.16：`components/brain-media.ts` Web Component（P1）— 音视频播放 + start 时间戳 + 引用角标
-- [ ] Task 11.17：`components/MarkdownRenderer.tsx`（P0）— markdown-it + 自定义媒体插件 + Version History / Semantic Rings 折叠 + evidence_span 着色
-- [ ] Task 11.18：`blocks/` 通用分子组件（P0）
-  - [ ] `BudgetBadge`、`QuickAskButton`、`GlobalSearch`、`UserMenu`、`DiffCard`、`GraphNodeCard`、`MessageBubble`
-- [ ] Task 11.19：`components/DiffCompare.tsx`（P0）— Diff 并排对比组件
+- [x] Task 11.17：`components/MarkdownRenderer.tsx`（P0）— markdown-it + 自定义媒体插件 + Version History / Semantic Rings 折叠 + evidence_span 着色
+- [x] Task 11.18：`blocks/` 通用分子组件（P0）
+  - [x] `BudgetBadge`、`QuickAskButton`、`GlobalSearch`、`UserMenu`、`DiffCard`、`GraphNodeCard`、`MessageBubble`
+- [x] Task 11.19：`components/DiffCompare.tsx`（P0）— Diff 并排对比组件
 
 ## 阶段 12：部署与文档（P0，与开发并行可起）
 

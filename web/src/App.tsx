@@ -12,11 +12,17 @@ import QAPanelPage from './routes/QAPanelPage';
 import DiffReviewPage from './routes/DiffReviewPage';
 import GraphFullPage from './routes/GraphFullPage';
 import DashboardPage from './routes/DashboardPage';
+import WikiEntryPage from './routes/WikiEntryPage';
+import OnboardingPage from './routes/OnboardingPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
+  }
+  const onboarded = localStorage.getItem('onboarding_completed');
+  if (!onboarded && window.location.pathname !== '/onboarding') {
+    return <Navigate to="/onboarding" replace />;
   }
   return <>{children}</>;
 }
@@ -25,6 +31,7 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/onboarding" element={<OnboardingPage />} />
       <Route
         path="/"
         element={
@@ -34,6 +41,7 @@ function AppRoutes() {
         }
       >
         <Route index element={<WikiHomePage />} />
+        <Route path="wiki/:slug" element={<WikiEntryPage />} />
         <Route path="qa" element={<QAPanelPage />} />
         <Route path="qa/:conversationId" element={<QAPanelPage />} />
         <Route path="graph" element={<GraphFullPage />} />
