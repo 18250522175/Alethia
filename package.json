@@ -1,0 +1,13 @@
+{
+  "name": "alethia",
+  "private": true,
+  "workspaces": ["shared", "server", "web"],
+  "scripts": {
+    "dev:server": "cd server && bun run dev",
+    "dev:web": "cd web && bun run dev",
+    "build": "bun run --filter shared build && bun run --filter server build && bun run --filter web build",
+    "db:migrate": "cd server && bun run db:migrate",
+    "seed": "cd server && bun run seed",
+    "brain": "cd server && bun run brain"
+  }
+}

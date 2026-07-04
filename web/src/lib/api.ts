@@ -1,0 +1,324 @@
+import type { EvidenceSpan } from '@shared/evidence';
+import type { Link } from '@shared/entities';
+
+const API_BASE = '/api';
+
+function getToken(): string | null {
+  return localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token');
+}
+
+function setToken(token: string, remember: boolean = true): void {
+  if (remember) {
+    localStorage.setItem('auth_token', token);
+  } else {
+    sessionStorage.setItem('auth_token', token);
+  }
+}
+
+function clearToken(): void {
+  localStorage.removeItem('auth_token');
+  sessionStorage.removeItem('auth_token');
+}
+
+function isAuthenticated(): boolean {
+  return !!getToken();
+}
+
+interface ApiError {
+  code: string;
+  message: string;
+  details?: Record<string, unknown>;
+}
+
+class ApiErrorClass extends Error {
+  code: string;
+  details?: Record<string, unknown>;
+
+  constructor(code: string, message: string, details?: Record<string, unknown>) {
+    super(message);
+    this.name = 'ApiError';
+    this.code = code;
+    this.details = details;
+  }
+}
+
+async function request<T>(
+  path: string,
+  options: RequestInit = {}
+): Promise<T> {
+  const url = `${API_BASE}${path}`;
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options.headers as Record<string, string> || {})
+  };
+
+  const token = getToken();
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers
+    });
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      const error = data.error as ApiError || {
+        code: 'INTERNAL_ERROR',
+        message: '未知错误'
+      };
+      throw new ApiErrorClass(error.code, error.message, error.details);
+    }
+
+    return data as T;
+  } catch (err) {
+    if (err instanceof ApiErrorClass) {
+      throw err;
+    }
+    throw new ApiErrorClass('NETWORK_ERROR', '网络连接失败，请检查服务是否正常运行');
+  }
+}
+
+export const api = {
+  request,
+  getToken,
+  setToken,
+  clearToken,
+  isAuthenticated,
+
+  login(apiKey: string) {
+    return request<{ success: boolean; token: string }>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ apiKey })
+    });
+  },
+
+  getSettings() {
+    return request<{ settings: any }>('/settings');
+  },
+
+  updateSettings(settings: any) {
+    return request<{ success: boolean; settings: any }>('/settings', {
+      method: 'PUT',
+      body: JSON.stringify({ settings })
+    });
+  },
+
+  getLlmAdapters() {
+    return request<{ adapters: any[] }>('/llm/adapters');
+  },
+
+  testLlmAdapter(adapterId: string) {
+    return request<{ adapterId: string; ok: boolean; latencyMs: number; error?: string }>('/llm/test', {
+      method: 'POST',
+      body: JSON.stringify({ adapterId })
+    });
+  },
+
+  rebuildStruct() {
+    return request<any>('/rebuild-struct', {
+      method: 'POST'
+    });
+  },
+
+  getHealthDashboard() {
+    return request<any>('/health-dashboard');
+  },
+
+  askQuestion(question: string, options?: { conversationId?: string; maxReflections?: number }) {
+    return request<{
+      answer: string;
+      sources: any[];
+      confidence: number;
+      relatedEntities: { slug: string; title: string }[];
+      conversationId: string;
+      tokensUsed: number;
+      estimatedCost: number;
+    }>('/ask', {
+      method: 'POST',
+      body: JSON.stringify({ question, ...options })
+    });
+  },
+
+  queryKnowledge(query: string, options?: { intent?: string; topK?: number; contexts?: string[] }) {
+    return request<{
+      items: Array<{ slug: string; title: string; snippet: string; score: number }>;
+      intent: string;
+      tier: string;
+      durationMs: number;
+    }>('/query', {
+      method: 'POST',
+      body: JSON.stringify({ query, ...options })
+    });
+  },
+
+  getGraphData() {
+    return request<{ nodes: any[]; edges: any[] }>('/graph');
+  },
+
+  getPendingDiffs(tier?: string) {
+    const qs = tier ? `?tier=${tier}` : '';
+    return request<{ items: any[]; total: number }>(`/diffs${qs}`);
+  },
+
+  applyDiff(diffId: string) {
+    return request<{ diffId: string; applied: boolean; newVersion: number; modifiedFiles: string[] }>(
+      `/diffs/${diffId}/apply`,
+      { method: 'POST' }
+    );
+  },
+
+  rejectDiff(diffId: string) {
+    return request<{ diffId: string; applied: boolean }>(
+      `/diffs/${diffId}/reject`,
+      { method: 'POST' }
+    );
+  },
+
+  getConversation(conversationId: string) {
+    return request<{ items: any[]; total: number }>(`/conversations/${conversationId}`);
+  },
+
+  getWikiPage(slug: string) {
+    return request<{
+      page: {
+        slug: string;
+        title: string;
+        type: string;
+        contexts: string[];
+        rawMd: string;
+        contentMd: string;
+        hash: string;
+        updatedAt: string;
+        version: number;
+      };
+      evidenceSpans: EvidenceSpan[];
+      links: { incoming: Link[]; outgoing: Link[] };
+    }>(`/pages/${slug}`);
+  },
+
+  updateWikiPage(slug: string, content: string) {
+    return request<{ success: boolean; hash: string }>(`/pages/${slug}`, {
+      method: 'PUT',
+      body: JSON.stringify({ content })
+    });
+  },
+
+  getChangeLog(params?: { limit?: number; op?: string }) {
+    const query = new URLSearchParams();
+    if (params?.limit) query.set('limit', String(params.limit));
+    if (params?.op) query.set('op', params.op);
+    return request<{
+      batches: {
+        batchId: string;
+        ts: string;
+        opCounts: Record<string, number>;
+        totalOps: number;
+        targets: string[];
+      }[];
+      total: number;
+    }>(`/changelog?${query.toString()}`);
+  },
+
+  rollbackBatch(batchId: string) {
+    return request<{ restored: boolean; files: string[]; rebuildTriggered: boolean }>(
+      `/rollback/${batchId}`,
+      { method: 'POST' }
+    );
+  },
+
+  getEvalReport() {
+    return request<{
+      benchmarks: {
+        id: number;
+        type: string;
+        slug?: string;
+        sourceText: string;
+        expectedOutput: string;
+        gitCommit?: string;
+        passed?: boolean;
+        score?: number;
+      }[];
+      anomalies: {
+        id: string;
+        metric: string;
+        threshold: number;
+        actual: number;
+        ts: string;
+        message: string;
+      }[];
+      summary: {
+        total: number;
+        passed: number;
+        accuracy: number;
+        reproductionRate: number;
+        newErrors: number;
+        lastRun?: string;
+      };
+      trend: { date: string; accuracy: number }[];
+    }>('/eval-report');
+  },
+
+  runShadowEval() {
+    return request<{
+      passed: boolean;
+      accuracy: number;
+      reproductionRate: number;
+      newErrors: number;
+      errors: string[];
+    }>('/shadow-eval', { method: 'POST' });
+  },
+
+  getTimeline(params?: { slug?: string; limit?: number; offset?: number }) {
+    const query = new URLSearchParams();
+    if (params?.slug) query.set('slug', params.slug);
+    if (params?.limit) query.set('limit', String(params.limit));
+    if (params?.offset) query.set('offset', String(params.offset));
+    return request<{
+      items: {
+        id: number;
+        slug: string;
+        type: string;
+        payload: any;
+        ts: string;
+        title?: string;
+        description?: string;
+      }[];
+      total: number;
+    }>(`/timeline?${query.toString()}`);
+  },
+
+  search(query: string) {
+    return request<{
+      pages: { slug: string; title: string; snippet: string; type: string }[];
+      files: { hash: string; originalName: string; mime: string; size: number; status: string }[];
+      conversations: { id: string; question: string; answer: string; ts: string }[];
+      total: number;
+    }>(`/search?q=${encodeURIComponent(query)}`);
+  },
+
+  getLibraryFile(hash: string) {
+    return request<{
+      file: {
+        hash: string;
+        mime: string;
+        originalName: string;
+        size: number;
+        status: string;
+        ingestedAt: string;
+      };
+      evidenceSpans: {
+        spanId: string;
+        originalLocation: string;
+        spanText: string;
+        sourceType: string;
+      }[];
+      contentUrl: string;
+    }>(`/library-files/${hash}`);
+  }
+};
+
+export default api;
