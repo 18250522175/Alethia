@@ -3,7 +3,10 @@
   "compilerOptions": {
     "types": ["bun-types"],
     "outDir": "./dist",
-    "rootDir": "./src"
+    "noEmit": false,
+    "declaration": false,
+    "declarationMap": false,
+    "skipLibCheck": true
   },
   "include": ["src/**/*", "scripts/**/*", "skills/**/*"]
 }

@@ -1,0 +1,59 @@
+{
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "delete": "Delete",
+    "edit": "Edit",
+    "close": "Close",
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "warning": "Warning",
+    "info": "Info",
+    "search": "Search",
+    "settings": "Settings",
+    "home": "Home",
+    "back": "Back",
+    "next": "Next",
+    "previous": "Previous",
+    "skip": "Skip",
+    "finish": "Finish"
+  },
+  "nav": {
+    "home": "Home",
+    "wiki": "Wiki",
+    "graph": "Graph",
+    "review": "Review",
+    "qa": "Q&A",
+    "dashboard": "Dashboard",
+    "timeline": "Timeline",
+    "changelog": "Changelog",
+    "settings": "Settings",
+    "logout": "Logout"
+  },
+  "login": {
+    "title": "Alethia Knowledge Base",
+    "subtitle": "Human-AI Symbiotic Digital Library",
+    "apiKeyPlaceholder": "Enter API key",
+    "submit": "Login",
+    "rememberDevice": "Remember this device",
+    "errorInvalidKey": "Invalid API key",
+    "errorNetwork": "Network error, please check if the service is running"
+  },
+  "home": {
+    "greetingMorning": "Good morning",
+    "greetingAfternoon": "Good afternoon",
+    "greetingEvening": "Good evening",
+    "searchPlaceholder": "Search knowledge, documents, Q&A records...",
+    "searchWiki": "Search Wiki",
+    "askAI": "Ask AI",
+    "featuredArticles": "📌 Featured",
+    "knowledgePortals": "🧭 Portals",
+    "recentActivity": "📰 Recent Activity",
+    "quickActions": "⚡ Quick Actions",
+    "randomWalk": "Random Walk",
+    "knowledgeGaps": "Knowledge Gaps",
+    "todayQA": "Today's Q&A"
+  }
+}
