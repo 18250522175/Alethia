@@ -199,7 +199,7 @@
 - [x] Task 5.9：`server/src/agents/translate.ts` 证据翻译缓存（P1）
   - [x] 检测 `evidence_span.lang` 非汉语
   - [x] 调用低成本模型翻译 → 写入 `evidence_translations`（90 天过期）
-- [ ] Task 5.10：`narrate`、`shadow_eval`、`rule_learn`、`ask_question` 工具实现（P1，挂在 MCP）
+- [x] Task 5.10：`narrate`、`shadow_eval`、`rule_learn`、`ask_question` 工具实现（P1，挂在 MCP）
 
 ## 阶段 6：L4 自进化引擎（P1：6.1–6.6；P2：6.7）
 
@@ -228,7 +228,11 @@
 - [x] Task 6.6：`server/src/evolution/rollback.ts` 全自动回滚
   - [x] 接收 `batchId`，从 `auto_change_log` 恢复文件
   - [x] 触发 `rebuild-struct`
-- [ ] Task 6.7：每周 skill 优化与夜间简报（P2，汉语输出）
+- [x] Task 6.7：每周 skill 优化与夜间简报（P2，汉语输出）
+  - [x] 自动生成周报（页面/关系/变更/对话/Token/异常统计）
+  - [x] LLM 增强摘要（Moonshot）
+  - [x] 每周技能优化（低置信度页面自动优化）
+  - [x] Bun.cron 定时任务（每周一 03:00）
 
 ## 阶段 7：BrainAPI 统一服务层完整实现（P0：7.1/7.2/7.4/7.5/7.10；P1：其余）
 
