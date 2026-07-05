@@ -1,0 +1,52 @@
+# Alethia .dockerignore
+# 减小构建上下文 + 避免敏感文件/无关文件进入镜像
+
+# Git
+.git/
+.gitignore
+
+# 编辑器/IDE
+.vscode/
+.idea/
+.trae/
+*.swp
+*.swo
+*~
+
+# 系统
+.DS_Store
+Thumbs.db
+
+# 环境变量与密钥（绝不入镜像）
+.env
+.env.local
+.env.*.local
+
+# 文档与报告（运行时不需要；wiki/ 与 server/skills/prompts/ 例外，仍会随 COPY 进入镜像）
+docs/
+*.md
+!wiki/**
+!server/skills/**
+
+# 构建产物（在镜像内重新构建）
+node_modules/
+web/dist/
+server/dist/
+shared/dist/
+
+# 日志与临时文件
+*.log
+logs/
+*.tmp
+*.bak
+
+# Docker 自身（避免上下文循环）
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# 测试产物
+**/*.test.ts
+**/*.test.tsx
+web/vitest.config.ts
+web/test/

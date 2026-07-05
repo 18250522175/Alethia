@@ -10,7 +10,7 @@
     "resolveJsonModule": true,
     "declaration": true,
     "declarationMap": true,
-    "sourceMap": true,
+    "sourceMap": false,
     "jsx": "react-jsx",
     "paths": {
       "@shared/*": ["./shared/types/*"]
