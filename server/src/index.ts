@@ -13,6 +13,7 @@ import settingsRoutes from './routes/settings';
 import healthRoutes from './routes/health';
 import brainapiRoutes from './routes/brainapi';
 import { llmRouter } from './llm/router';
+import { budgetManager } from './evolution/budget';
 
 const VERSION = '5.0.0';
 
@@ -171,6 +172,13 @@ async function bootstrap() {
   validateApiKeyOnStartup();
 
   await waitForDatabase();
+
+  // 启动时从数据库恢复预算计数
+  try {
+    await budgetManager.restoreFromDB();
+  } catch (err) {
+    loggerInstance.warn({ err }, '预算计数恢复失败，使用默认零值');
+  }
 
   // 启动时检测 embedding 维度
   try {

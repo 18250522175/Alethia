@@ -754,19 +754,19 @@ ${relationsBlock}
       // 使用两个独立查询避免动态参数索引混乱
       const subResult = opFilter
         ? await pool.query(
-            `SELECT batch_id, op, target, ts,
+            `SELECT batch_id, op, target, created_at,
                     COUNT(*) OVER (PARTITION BY batch_id, op) as cnt
              FROM auto_change_log
              WHERE op = $1
-             ORDER BY ts DESC
+             ORDER BY created_at DESC
              LIMIT $2 * 1000`,
             [opFilter, limit]
           )
         : await pool.query(
-            `SELECT batch_id, op, target, ts,
+            `SELECT batch_id, op, target, created_at,
                     COUNT(*) OVER (PARTITION BY batch_id, op) as cnt
              FROM auto_change_log
-             ORDER BY ts DESC
+             ORDER BY created_at DESC
              LIMIT $1 * 1000`,
             [limit]
           );
@@ -776,12 +776,12 @@ ${relationsBlock}
       const result = batchIds.length > 0
         ? await pool.query(
             `SELECT batch_id,
-                    MIN(ts) as batch_ts,
+                    MIN(created_at) as batch_ts,
                     COUNT(*) as total_ops,
                     json_object_agg(op, cnt) as op_counts,
                     array_agg(DISTINCT target) as targets
              FROM (
-               SELECT batch_id, op, target, ts,
+               SELECT batch_id, op, target, created_at,
                       COUNT(*) OVER (PARTITION BY batch_id, op) as cnt
                FROM auto_change_log
                WHERE batch_id = ANY($1::text[])
