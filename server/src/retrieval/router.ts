@@ -2,6 +2,7 @@ import { vectorSearch } from './vector';
 import { fulltextSearch } from './fulltext';
 import { rrfFusion, type RRFResult } from './rrf';
 import { graphTraverse } from './graph';
+import { rerank } from './rerank';
 import { applySourceWeights } from './source';
 import logger from '../i18n/logger';
 import type { QueryParams, QueryResult, QueryResultItem, QueryIntent, QueryTier } from '@shared/index';
@@ -63,7 +64,7 @@ async function getSnippetsForPages(slugs: string[]): Promise<Map<string, string>
 
 export async function executeQuery(params: QueryParams): Promise<QueryResult> {
   const startTime = Date.now();
-  const { query, intent, tier, contexts, topK = 10, withGraph = false } = params;
+  const { query, intent, tier, contexts, topK = 10, withGraph = false, withRerank = false } = params;
 
   const classification = classifyIntent(query);
   const finalIntent = intent || classification.intent;
@@ -99,6 +100,12 @@ export async function executeQuery(params: QueryParams): Promise<QueryResult> {
     snippet: snippetMap.get(result.slug) || result.snippet || '',
     score: result.score
   }));
+
+  // 重排序（如果启用且已配置 reranker）
+  if (withRerank) {
+    items = await rerank(items, query);
+    logger.debug({ count: items.length }, '重排序完成');
+  }
 
   if (withGraph && items.length > 0) {
     const graphLinks = await graphTraverse(items[0].slug, 1);

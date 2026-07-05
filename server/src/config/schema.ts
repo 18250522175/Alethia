@@ -151,7 +151,9 @@ export const EnvConfigSchema = z.object({
   ZERANK_API_KEY: z.string().default(''),
   NLI_PROVIDER: z.enum(['hf-inference', 'local']).default('local'),
   HF_API_KEY: z.string().default(''),
-  NODE_ENV: z.enum(['development', 'production', 'test']).default('development')
+  NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+  BRAIN_CORS_ORIGINS: z.string().default(''),
+  LIBRARY_PATH: z.string().default('/data/library')
 });
 
 export type EnvConfig = z.infer<typeof EnvConfigSchema>;

@@ -1,6 +1,5 @@
 import { llmRouter } from '../llm/router';
-import { readFileSync } from 'fs';
-import { join } from 'path';
+import { loadPrompt } from './utils';
 import logger from '../i18n/logger';
 import type { LLMMessage, EvidenceSpan } from '@shared/index';
 import type { RetrievalResult } from './retriever';
@@ -13,18 +12,6 @@ export interface GenerationResult {
 }
 
 const generatorPrompt = loadPrompt('generator.zh-CN.md');
-
-function loadPrompt(name: string): string {
-  try {
-    return readFileSync(join(process.cwd(), 'skills/prompts', name), 'utf-8');
-  } catch {
-    try {
-      return readFileSync(join(__dirname, '../../skills/prompts', name), 'utf-8');
-    } catch {
-      return '';
-    }
-  }
-}
 
 export async function generate(
   question: string,

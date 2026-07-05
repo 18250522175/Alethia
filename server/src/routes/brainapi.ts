@@ -24,11 +24,24 @@ app.post('/api/ask', async (c) => {
       }, 400);
     }
 
+    // 限制问题长度，防止内存消耗
+    const trimmed = question.trim();
+    if (trimmed.length > 2000) {
+      return c.json({
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: '问题长度不能超过 2000 个字符'
+        }
+      }, 400);
+    }
+
     const request: AskRequest = {
-      question: question.trim(),
+      question: trimmed,
       conversationId,
       mode,
-      maxReflections,
+      maxReflections: maxReflections && typeof maxReflections === 'number' && maxReflections > 0
+        ? Math.min(maxReflections, 5)
+        : undefined,
       enableTranslation
     };
 

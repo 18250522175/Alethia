@@ -3,6 +3,11 @@ import logger from '../i18n/logger';
 import type { Link } from '@shared/index';
 
 export async function graphTraverse(slug: string, depth: number = 2): Promise<Link[]> {
+  const MAX_DEPTH = 5;
+  const safeDepth = Math.min(depth, MAX_DEPTH);
+  if (depth > MAX_DEPTH) {
+    logger.warn({ depth, maxDepth: MAX_DEPTH }, '图谱遍历深度超出上限，已截断');
+  }
   try {
     const pool = getPool();
     const result = await pool.query(
@@ -20,7 +25,7 @@ export async function graphTraverse(slug: string, depth: number = 2): Promise<Li
       )
       SELECT DISTINCT source_slug, target_slug, relation, weight, orphaned
       FROM graph_traverse`,
-      [slug, depth]
+      [slug, safeDepth]
     );
 
     return result.rows.map((row: any) => ({

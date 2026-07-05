@@ -4,7 +4,7 @@ import { plan } from '../agents/planner';
 import { retrieve } from '../agents/retriever';
 import { grade } from '../agents/grader';
 import { generate } from '../agents/generator';
-import { reflector } from '../agents/reflector';
+import { Reflector } from '../agents/reflector';
 import { submitFeedback as submitFeedbackAgent } from '../agents/feedback';
 import { extractFacts } from '../agents/observe';
 import { translateEvidence as translateEvidenceAgent } from '../agents/translate';
@@ -81,7 +81,8 @@ class BrainAPI {
 
     logger.info({ question: request.question, conversationId }, '开始处理问答');
 
-    reflector.reset();
+    const ref = new Reflector();
+    ref.reset();
 
     const hasLlm = llmRouter.hasAnyConfigured();
     if (!hasLlm) {
@@ -124,10 +125,10 @@ class BrainAPI {
       totalTokens += generationResult.tokensUsed;
       totalCost += generationResult.estimatedCost;
 
-      reflector.trackEntities(planResult.entities);
-      reflector.trackEvidence(retrievalResult.evidence.map(e => e.span_id));
+      ref.trackEntities(planResult.entities);
+      ref.trackEvidence(retrievalResult.evidence.map(e => e.span_id));
 
-      const reflection = await reflector.reflect(
+      const reflection = await ref.reflect(
         gradeResult,
         planResult.entities,
         retrievalResult.evidence.map(e => e.span_id)

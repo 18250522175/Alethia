@@ -1,6 +1,8 @@
 import type { LLMRequest, LLMResponse, LLMAdapter, AdapterId } from '@shared/index';
 import logger from '../i18n/logger';
 
+const DEFAULT_REQUEST_TIMEOUT_MS = 60_000;
+
 export abstract class BaseLLMAdapter implements LLMAdapter {
   abstract readonly id: AdapterId;
   abstract readonly displayName: string;
@@ -73,7 +75,8 @@ export class BaseOpenAICompatibleAdapter extends BaseLLMAdapter {
           max_tokens: req.maxTokens,
           stream: false,
           ...(req.jsonMode ? { response_format: { type: 'json_object' } } : {})
-        })
+        }),
+        signal: AbortSignal.timeout(DEFAULT_REQUEST_TIMEOUT_MS)
       });
 
       if (!response.ok) {
@@ -114,7 +117,8 @@ export class BaseOpenAICompatibleAdapter extends BaseLLMAdapter {
         body: JSON.stringify({
           model: this.defaultModel,
           input: text
-        })
+        }),
+        signal: AbortSignal.timeout(DEFAULT_REQUEST_TIMEOUT_MS)
       });
 
       if (!response.ok) {

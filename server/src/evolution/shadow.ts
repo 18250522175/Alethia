@@ -170,8 +170,8 @@ async function gradeOutput(actual: string, expected: string): Promise<boolean> {
       maxTokens: 8
     });
     const verdict = response.content.trim().toLowerCase();
-    if (verdict.startsWith('yes')) return true;
-    if (verdict.startsWith('no')) return false;
+    if (verdict === 'yes') return true;
+    if (verdict === 'no') return false;
   } catch (err) {
     logger.debug({ err }, 'LLM 评分降级为相似度匹配');
   }

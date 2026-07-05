@@ -222,6 +222,12 @@ CREATE TABLE IF NOT EXISTS eval_anomaly_flags (
   message TEXT NOT NULL DEFAULT ''
 );
 
+CREATE TABLE IF NOT EXISTS budget_usage (
+  key VARCHAR(64) PRIMARY KEY,
+  cost REAL NOT NULL DEFAULT 0.0,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE INDEX IF NOT EXISTS idx_pages_slug ON pages (slug);
 CREATE INDEX IF NOT EXISTS idx_pages_type ON pages (type);
 CREATE INDEX IF NOT EXISTS idx_page_embeddings_hnsw ON page_embeddings USING hnsw (embedding vector_cosine_ops);

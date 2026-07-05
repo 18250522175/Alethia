@@ -16,13 +16,16 @@
  */
 
 import { Hono } from 'hono';
+import { bearerAuth } from '../auth/bearer';
 import { brainAPI } from '../brainapi';
 import { llmRouter } from '../llm/router';
 import { ingestFile } from '../ingest/pipeline';
 import { learnRule } from '../retrieval/entity';
 import { defaultSettings } from '../config/defaults';
+import { loadEnv } from '../config/loader';
 import { getPool } from '../db/pool';
 import logger from '../i18n/logger';
+import * as path from 'path';
 
 const PROTOCOL_VERSION = '2024-11-05';
 const SERVER_NAME = 'alethia-mcp';
@@ -727,6 +730,14 @@ const TOOLS: ToolEntry[] = [
       if (!settings || typeof settings !== 'object') {
         return errorResult('settings 参数必须为对象');
       }
+
+      // 基本结构校验：确保 settings 包含必要的顶层键
+      const requiredKeys = ['appearance', 'general', 'language', 'budget', 'security', 'privacy', 'tasks', 'paths', 'integration', 'experimental'];
+      const missingKeys = requiredKeys.filter(k => !(k in settings));
+      if (missingKeys.length > 0) {
+        return errorResult(`settings 缺少必要字段: ${missingKeys.join(', ')}`);
+      }
+
       const pool = getPool();
       await pool.query(
         `INSERT INTO settings (key, value, updated_at)
@@ -809,7 +820,18 @@ const TOOLS: ToolEntry[] = [
       }
     },
     handler: async (args) => {
-      const result = await ingestFile(String(args.filePath), args.mime);
+      const filePath = String(args.filePath);
+      const env = loadEnv();
+
+      // 路径遍历保护: 仅允许 libraryPath 下的文件
+      const libraryPath = env.LIBRARY_PATH || '/data/library';
+      const resolvedPath = path.resolve(filePath);
+      const resolvedLibrary = path.resolve(libraryPath);
+      if (!resolvedPath.startsWith(resolvedLibrary + path.sep) && resolvedPath !== resolvedLibrary) {
+        return errorResult(`路径遍历被拒绝: ${filePath}。仅允许 ${libraryPath} 目录下的文件。`);
+      }
+
+      const result = await ingestFile(filePath, args.mime);
       return jsonTextResult(result);
     }
   },
@@ -1026,6 +1048,8 @@ async function startStdio(): Promise<void> {
 async function startHttp(port: number): Promise<void> {
   const server = new McpServer();
   const app = new Hono();
+
+  app.use('/mcp/*', bearerAuth);
 
   app.post('/mcp', async (c) => {
     let request: any;
