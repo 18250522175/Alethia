@@ -1,7 +1,7 @@
 import { Bell, Gauge, User, List, ChatsCircle, CurrencyDollar } from '@phosphor-icons/react';
 import { useTheme } from '../store/ThemeContext';
 import { useAuth } from '../store/AuthContext';
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useNotification, NotificationCenter } from '../contexts/NotificationContext';
@@ -16,9 +16,22 @@ export default function TopBar({ onToggleSidebar }: TopBarProps) {
   const { isDark, toggleTheme } = useTheme();
   const { logout } = useAuth();
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const { t } = useTranslation();
   const { unreadCount } = useNotification();
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setShowUserMenu(false);
+      }
+    }
+    if (showUserMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showUserMenu]);
 
   const handleLogout = () => {
     logout();
@@ -66,11 +79,14 @@ export default function TopBar({ onToggleSidebar }: TopBarProps) {
         <Popover className="relative">
           <PopoverButton
             className="btn btn-ghost p-2 relative"
-            aria-label="通知"
+            aria-label={`通知${unreadCount > 0 ? `（${unreadCount} 条未读）` : ''}`}
           >
             <Bell size={20} />
             {unreadCount > 0 && (
-              <span className="absolute right-1.5 top-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+              <span
+                className="absolute right-1.5 top-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white"
+                aria-hidden="true"
+              >
                 {unreadCount > 9 ? '9+' : unreadCount}
               </span>
             )}
@@ -126,19 +142,26 @@ export default function TopBar({ onToggleSidebar }: TopBarProps) {
           </PopoverPanel>
         </Popover>
 
-        <div className="relative">
+        <div className="relative" ref={userMenuRef}>
           <button
             onClick={() => setShowUserMenu(!showUserMenu)}
             className="btn btn-ghost p-2"
             aria-label="用户菜单"
+            aria-expanded={showUserMenu}
+            aria-haspopup="menu"
           >
             <User size={20} />
           </button>
 
           {showUserMenu && (
-            <div className="absolute right-0 mt-2 w-48 rounded-lg border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-800 z-50">
+            <div
+              className="absolute right-0 mt-2 w-48 rounded-lg border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-800 z-50"
+              role="menu"
+              aria-label="用户菜单"
+            >
               <button
                 onClick={toggleTheme}
+                role="menuitem"
                 className="flex w-full items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700"
               >
                 {isDark ? '浅色模式' : '深色模式'}
@@ -148,6 +171,7 @@ export default function TopBar({ onToggleSidebar }: TopBarProps) {
                   navigate('/settings');
                   setShowUserMenu(false);
                 }}
+                role="menuitem"
                 className="flex w-full items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700"
               >
                 {t('nav.settings')}
@@ -155,6 +179,7 @@ export default function TopBar({ onToggleSidebar }: TopBarProps) {
               <hr className="my-1 border-slate-200 dark:border-slate-700" />
               <button
                 onClick={handleLogout}
+                role="menuitem"
                 className="flex w-full items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
               >
                 {t('nav.logout')}

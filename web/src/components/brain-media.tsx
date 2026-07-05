@@ -27,6 +27,9 @@ class BrainMediaElement extends HTMLElement {
   private mediaEl: HTMLMediaElement | null = null;
   private timeDisplay: HTMLElement | null = null;
   private jumpBtn: HTMLButtonElement | null = null;
+  private errorDisplay: HTMLElement | null = null;
+  private lastSrc: string = '';
+  private lastType: string = '';
 
   static get observedAttributes() {
     return ['src', 'start', 'type', 'label'];
@@ -36,8 +39,48 @@ class BrainMediaElement extends HTMLElement {
     this.render();
   }
 
-  attributeChangedCallback() {
-    if (this.isConnected) this.render();
+  attributeChangedCallback(name: string, _oldValue: string, _newValue: string) {
+    if (!this.isConnected) return;
+    if (name === 'src' || name === 'type') {
+      this.render();
+    } else {
+      this.updatePartial(name, _newValue);
+    }
+  }
+
+  private updatePartial(attr: string, value: string) {
+    if (attr === 'label') {
+      const labelEl = this.shadowRoot?.querySelector('.label');
+      if (labelEl) labelEl.textContent = value || this.getAttribute('src') || '';
+    } else if (attr === 'start') {
+      const start = parseFloat(value) || 0;
+      if (this.jumpBtn) {
+        this.jumpBtn.textContent = `跳转 ${formatTime(start)}`;
+        this.jumpBtn.disabled = start <= 0;
+      }
+    }
+  }
+
+  private showError(message: string) {
+    if (this.errorDisplay) {
+      this.errorDisplay.textContent = message;
+      this.errorDisplay.style.display = 'block';
+      return;
+    }
+    const errorEl = document.createElement('div');
+    errorEl.className = 'error';
+    errorEl.textContent = message;
+    const container = this.shadowRoot?.querySelector('.container');
+    if (container) {
+      container.appendChild(errorEl);
+    }
+    this.errorDisplay = errorEl;
+  }
+
+  private hideError() {
+    if (this.errorDisplay) {
+      this.errorDisplay.style.display = 'none';
+    }
   }
 
   private render() {
@@ -48,8 +91,20 @@ class BrainMediaElement extends HTMLElement {
     const type = (this.getAttribute('type') || 'audio') as 'audio' | 'video' | 'image';
     const label = this.getAttribute('label') || '';
 
+    if (this.lastSrc === src && this.lastType === type && this.shadowRoot) {
+      this.updatePartial('label', label);
+      if (startAttr) this.updatePartial('start', startAttr);
+      return;
+    }
+    this.lastSrc = src;
+    this.lastType = type;
+
     const shadow = this.shadowRoot || this.attachShadow({ mode: 'open' });
     shadow.innerHTML = '';
+    this.errorDisplay = null;
+    this.mediaEl = null;
+    this.timeDisplay = null;
+    this.jumpBtn = null;
 
     const style = document.createElement('style');
     style.textContent = `
@@ -81,6 +136,20 @@ class BrainMediaElement extends HTMLElement {
       .jump-btn:disabled { opacity: 0.4; cursor: not-allowed; }
       media { width: 100%; border-radius: 0.375rem; display: block; }
       img { max-width: 100%; border-radius: 0.375rem; display: block; }
+      .error {
+        margin-top: 0.5rem; padding: 0.5rem 0.75rem; font-size: 0.75rem;
+        color: #b91c1c; background: #fef2f2; border: 1px solid #fecaca;
+        border-radius: 0.25rem;
+      }
+      :host-context(.dark) .error {
+        color: #fca5a5; background: rgba(127, 29, 29, 0.3); border-color: rgba(127, 29, 29, 0.5);
+      }
+      .retry-btn {
+        background: transparent; color: var(--bm-accent); border: 1px solid var(--bm-accent);
+        border-radius: 0.25rem; padding: 0.15rem 0.4rem; font-size: 0.7rem;
+        cursor: pointer; margin-left: 0.5rem;
+      }
+      .retry-btn:hover { background: var(--bm-accent); color: #fff; }
     `;
     shadow.appendChild(style);
 
@@ -106,6 +175,12 @@ class BrainMediaElement extends HTMLElement {
       const img = document.createElement('img');
       img.src = src;
       img.alt = label;
+      img.addEventListener('error', () => {
+        this.showError(`图片加载失败：${label || rawSrc}`);
+      });
+      img.addEventListener('load', () => {
+        this.hideError();
+      });
       container.appendChild(img);
     } else {
       const media = document.createElement(type === 'video' ? 'video' : 'audio');
@@ -114,6 +189,13 @@ class BrainMediaElement extends HTMLElement {
       media.style.width = '100%';
       this.mediaEl = media;
       container.appendChild(media);
+
+      media.addEventListener('error', () => {
+        this.showError(`媒体加载失败：${label || rawSrc}。请检查文件是否存在或格式是否支持。`);
+      });
+      media.addEventListener('loadedmetadata', () => {
+        this.hideError();
+      });
 
       const controls = document.createElement('div');
       controls.className = 'controls';
@@ -130,7 +212,9 @@ class BrainMediaElement extends HTMLElement {
       jumpBtn.addEventListener('click', () => {
         if (this.mediaEl) {
           this.mediaEl.currentTime = start;
-          this.mediaEl.play().catch(() => {});
+          this.mediaEl.play().catch(() => {
+            this.showError('播放失败，请检查浏览器权限或文件格式。');
+          });
         }
       });
       this.jumpBtn = jumpBtn;

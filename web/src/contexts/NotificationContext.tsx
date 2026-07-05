@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useCallback, ReactNode, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import {
   Bell,
   CheckCircle,
@@ -13,6 +14,7 @@ import {
   ArrowRight,
 } from '@phosphor-icons/react';
 import { formatRelativeTime } from '../lib/format';
+import api from '../lib/api';
 
 export type NotificationType = 'review' | 'system' | 'extraction' | 'anomaly';
 
@@ -34,74 +36,38 @@ interface NotificationContextType {
   markAsRead: (id: string) => void;
   markAllAsRead: () => void;
   clearAll: () => void;
+  refetch: () => void;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
 
-const initialNotifications: Notification[] = [
-  {
-    id: '1',
-    type: 'review',
-    title: '新的审核任务待处理',
-    description: '有 3 条知识变更等待您的审核确认',
-    ts: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
-    read: false,
-    actionUrl: '/review',
-    actionLabel: '前往审核',
-  },
-  {
-    id: '2',
-    type: 'system',
-    title: '系统维护通知',
-    description: '系统将于今晚 23:00-24:00 进行例行维护',
-    ts: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-    read: false,
-  },
-  {
-    id: '3',
-    type: 'extraction',
-    title: '补提取任务完成',
-    description: '文档「产品说明书 v2.0」知识提取已完成',
-    ts: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
-    read: true,
-    actionUrl: '/wiki/doc-123',
-    actionLabel: '查看详情',
-  },
-  {
-    id: '4',
-    type: 'anomaly',
-    title: '异常检测告警',
-    description: '检测到知识库中存在 2 条幽灵关系，请及时处理',
-    ts: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(),
-    read: false,
-    actionUrl: '/dashboard',
-    actionLabel: '查看详情',
-  },
-  {
-    id: '5',
-    type: 'review',
-    title: '审核通过通知',
-    description: '您提交的 5 条知识变更已全部通过审核',
-    ts: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
-    read: true,
-  },
-  {
-    id: '6',
-    type: 'extraction',
-    title: '自动提取失败',
-    description: '文档「技术规格.pdf」提取失败，原因：格式不支持',
-    ts: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(),
-    read: true,
-  },
-];
-
 function generateId(): string {
-  return Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return Date.now().toString(36) + Math.random().toString(36).substring(2, 11);
 }
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
-  const [notifications, setNotifications] = useState<Notification[]>(initialNotifications);
+  const [localNotifications, setLocalNotifications] = useState<Notification[]>([]);
 
+  const { data, refetch } = useQuery({
+    queryKey: ['notifications'],
+    queryFn: async () => {
+      try {
+        const result = await api.request<{ items: Notification[]; total: number }>('/notifications');
+        return result.items || [];
+      } catch {
+        return [];
+      }
+    },
+    staleTime: 60_000,
+    refetchInterval: 120_000,
+    retry: 1
+  });
+
+  const serverNotifications = data || [];
+  const notifications = [...localNotifications, ...serverNotifications];
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   const addNotification = useCallback(
@@ -112,28 +78,28 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         ts: new Date().toISOString(),
         read: false,
       };
-      setNotifications((prev) => [newNotification, ...prev]);
+      setLocalNotifications((prev) => [newNotification, ...prev]);
     },
     []
   );
 
   const markAsRead = useCallback((id: string) => {
-    setNotifications((prev) =>
+    setLocalNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, read: true } : n))
     );
   }, []);
 
   const markAllAsRead = useCallback(() => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    setLocalNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
   }, []);
 
   const clearAll = useCallback(() => {
-    setNotifications([]);
+    setLocalNotifications([]);
   }, []);
 
   return (
     <NotificationContext.Provider
-      value={{ notifications, unreadCount, addNotification, markAsRead, markAllAsRead, clearAll }}
+      value={{ notifications, unreadCount, addNotification, markAsRead, markAllAsRead, clearAll, refetch }}
     >
       {children}
     </NotificationContext.Provider>

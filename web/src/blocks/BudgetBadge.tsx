@@ -36,7 +36,14 @@ function BudgetBar({
       : 'bg-primary-500';
 
   return (
-    <div>
+    <div
+      role="progressbar"
+      aria-label={label}
+      aria-valuenow={pct}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuetext={`${pct}%（已用 ${used.toFixed(2)} / 总额 ${total.toFixed(2)}）`}
+    >
       <div className="mb-1 flex items-center justify-between text-xs">
         <span className="text-slate-500 dark:text-slate-400">{label}</span>
         <span
