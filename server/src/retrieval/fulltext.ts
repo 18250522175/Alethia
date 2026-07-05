@@ -42,7 +42,7 @@ export async function fulltextSearch(query: string, k: number = 10): Promise<Ful
     logger.debug('tsvector 检索无结果，回退到 ILIKE 模糊检索');
     return ilikeSearch(query, k);
   } catch (err) {
-    logger.error({ err }, '全文检索失败，回退到 ILIKE');
+    logger.error({ err, query: query.slice(0, 100) }, '全文检索失败，回退到 ILIKE 模糊检索');
     return ilikeSearch(query, k);
   }
 }
@@ -54,11 +54,16 @@ async function ilikeSearch(query: string, k: number): Promise<FulltextSearchResu
     const result = await pool.query(
       `SELECT p.id AS page_id, p.slug, p.title,
               LEFT(p.content_md, 200) AS snippet,
-              0.5 AS score
+              GREATEST(
+                similarity(p.title, $1),
+                similarity(p.slug, $1),
+                similarity(LEFT(p.content_md, 500), $1) * 0.8
+              ) AS score
        FROM pages p
-       WHERE p.content_md ILIKE $1 OR p.slug ILIKE $1 OR p.title ILIKE $1
-       LIMIT $2`,
-      [pattern, k]
+       WHERE p.content_md ILIKE $2 OR p.slug ILIKE $2 OR p.title ILIKE $2
+       ORDER BY score DESC
+       LIMIT $3`,
+      [query, pattern, k]
     );
 
     return result.rows.map((row: any) => ({

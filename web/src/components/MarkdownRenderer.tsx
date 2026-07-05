@@ -141,7 +141,12 @@ const origLinkClose = md.renderer.rules.link_close;
 
 md.renderer.rules.link_open = (tokens, idx, options, env, self) => {
   const href = tokens[idx].attrGet('href') || '';
-  if (href.startsWith('library://')) {
+  // XSS 防护：过滤危险协议
+  const sanitizedHref = /^(javascript|data|vbscript):/i.test(href) ? '#' : href;
+  if (sanitizedHref !== href) {
+    tokens[idx].attrSet('href', sanitizedHref);
+  }
+  if (sanitizedHref.startsWith('library://')) {
     const hash = href.slice('library://'.length);
     env._mediaStack = env._mediaStack || [];
     env._mediaStack.push(true);

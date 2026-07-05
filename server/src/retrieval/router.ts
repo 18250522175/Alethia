@@ -107,15 +107,51 @@ export async function executeQuery(params: QueryParams): Promise<QueryResult> {
     logger.debug({ count: items.length }, '重排序完成');
   }
 
+  // 图谱扩展：将遍历到的邻居节点合并到检索结果中
   if (withGraph && items.length > 0) {
-    const graphLinks = await graphTraverse(items[0].slug, 1);
+    const graphLinks = await graphTraverse(items[0].slug, 2);
     logger.debug({ graphLinks: graphLinks.length }, '图谱扩展完成');
+    const existingSlugs = new Set(items.map(i => i.slug));
+    for (const link of graphLinks) {
+      const neighborSlug = link.sourceSlug === items[0].slug ? link.targetSlug : link.sourceSlug;
+      if (!existingSlugs.has(neighborSlug)) {
+        const snippet = snippetMap.get(neighborSlug) || '';
+        items.push({
+          slug: neighborSlug,
+          title: neighborSlug,
+          snippet,
+          score: 0.3
+        });
+        existingSlugs.add(neighborSlug);
+      }
+    }
   }
 
+  // 按 contexts 过滤：只保留匹配指定上下文的页面
   if (contexts && contexts.length > 0) {
-    items = items.map(item => {
-      return item;
-    });
+    const contextSet = new Set(contexts);
+    const filteredItems: QueryResultItem[] = [];
+    for (const item of items) {
+      try {
+        const { getPool } = await import('../db/pool');
+        const pool = getPool();
+        const pageResult = await pool.query(
+          'SELECT contexts FROM pages WHERE slug = $1',
+          [item.slug]
+        );
+        if (pageResult.rows.length > 0) {
+          const pageContexts: string[] = pageResult.rows[0].contexts || [];
+          if (pageContexts.some(c => contextSet.has(c))) {
+            filteredItems.push(item);
+          }
+        }
+      } catch {
+        // 查询失败时保留该条目
+        filteredItems.push(item);
+      }
+    }
+    items = filteredItems;
+    logger.debug({ before: items.length, after: filteredItems.length }, 'contexts 过滤完成');
   }
 
   const durationMs = Date.now() - startTime;
