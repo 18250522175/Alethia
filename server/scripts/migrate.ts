@@ -3,7 +3,9 @@ import { join } from 'path';
 import { getPool } from '../src/db/pool';
 import logger from '../src/i18n/logger';
 
-const MIGRATIONS_DIR = join(__dirname, '../src/db/migrations');
+// 兼容源码运行（scripts/migrate.ts）与打包后运行（dist/migrate.js）
+// 打包后 __dirname 会指向 dist/，故改用 process.cwd() 相对路径
+const MIGRATIONS_DIR = join(process.cwd(), 'src/db/migrations');
 
 async function ensureMigrationsTable(client: any): Promise<void> {
   await client.query(`
@@ -38,6 +40,13 @@ async function runMigrations(): Promise<void> {
   const pool = getPool();
   const client = await pool.connect();
 
+  // 并发锁：多实例同时启动时，确保只有一个实例执行迁移
+  // 使用 session 级 advisory lock，连接关闭时自动释放；这里仍显式释放以尽快归还连接池
+  const ADVISORY_LOCK_KEY = 7331;
+  logger.info('正在获取迁移 advisory lock...');
+  await client.query('SELECT pg_advisory_lock($1)', [ADVISORY_LOCK_KEY]);
+  logger.info('已获取 advisory lock');
+
   try {
     await ensureMigrationsTable(client);
     const applied = await getAppliedMigrations(client);
@@ -61,6 +70,12 @@ async function runMigrations(): Promise<void> {
       logger.info(`共执行 ${appliedCount} 个迁移文件`);
     }
   } finally {
+    // 显式释放 advisory lock，避免连接归还连接池后锁仍持有
+    try {
+      await client.query('SELECT pg_advisory_unlock($1)', [ADVISORY_LOCK_KEY]);
+    } catch (err) {
+      logger.warn({ err }, '释放 advisory lock 失败（连接关闭时会自动释放）');
+    }
     client.release();
   }
 }

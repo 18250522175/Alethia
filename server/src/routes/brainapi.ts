@@ -19,7 +19,7 @@ app.post('/api/ask', async (c) => {
       return c.json({
         error: {
           code: 'VALIDATION_ERROR',
-          message: '问题不能为空'
+          message: getErrorMessage('VALIDATION_ERROR')
         }
       }, 400);
     }
@@ -30,7 +30,7 @@ app.post('/api/ask', async (c) => {
       return c.json({
         error: {
           code: 'VALIDATION_ERROR',
-          message: '问题长度不能超过 2000 个字符'
+          message: getErrorMessage('VALIDATION_ERROR')
         }
       }, 400);
     }
@@ -63,17 +63,27 @@ app.post('/api/query', async (c) => {
     const body = await c.req.json().catch(() => ({}));
     const { query, intent, tier, contexts, topK, withGraph, withRerank } = body as QueryParams;
 
-    if (!query || typeof query !== 'string') {
+    if (!query || typeof query !== 'string' || query.trim().length === 0) {
       return c.json({
         error: {
           code: 'VALIDATION_ERROR',
-          message: '查询内容不能为空'
+          message: getErrorMessage('VALIDATION_ERROR')
+        }
+      }, 400);
+    }
+
+    const trimmed = query.trim();
+    if (trimmed.length > 2000) {
+      return c.json({
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: getErrorMessage('VALIDATION_ERROR')
         }
       }, 400);
     }
 
     const params: QueryParams = {
-      query,
+      query: trimmed,
       intent,
       tier,
       contexts,
@@ -204,7 +214,7 @@ app.post('/api/feedback', async (c) => {
       return c.json({
         error: {
           code: 'VALIDATION_ERROR',
-          message: '缺少必要参数'
+          message: getErrorMessage('VALIDATION_ERROR')
         }
       }, 400);
     }
@@ -213,7 +223,7 @@ app.post('/api/feedback', async (c) => {
       return c.json({
         error: {
           code: 'VALIDATION_ERROR',
-          message: 'feedback 取值必须为 helpful 或 wrong'
+          message: getErrorMessage('VALIDATION_ERROR')
         }
       }, 400);
     }
@@ -255,7 +265,7 @@ app.post('/api/observed-files/:hash/extract', async (c) => {
       return c.json({
         error: {
           code: 'VALIDATION_ERROR',
-          message: '文件 hash 不能为空'
+          message: getErrorMessage('VALIDATION_ERROR')
         }
       }, 400);
     }
@@ -282,7 +292,7 @@ app.post('/api/translate-evidence', async (c) => {
       return c.json({
         error: {
           code: 'VALIDATION_ERROR',
-          message: 'spanIds 不能为空'
+          message: getErrorMessage('VALIDATION_ERROR')
         }
       }, 400);
     }
@@ -344,7 +354,7 @@ app.post('/api/generate-draft', async (c) => {
       return c.json({
         error: {
           code: 'VALIDATION_ERROR',
-          message: '标题不能为空'
+          message: getErrorMessage('VALIDATION_ERROR')
         }
       }, 400);
     }
@@ -412,7 +422,7 @@ app.put('/api/pages/:slug', async (c) => {
 
     if (!content || typeof content !== 'string') {
       return c.json({
-        error: { code: 'VALIDATION_ERROR', message: 'content 不能为空' }
+        error: { code: 'VALIDATION_ERROR', message: getErrorMessage('VALIDATION_ERROR') }
       }, 400);
     }
 
@@ -520,7 +530,7 @@ app.get('/api/library-files/:hash', async (c) => {
     const hash = c.req.param('hash');
     const result = await brainAPI.getLibraryFile(hash);
     if (!result) {
-      return c.json({ error: { code: 'NOT_FOUND', message: '文件不存在' } }, 404);
+      return c.json({ error: { code: 'NOT_FOUND', message: getErrorMessage('NOT_FOUND') } }, 404);
     }
     return c.json(result);
   } catch (err) {
@@ -536,13 +546,13 @@ app.get('/api/library-files/:hash/content', async (c) => {
     const pool = getPool();
     const result = await pool.query('SELECT mime FROM library_files WHERE hash = $1', [hash]);
     if (result.rows.length === 0) {
-      return c.json({ error: { code: 'NOT_FOUND', message: '文件不存在' } }, 404);
+      return c.json({ error: { code: 'NOT_FOUND', message: getErrorMessage('NOT_FOUND') } }, 404);
     }
     const mime = result.rows[0].mime;
     const filePath = join(storage.getLibraryPath(), hash);
 
     if (!existsSync(filePath)) {
-      return c.json({ error: { code: 'NOT_FOUND', message: '文件不存在' } }, 404);
+      return c.json({ error: { code: 'NOT_FOUND', message: getErrorMessage('NOT_FOUND') } }, 404);
     }
 
     const totalSize = statSync(filePath).size;
@@ -654,7 +664,7 @@ app.post('/api/settings/daily-budget', async (c) => {
       return c.json({
         error: {
           code: 'VALIDATION_ERROR',
-          message: 'amount 必须为非负数字'
+          message: getErrorMessage('VALIDATION_ERROR')
         }
       }, 400);
     }

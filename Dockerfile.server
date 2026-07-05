@@ -1,7 +1,8 @@
 # Alethia Brain API 服务端 Dockerfile
-# 基于 Bun 运行时
+# 多阶段构建：打包 TypeScript → 运行编译产物
 
-FROM oven/bun:1.1 AS base
+# === 阶段 1：构建 ===
+FROM oven/bun:1.1 AS builder
 WORKDIR /app
 
 # 拷贝 workspace 配置与各 package 的 manifest
@@ -10,7 +11,7 @@ COPY shared/package.json ./shared/package.json
 COPY server/package.json ./server/package.json
 COPY web/package.json ./web/package.json
 
-# 安装依赖（仅 server + shared 所需）
+# 安装全部依赖（构建期需要 devDependencies 提供 types 等）
 RUN bun install --frozen-lockfile --filter @alethia/server... --filter @alethia/shared...
 
 # 拷贝源码
@@ -18,11 +19,32 @@ COPY shared ./shared
 COPY server ./server
 COPY wiki ./wiki
 
-# 默认环境变量（可被 .env 覆盖）
+# 构建：将 src/index.ts、scripts/migrate.ts、scripts/seed.ts 打包到 dist/
+RUN cd server && bun run build
+
+# === 阶段 2：运行 ===
+FROM oven/bun:1.1 AS runtime
+WORKDIR /app
+
+# 拷贝 workspace 配置（用于解析 workspace 依赖）
+COPY package.json bun.lock tsconfig.base.json ./
+COPY shared/package.json ./shared/package.json
+COPY server/package.json ./server/package.json
+COPY web/package.json ./web/package.json
+
+# 仅安装生产依赖（保留 native/WASM 模块的可解析路径，避免打包后失效）
+RUN bun install --frozen-lockfile --production --filter @alethia/server... --filter @alethia/shared...
+
+# 拷贝构建产物与运行期需要的非 JS 资源
+COPY --from=builder /app/server/dist /app/server/dist
+COPY --from=builder /app/server/skills /app/server/skills
+COPY --from=builder /app/server/src/db/migrations /app/server/src/db/migrations
+COPY --from=builder /app/wiki /app/wiki
+
+# 默认环境变量（DB 密钥不再硬编码，由 compose/.env 强制注入）
 ENV NODE_ENV=production
 ENV BRAIN_PORT=3000
 ENV LANGUAGE=zh-CN
-ENV DATABASE_URL=postgres://alethia:alethia@postgres:5432/alethia
 ENV EMBEDDING_PROVIDER=local
 ENV NLI_PROVIDER=local
 
@@ -34,11 +56,12 @@ RUN addgroup --system app && adduser --system --ingroup app app
 RUN chown -R app:app /app
 USER app
 
+WORKDIR /app/server
 EXPOSE 3000
 
 # 健康检查：每 30s 探测 /health
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD curl -fs http://localhost:3000/health || exit 1
 
-# 启动命令：直接以 Bun 运行 TypeScript 源码
-CMD ["bun", "run", "src/index.ts"]
+# 启动编译产物
+CMD ["bun", "run", "dist/index.js"]

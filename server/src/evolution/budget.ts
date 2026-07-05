@@ -40,6 +40,7 @@ class BudgetManager {
   private currentMonth: string;
   private tripped: boolean = false;
   private alerts: BudgetAlert[] = [];
+  private restored: boolean = false;
 
   constructor() {
     const env = loadEnv();
@@ -49,6 +50,36 @@ class BudgetManager {
     const now = new Date();
     this.currentDay = this.formatDay(now);
     this.currentMonth = this.formatMonth(now);
+  }
+
+  async restoreFromDB(): Promise<void> {
+    if (this.restored) return;
+    const pool = getPool();
+    const today = this.formatDay(new Date());
+    const month = this.formatMonth(new Date());
+    try {
+      const dailyResult = await pool.query(
+        'SELECT cost FROM budget_usage WHERE key = $1',
+        [`daily:${today}`]
+      );
+      if (dailyResult.rows.length > 0) {
+        this.dailyUsed = parseFloat(dailyResult.rows[0].cost) || 0;
+        logger.info({ dailyUsed: this.dailyUsed, day: today }, '已从数据库恢复日预算计数');
+      }
+
+      const monthlyResult = await pool.query(
+        'SELECT cost FROM budget_usage WHERE key = $1',
+        [`monthly:${month}`]
+      );
+      if (monthlyResult.rows.length > 0) {
+        this.monthlyUsed = parseFloat(monthlyResult.rows[0].cost) || 0;
+        logger.info({ monthlyUsed: this.monthlyUsed, month }, '已从数据库恢复月预算计数');
+      }
+
+      this.restored = true;
+    } catch (err) {
+      logger.warn({ err }, '从数据库恢复预算计数失败，使用默认零值');
+    }
   }
 
   async checkBudget(task: string): Promise<BudgetCheckResult> {

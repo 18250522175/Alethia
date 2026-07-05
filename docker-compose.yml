@@ -1,5 +1,6 @@
 # Alethia AI 知识库 v5.0 · Docker Compose 编排
 # 一键启动：docker compose up -d
+# 首次使用前请复制 .env.example 为 .env 并设置强密码（POSTGRES_PASSWORD 必填）
 
 name: alethia
 
@@ -10,22 +11,30 @@ services:
     container_name: alethia-postgres
     restart: unless-stopped
     environment:
+      # 强制要求显式设置 POSTGRES_PASSWORD，避免弱默认密码
       POSTGRES_USER: ${POSTGRES_USER:-alethia}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-alethia}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD 必须在 .env 中设置（参考 .env.example）}
       POSTGRES_DB: ${POSTGRES_DB:-alethia}
       TZ: Asia/Shanghai
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
+    # 不再向宿主暴露 5432，仅 server/init 通过 backend 网络访问
+    # 本地调试时取消下方注释即可
+    # ports:
+    #   - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U alethia -d alethia"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-alethia} -d ${POSTGRES_DB:-alethia}"]
       interval: 5s
       timeout: 5s
       retries: 10
       start_period: 10s
     networks:
-      - alethia-net
+      - backend
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
 
   # === Brain API 后端服务 ===
   server:
@@ -39,7 +48,7 @@ services:
         condition: service_healthy
     environment:
       NODE_ENV: production
-      DATABASE_URL: postgres://${POSTGRES_USER:-alethia}:${POSTGRES_PASSWORD:-alethia}@postgres:5432/${POSTGRES_DB:-alethia}
+      DATABASE_URL: postgres://${POSTGRES_USER:-alethia}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD 必须在 .env 中设置}@postgres:5432/${POSTGRES_DB:-alethia}
       BRAIN_PORT: "3000"
       LANGUAGE: zh-CN
       BRAIN_API_KEY: ${BRAIN_API_KEY:-}
@@ -73,13 +82,19 @@ services:
     ports:
       - "3000:3000"
     networks:
-      - alethia-net
+      - frontend
+      - backend
     healthcheck:
       test: ["CMD-SHELL", "curl -fs http://localhost:3000/health || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "1.5"
 
   # === Web 前端（nginx 静态服务） ===
   web:
@@ -95,12 +110,18 @@ services:
       - "80:80"
       # 如需 HTTPS，请使用反向代理（如 Traefik/Caddy）或在此处挂载证书
     networks:
-      - alethia-net
+      - frontend
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O- http://localhost/ || exit 1"]
+      # 不仅检查 nginx 自身，也通过 /health 反代确认后端可达
+      test: ["CMD-SHELL", "wget -q -O- http://localhost/health > /dev/null 2>&1 || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: "0.25"
 
   # === 一次性初始化任务 ===
   # 执行数据库迁移 + 种子数据
@@ -113,7 +134,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER:-alethia}:${POSTGRES_PASSWORD:-alethia}@postgres:5432/${POSTGRES_DB:-alethia}
+      DATABASE_URL: postgres://${POSTGRES_USER:-alethia}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD 必须在 .env 中设置}@postgres:5432/${POSTGRES_DB:-alethia}
       LANGUAGE: zh-CN
       NODE_ENV: production
     entrypoint: ["/bin/sh", "/app/init.sh"]
@@ -122,7 +143,12 @@ services:
       - wiki_data:/app/wiki
     restart: "no"
     networks:
-      - alethia-net
+      - backend
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.5"
 
 volumes:
   postgres_data:
@@ -133,5 +159,7 @@ volumes:
   summaries_data:
 
 networks:
-  alethia-net:
+  frontend:
+    driver: bridge
+  backend:
     driver: bridge
