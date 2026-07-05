@@ -18,6 +18,7 @@ import {
   ArrowLeft
 } from '@phosphor-icons/react';
 import api from '../lib/api';
+import { formatRelativeTime, formatFileSize, truncateText } from '../lib/format';
 
 const PREVIEW_COUNT = 10;
 
@@ -48,33 +49,6 @@ const TABS: { id: TabId; label: string; Icon: typeof FileText }[] = [
   { id: 'files', label: '文件', Icon: Files },
   { id: 'conversations', label: '问答记录', Icon: ChatsCircle }
 ];
-
-function formatRelativeTime(ts: string): string {
-  const time = new Date(ts).getTime();
-  if (Number.isNaN(time)) return ts;
-  const diff = Date.now() - time;
-  if (diff < 60_000) return '刚刚';
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)} 分钟前`;
-  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)} 小时前`;
-  return `${Math.floor(diff / 86_400_000)} 天前`;
-}
-
-function formatFileSize(bytes: number): string {
-  if (!bytes || bytes < 0) return '0 B';
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  let v = bytes;
-  let i = 0;
-  while (v >= 1024 && i < units.length - 1) {
-    v /= 1024;
-    i++;
-  }
-  return `${v.toFixed(v >= 100 ? 0 : 1)} ${units[i]}`;
-}
-
-function truncate(text: string, max: number): string {
-  if (!text) return '';
-  return text.length > max ? `${text.slice(0, max)}…` : text;
-}
 
 export default function SearchResultPage() {
   const { t } = useTranslation();
@@ -438,7 +412,7 @@ function ConversationResultCard({ conv }: { conv: ConversationResult }) {
       </div>
       {conv.answer && (
         <p className="mt-1 line-clamp-2 pl-6 text-xs text-slate-600 dark:text-slate-300">
-          {truncate(conv.answer, 200)}
+          {truncateText(conv.answer, 200)}
         </p>
       )}
     </RouterLink>

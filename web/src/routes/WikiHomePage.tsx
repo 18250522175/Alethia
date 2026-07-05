@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import api from '../lib/api';
+import { formatRelativeTime } from '../lib/format';
 import {
   BookOpen,
   Graph,
@@ -106,17 +107,6 @@ export default function WikiHomePage() {
     if (tLower.includes('qa') || tLower.includes('question') || tLower.includes('问答')) return ChatsCircle;
     if (tLower.includes('page') || tLower.includes('edit') || tLower.includes('update') || tLower.includes('编辑')) return BookOpen;
     return Lightbulb;
-  };
-
-  const formatRelativeTime = (ts: string) => {
-    const diff = Date.now() - new Date(ts).getTime();
-    const mins = Math.floor(diff / 60000);
-    if (mins < 1) return '刚刚';
-    if (mins < 60) return `${mins} 分钟前`;
-    const hours = Math.floor(mins / 60);
-    if (hours < 24) return `${hours} 小时前`;
-    const days = Math.floor(hours / 24);
-    return `${days} 天前`;
   };
 
   const handleRandomWalk = () => {

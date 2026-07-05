@@ -84,7 +84,7 @@ export default function QAPanelPage() {
       api.askQuestion(question, { conversationId: convId, maxReflections: 3 }),
     onSuccess: (data, variables) => {
       const assistantMessage: ChatMessage = {
-        id: `msg-${Date.now()}`,
+        id: crypto.randomUUID(),
         role: 'assistant',
         content: data.answer,
         sources: data.sources,
@@ -103,7 +103,7 @@ export default function QAPanelPage() {
     },
     onError: (err: Error, variables) => {
       const errorMessage: ChatMessage = {
-        id: `err-${Date.now()}`,
+        id: crypto.randomUUID(),
         role: 'assistant',
         content: `处理失败：${err.message}`,
         ts: Date.now()
@@ -124,7 +124,7 @@ export default function QAPanelPage() {
     if (!q || askMutation.isPending) return;
 
     const userMessage: ChatMessage = {
-      id: `user-${Date.now()}`,
+      id: crypto.randomUUID(),
       role: 'user',
       content: q,
       ts: Date.now()

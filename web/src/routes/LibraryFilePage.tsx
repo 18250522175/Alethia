@@ -19,6 +19,7 @@ import {
   ListBullets
 } from '@phosphor-icons/react';
 import api from '../lib/api';
+import { formatFileSize, formatDateTime } from '../lib/format';
 
 interface LibraryFile {
   hash: string;
@@ -37,32 +38,6 @@ interface EvidenceSpanItem {
 }
 
 const TIMECODE_REGEX = /(\d{1,2}):(\d{2})(?::(\d{2}))?/g;
-
-function formatFileSize(bytes: number): string {
-  if (!bytes || bytes < 0) return '0 B';
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  let v = bytes;
-  let i = 0;
-  while (v >= 1024 && i < units.length - 1) {
-    v /= 1024;
-    i++;
-  }
-  return `${v.toFixed(v >= 100 ? 0 : 1)} ${units[i]}`;
-}
-
-function formatDateTime(ts: string): string {
-  try {
-    return new Date(ts).toLocaleString('zh-CN', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  } catch {
-    return ts;
-  }
-}
 
 function parseTimecodeToSeconds(text: string): number | null {
   const match = text.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);

@@ -33,7 +33,21 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     const saved = localStorage.getItem('theme') as Theme | null;
     return saved || 'system';
   });
-  const [isDark, setIsDark] = useState(false);
+
+  const [isDark, setIsDark] = useState<boolean>(() => {
+    const saved = localStorage.getItem('theme') as Theme | null;
+    const currentTheme = saved || 'system';
+    if (typeof document !== 'undefined') {
+      const dark = currentTheme === 'dark' || (currentTheme === 'system' && getSystemTheme() === 'dark');
+      if (dark) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+      return dark;
+    }
+    return false;
+  });
 
   useEffect(() => {
     applyTheme(theme);

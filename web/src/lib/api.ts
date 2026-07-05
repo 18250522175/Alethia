@@ -2,6 +2,7 @@ import type { EvidenceSpan } from '@shared/evidence';
 import type { Link } from '@shared/entities';
 
 const API_BASE = '/api';
+const DEFAULT_TIMEOUT = 30_000;
 
 function getToken(): string | null {
   return localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token');
@@ -33,18 +34,22 @@ interface ApiError {
 class ApiErrorClass extends Error {
   code: string;
   details?: Record<string, unknown>;
+  isTimeout?: boolean;
+  isAbort?: boolean;
 
-  constructor(code: string, message: string, details?: Record<string, unknown>) {
+  constructor(code: string, message: string, details?: Record<string, unknown>, isTimeout?: boolean, isAbort?: boolean) {
     super(message);
     this.name = 'ApiError';
     this.code = code;
     this.details = details;
+    this.isTimeout = isTimeout;
+    this.isAbort = isAbort;
   }
 }
 
 async function request<T>(
   path: string,
-  options: RequestInit = {}
+  options: RequestInit & { timeout?: number; signal?: AbortSignal } = {}
 ): Promise<T> {
   const url = `${API_BASE}${path}`;
   const headers: Record<string, string> = {
@@ -57,10 +62,28 @@ async function request<T>(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
+  const timeout = options.timeout ?? DEFAULT_TIMEOUT;
+  const controller = new AbortController();
+  const userSignal = options.signal ?? undefined;
+
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  if (timeout > 0) {
+    timeoutId = setTimeout(() => controller.abort(), timeout);
+  }
+
+  if (userSignal) {
+    if (userSignal.aborted) {
+      controller.abort();
+    } else {
+      userSignal.addEventListener('abort', () => controller.abort(), { once: true });
+    }
+  }
+
   try {
     const response = await fetch(url, {
       ...options,
-      headers
+      headers,
+      signal: controller.signal
     });
 
     const data = await response.json().catch(() => ({}));
@@ -78,16 +101,50 @@ async function request<T>(
     if (err instanceof ApiErrorClass) {
       throw err;
     }
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      if (userSignal?.aborted) {
+        throw new ApiErrorClass('ABORTED', '请求已取消', undefined, false, true);
+      }
+      throw new ApiErrorClass('TIMEOUT', `请求超时（${timeout / 1000}s）`, undefined, true, false);
+    }
     throw new ApiErrorClass('NETWORK_ERROR', '网络连接失败，请检查服务是否正常运行');
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
   }
+}
+
+async function requestWithRetry<T>(
+  path: string,
+  options: RequestInit & { timeout?: number; retries?: number; retryDelay?: number; signal?: AbortSignal } = {}
+): Promise<T> {
+  const { retries = 0, retryDelay = 1000, ...requestOptions } = options;
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await request<T>(path, requestOptions);
+    } catch (err) {
+      lastError = err as Error;
+      if (attempt < retries) {
+        const delay = retryDelay * Math.pow(2, attempt);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+
+  throw lastError;
 }
 
 export const api = {
   request,
+  requestWithRetry,
   getToken,
   setToken,
   clearToken,
   isAuthenticated,
+  ApiError: ApiErrorClass,
 
   login(apiKey: string) {
     return request<{ success: boolean; token: string }>('/auth/login', {
@@ -124,11 +181,21 @@ export const api = {
     });
   },
 
+  getHealth() {
+    return request<{
+      status: 'ok' | 'degraded' | 'error';
+      version: string;
+      lastSync?: string;
+      uptimeMs: number;
+      components: { name: string; status: 'ok' | 'degraded' | 'error'; latencyMs?: number }[];
+    }>('/health');
+  },
+
   getHealthDashboard() {
     return request<any>('/health-dashboard');
   },
 
-  askQuestion(question: string, options?: { conversationId?: string; maxReflections?: number }) {
+  askQuestion(question: string, options?: { conversationId?: string; maxReflections?: number; signal?: AbortSignal }) {
     return request<{
       answer: string;
       sources: any[];
@@ -139,7 +206,9 @@ export const api = {
       estimatedCost: number;
     }>('/ask', {
       method: 'POST',
-      body: JSON.stringify({ question, ...options })
+      body: JSON.stringify({ question, ...options }),
+      timeout: 120_000,
+      signal: options?.signal
     });
   },
 
@@ -369,7 +438,8 @@ export const api = {
       tokensUsed: number;
     }>('/generate-draft', {
       method: 'POST',
-      body: JSON.stringify({ slug, prompt })
+      body: JSON.stringify({ slug, prompt }),
+      timeout: 120_000
     });
   },
 
@@ -379,7 +449,7 @@ export const api = {
       outputPath: string;
       pagesGenerated: number;
       durationMs: number;
-    }>('/generate-static-site', { method: 'POST' });
+    }>('/generate-static-site', { method: 'POST', timeout: 300_000 });
   },
 
   getExtractPending() {

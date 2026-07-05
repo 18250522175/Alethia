@@ -19,6 +19,7 @@ import {
   X
 } from '@phosphor-icons/react';
 import api from '../lib/api';
+import { formatRelativeTime, formatDateTime } from '../lib/format';
 
 interface TimelineItem {
   id: number;
@@ -46,32 +47,6 @@ const TYPE_META: Record<string, { badge: string; label: string; Icon: typeof Fil
   archive: { badge: 'badge-red', label: '归档', Icon: Archive },
   qa: { badge: 'badge-blue', label: '问答', Icon: ChatsCircle }
 };
-
-function formatRelativeTime(ts: string): string {
-  const now = Date.now();
-  const time = new Date(ts).getTime();
-  if (Number.isNaN(time)) return ts;
-  const diff = now - time;
-  if (diff < 60_000) return '刚刚';
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)} 分钟前`;
-  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)} 小时前`;
-  return `${Math.floor(diff / 86_400_000)} 天前`;
-}
-
-function formatDateTime(ts: string): string {
-  try {
-    return new Date(ts).toLocaleString('zh-CN', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
-    });
-  } catch {
-    return ts;
-  }
-}
 
 function isWithinRange(ts: string, range: string): boolean {
   if (range === 'all') return true;

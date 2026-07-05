@@ -15,6 +15,7 @@ import {
 } from '@phosphor-icons/react';
 import api from '../lib/api';
 import DiffCompare from '../components/DiffCompare';
+import { useNotification } from '../contexts/NotificationContext';
 
 const TIERS = [
   { id: 'green', label: '🟢 低风险', desc: '可直接应用', color: 'badge-green' },
@@ -24,6 +25,7 @@ const TIERS = [
 
 export default function DiffReviewPage() {
   const { t } = useTranslation();
+  const { addNotification } = useNotification();
   const [activeTier, setActiveTier] = useState<string>('yellow');
   const [activeIndex, setActiveIndex] = useState<number>(0);
   const queryClient = useQueryClient();
@@ -38,6 +40,18 @@ export default function DiffReviewPage() {
     mutationFn: (diffId: string) => api.applyDiff(diffId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['diffs'] });
+      addNotification({
+        type: 'system',
+        title: '变更已应用',
+        description: '知识变更已成功应用到知识库'
+      });
+    },
+    onError: (error: Error) => {
+      addNotification({
+        type: 'system',
+        title: '应用失败',
+        description: error.message || '应用变更时发生错误'
+      });
     }
   });
 
@@ -45,6 +59,18 @@ export default function DiffReviewPage() {
     mutationFn: (diffId: string) => api.rejectDiff(diffId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['diffs'] });
+      addNotification({
+        type: 'system',
+        title: '变更已拒绝',
+        description: '已拒绝该知识变更建议'
+      });
+    },
+    onError: (error: Error) => {
+      addNotification({
+        type: 'system',
+        title: '操作失败',
+        description: error.message || '拒绝变更时发生错误'
+      });
     }
   });
 
