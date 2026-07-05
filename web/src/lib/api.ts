@@ -58,9 +58,13 @@ async function request<T>(
 ): Promise<T> {
   const url = `${API_BASE}${path}`;
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
     ...(options.headers as Record<string, string> || {})
   };
+
+  // 仅对非 GET 请求设置 Content-Type
+  if (options.method && options.method !== 'GET') {
+    headers['Content-Type'] = 'application/json';
+  }
 
   const token = getToken();
   if (token) {
@@ -94,6 +98,12 @@ async function request<T>(
     const data = await response.json().catch(() => ({}));
 
     if (!response.ok) {
+      // 401 全局处理：清除 token 并通知认证状态变更
+      if (response.status === 401) {
+        clearToken();
+        window.dispatchEvent(new CustomEvent('auth:expired'));
+      }
+
       const error = data.error as ApiError || {
         code: 'INTERNAL_ERROR',
         message: '未知错误'
@@ -311,7 +321,7 @@ export const api = {
   },
 
   rollbackBatch(batchId: string) {
-    return request<{ restored: boolean; files: string[]; rebuildTriggered: boolean }>(
+    return request<{ restored: boolean; restoredFiles: string[]; rebuildTriggered: boolean }>(
       `/rollback/${batchId}`,
       { method: 'POST' }
     );

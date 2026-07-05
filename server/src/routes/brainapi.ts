@@ -388,6 +388,46 @@ app.post('/api/generate-static-site', async (c) => {
   }
 });
 
+// Wiki 页面读取与编辑
+app.get('/api/pages/:slug', async (c) => {
+  try {
+    const slug = c.req.param('slug');
+    const result = await brainAPI.getWikiPage(slug);
+    return c.json(result);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : getErrorMessage('INTERNAL_ERROR');
+    const code = message.includes('不存在') ? 'NOT_FOUND' : 'INTERNAL_ERROR';
+    loggerInstance.error({ err, slug: c.req.param('slug') }, '获取 Wiki 页面失败');
+    return c.json({
+      error: { code, message }
+    }, code === 'NOT_FOUND' ? 404 : 500);
+  }
+});
+
+app.put('/api/pages/:slug', async (c) => {
+  try {
+    const slug = c.req.param('slug');
+    const body = await c.req.json().catch(() => ({}));
+    const { content } = body;
+
+    if (!content || typeof content !== 'string') {
+      return c.json({
+        error: { code: 'VALIDATION_ERROR', message: 'content 不能为空' }
+      }, 400);
+    }
+
+    const result = await brainAPI.updateWikiPage(slug, content);
+    return c.json(result);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : getErrorMessage('INTERNAL_ERROR');
+    const code = message.includes('不存在') ? 'NOT_FOUND' : 'INTERNAL_ERROR';
+    loggerInstance.error({ err, slug: c.req.param('slug') }, '更新 Wiki 页面失败');
+    return c.json({
+      error: { code, message }
+    }, code === 'NOT_FOUND' ? 404 : 500);
+  }
+});
+
 // Changelog
 app.get('/api/changelog', async (c) => {
   try {

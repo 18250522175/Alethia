@@ -199,7 +199,7 @@ export default function ChangelogPage() {
       {rollbackMutation.data && (
         <div className="card border-green-300 bg-green-50 p-4 text-sm dark:border-green-700 dark:bg-green-900/20">
           <strong>回滚成功：</strong>
-          已恢复 {rollbackMutation.data.files.length} 个文件
+          已恢复 {rollbackMutation.data.restoredFiles.length} 个文件
           {rollbackMutation.data.rebuildTriggered && ' · 已触发结构重建'}
         </div>
       )}

@@ -89,7 +89,7 @@ app.get('/health', async (c) => {
     llm: llmStatus,
     embedding: embeddingStatus,
     version: VERSION
-  });
+  }, 200);
 });
 
 app.post('/api/auth/login', async (c) => {

@@ -1,5 +1,6 @@
 import { syncEngine } from '../storage/sync';
 import { storage } from '../storage/markdown';
+import { parser } from '../storage/parser';
 import { executeQuery } from '../retrieval/router';
 import { plan } from '../agents/planner';
 import { retrieve } from '../agents/retriever';
@@ -252,6 +253,10 @@ class BrainAPI {
 
       const env = loadEnv();
 
+      const snapshot = budgetManager.getSnapshot();
+      const alerts = budgetManager.getAlerts();
+      const budgetExceeded = alerts.some(a => a.metric === 'budget_exceeded');
+
       return {
         scale: {
           nodes: parseInt(nodesResult.rows[0].count),
@@ -267,8 +272,8 @@ class BrainAPI {
         },
         aiQuality: { correctness: 0, trend: [] },
         budget: {
-          daily: { spent: 0, limit: env.DAILY_BUDGET, exceeded: false },
-          monthly: { spent: 0, limit: env.MONTHLY_BUDGET, exceeded: false },
+          daily: { spent: snapshot.dailyUsed, limit: snapshot.dailyBudget, exceeded: snapshot.remaining.daily <= 0 },
+          monthly: { spent: snapshot.monthlyUsed, limit: snapshot.monthlyBudget, exceeded: snapshot.remaining.monthly <= 0 },
           perQueryLimit: env.PER_QUERY_BUDGET
         },
         ghostRelations: parseInt(ghostResult.rows[0].count || '0'),
@@ -640,6 +645,101 @@ ${relationsBlock}
     return { slug, content };
   }
 
+  // Wiki 页面读取与编辑
+  async getWikiPage(slug: string): Promise<{
+    page: {
+      slug: string;
+      title: string;
+      type: string;
+      contexts: string[];
+      rawMd: string;
+      contentMd: string;
+      hash: string;
+      updatedAt: string;
+      version: number;
+    };
+    evidenceSpans: any[];
+    links: { incoming: any[]; outgoing: any[] };
+  }> {
+    const wikiPath = storage.getWikiPath();
+    const targetFile = join(wikiPath, `${slug}.md`);
+
+    if (!existsSync(targetFile)) {
+      throw new Error(`页面 ${slug} 不存在`);
+    }
+
+    const rawMd = storage.readFile(targetFile);
+    const parsed = await parser.parse(targetFile, rawMd);
+
+    // 查询证据跨度
+    const pool = getPool();
+    const evidenceResult = await pool.query(
+      'SELECT span_id, source_file_hash, span_text, source_type, confidence FROM evidence_spans WHERE slug = $1',
+      [slug]
+    );
+
+    // 查询关联链接
+    const [incomingResult, outgoingResult] = await Promise.all([
+      pool.query(
+        `SELECT l.*, p.title as target_title FROM links l
+         LEFT JOIN pages p ON p.slug = l.source_slug
+         WHERE l.target_slug = $1`,
+        [slug]
+      ),
+      pool.query(
+        `SELECT l.*, p.title as target_title FROM links l
+         LEFT JOIN pages p ON p.slug = l.target_slug
+         WHERE l.source_slug = $1`,
+        [slug]
+      )
+    ]);
+
+    // 查询版本号
+    const versionResult = await pool.query(
+      'SELECT MAX(version) as max_version FROM knowledge_versions WHERE slug = $1',
+      [slug]
+    );
+    const version = versionResult.rows[0]?.max_version || 1;
+
+    return {
+      page: {
+        slug: parsed.slug || slug,
+        title: parsed.title || slug,
+        type: parsed.type || 'concept',
+        contexts: parsed.contexts || [],
+        rawMd,
+        contentMd: parsed.contentMd || '',
+        hash: storage.getFileHash(targetFile),
+        updatedAt: new Date(storage.getFileMtime(targetFile)).toISOString(),
+        version
+      },
+      evidenceSpans: evidenceResult.rows,
+      links: {
+        incoming: incomingResult.rows,
+        outgoing: outgoingResult.rows
+      }
+    };
+  }
+
+  async updateWikiPage(slug: string, content: string): Promise<{ success: boolean; hash: string }> {
+    const wikiPath = storage.getWikiPath();
+    const targetFile = join(wikiPath, `${slug}.md`);
+
+    if (!existsSync(targetFile)) {
+      throw new Error(`页面 ${slug} 不存在`);
+    }
+
+    storage.atomicWrite(targetFile, content);
+
+    // 触发重新同步
+    await syncEngine.syncAll();
+
+    const hash = storage.getFileHash(targetFile);
+    logger.info({ slug, hash }, 'Wiki 页面已更新');
+
+    return { success: true, hash };
+  }
+
   async generateStaticSite(options?: any): Promise<any> {
     const { generateStaticSite } = await import('./static');
     return generateStaticSite(options);
@@ -729,15 +829,39 @@ ${relationsBlock}
         pool.query('SELECT id, metric, threshold, actual, ts, message FROM eval_anomaly_flags ORDER BY ts DESC LIMIT 20')
       ]);
 
-      const benchmarks = benchResult.rows.map(row => ({
-        id: row.id,
-        type: row.type,
-        slug: row.slug,
-        sourceText: row.source_text,
-        expectedOutput: row.expected_output,
-        gitCommit: row.git_commit,
-        passed: null,
-        score: null
+      const benchmarks = await Promise.all(benchResult.rows.map(async (row) => {
+        let passed: boolean | null = null;
+        let score: number | null = null;
+
+        // 尝试评估：检查当前页面内容是否匹配预期输出
+        try {
+          if (row.slug && row.type === 'factual') {
+            const wikiPath = storage.getWikiPath();
+            const targetFile = join(wikiPath, `${row.slug}.md`);
+            if (existsSync(targetFile)) {
+              const currentContent = storage.readFile(targetFile);
+              const similarity = currentContent.length > 0 && row.expected_output.length > 0
+                ? Math.min(currentContent.length, row.expected_output.length) /
+                  Math.max(currentContent.length, row.expected_output.length)
+                : 0;
+              passed = similarity >= 0.5;
+              score = similarity;
+            }
+          }
+        } catch {
+          // 评估失败时保持 null
+        }
+
+        return {
+          id: row.id,
+          type: row.type,
+          slug: row.slug,
+          sourceText: row.source_text,
+          expectedOutput: row.expected_output,
+          gitCommit: row.git_commit,
+          passed,
+          score
+        };
       }));
 
       const anomalies = anomalyResult.rows.map(row => ({

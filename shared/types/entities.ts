@@ -103,3 +103,29 @@ export interface EvidenceTranslation {
   createdAt: string;
   expiresAt: string;
 }
+
+// Wiki 页面完整响应
+export interface WikiPageResponse {
+  page: {
+    slug: string;
+    title: string;
+    type: string;
+    contexts: string[];
+    rawMd: string;
+    contentMd: string;
+    hash: string;
+    updatedAt: string;
+    version: number;
+  };
+  evidenceSpans: {
+    span_id: string;
+    source_file_hash: string;
+    span_text: string;
+    source_type: string;
+    confidence: number;
+  }[];
+  links: {
+    incoming: Link[];
+    outgoing: Link[];
+  };
+}
