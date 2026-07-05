@@ -21,6 +21,8 @@ export default function TopBar({ onToggleSidebar }: TopBarProps) {
   const { t } = useTranslation();
   const { unreadCount } = useNotification();
 
+  const menuItemsRef = useRef<(HTMLButtonElement | null)[]>([]);
+
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
@@ -32,6 +34,52 @@ export default function TopBar({ onToggleSidebar }: TopBarProps) {
     }
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showUserMenu]);
+
+  const handleMenuKeyDown = (e: React.KeyboardEvent) => {
+    const items = menuItemsRef.current.filter(Boolean) as HTMLButtonElement[];
+    if (items.length === 0) return;
+    const currentIdx = items.indexOf(document.activeElement as HTMLButtonElement);
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      const next = currentIdx < 0 ? 0 : (currentIdx + 1) % items.length;
+      items[next].focus();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      const prev = currentIdx <= 0 ? items.length - 1 : currentIdx - 1;
+      items[prev].focus();
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      items[0].focus();
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      items[items.length - 1].focus();
+    } else if (e.key === 'Escape') {
+      e.stopPropagation();
+      setShowUserMenu(false);
+      (e.currentTarget as HTMLElement).focus();
+    }
+  };
+
+  const handleUserMenuButtonKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowDown' && !showUserMenu) {
+      e.preventDefault();
+      setShowUserMenu(true);
+      requestAnimationFrame(() => {
+        const items = menuItemsRef.current.filter(Boolean) as HTMLButtonElement[];
+        if (items.length > 0) items[0].focus();
+      });
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      setShowUserMenu(!showUserMenu);
+      if (!showUserMenu) {
+        requestAnimationFrame(() => {
+          const items = menuItemsRef.current.filter(Boolean) as HTMLButtonElement[];
+          if (items.length > 0) items[0].focus();
+        });
+      }
+    }
+  };
 
   const handleLogout = () => {
     logout();
@@ -49,7 +97,7 @@ export default function TopBar({ onToggleSidebar }: TopBarProps) {
         <button
           onClick={onToggleSidebar}
           className="btn btn-ghost p-2"
-          aria-label="切换侧边栏"
+          aria-label={t('topbar.toggleSidebar', '切换侧边栏')}
         >
           <List size={20} />
         </button>
@@ -58,7 +106,7 @@ export default function TopBar({ onToggleSidebar }: TopBarProps) {
             <Gauge size={18} />
           </div>
           <span className="font-semibold text-slate-900 dark:text-white">
-            理想 AI 知识库
+            {t('topbar.appName', '理想 AI 知识库')}
           </span>
         </div>
       </div>
@@ -73,13 +121,15 @@ export default function TopBar({ onToggleSidebar }: TopBarProps) {
           className="btn btn-primary gap-2"
         >
           <ChatsCircle size={18} />
-          <span className="hidden sm:inline">快速提问</span>
+          <span className="hidden sm:inline">{t('topbar.quickAsk', '快速提问')}</span>
         </button>
 
         <Popover className="relative">
           <PopoverButton
             className="btn btn-ghost p-2 relative"
-            aria-label={`通知${unreadCount > 0 ? `（${unreadCount} 条未读）` : ''}`}
+            aria-label={unreadCount > 0
+              ? t('topbar.notificationUnread', '通知（{{count}} 条未读）', { count: unreadCount })
+              : t('topbar.notification', '通知')}
           >
             <Bell size={20} />
             {unreadCount > 0 && (
@@ -107,7 +157,7 @@ export default function TopBar({ onToggleSidebar }: TopBarProps) {
         <Popover className="relative">
           <PopoverButton
             className="btn btn-ghost p-2 relative"
-            aria-label="预算"
+            aria-label={t('topbar.budget', '预算')}
           >
             <CurrencyDollar size={20} />
           </PopoverButton>
@@ -136,7 +186,7 @@ export default function TopBar({ onToggleSidebar }: TopBarProps) {
                 onClick={() => navigate('/dashboard')}
                 className="mt-3 w-full text-xs text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 font-medium text-right"
               >
-                查看详情 →
+                {t('common.viewDetails', '查看详情 →')}
               </button>
             </div>
           </PopoverPanel>
@@ -145,8 +195,9 @@ export default function TopBar({ onToggleSidebar }: TopBarProps) {
         <div className="relative" ref={userMenuRef}>
           <button
             onClick={() => setShowUserMenu(!showUserMenu)}
+            onKeyDown={handleUserMenuButtonKeyDown}
             className="btn btn-ghost p-2"
-            aria-label="用户菜单"
+            aria-label={t('topbar.userMenu', '用户菜单')}
             aria-expanded={showUserMenu}
             aria-haspopup="menu"
           >
@@ -157,29 +208,36 @@ export default function TopBar({ onToggleSidebar }: TopBarProps) {
             <div
               className="absolute right-0 mt-2 w-48 rounded-lg border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-800 z-50"
               role="menu"
-              aria-label="用户菜单"
+              aria-label={t('topbar.userMenu', '用户菜单')}
+              onKeyDown={handleMenuKeyDown}
             >
               <button
+                ref={el => { menuItemsRef.current[0] = el; }}
                 onClick={toggleTheme}
                 role="menuitem"
+                tabIndex={0}
                 className="flex w-full items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700"
               >
-                {isDark ? '浅色模式' : '深色模式'}
+                {isDark ? t('topbar.lightMode', '浅色模式') : t('topbar.darkMode', '深色模式')}
               </button>
               <button
+                ref={el => { menuItemsRef.current[1] = el; }}
                 onClick={() => {
                   navigate('/settings');
                   setShowUserMenu(false);
                 }}
                 role="menuitem"
+                tabIndex={0}
                 className="flex w-full items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700"
               >
                 {t('nav.settings')}
               </button>
               <hr className="my-1 border-slate-200 dark:border-slate-700" />
               <button
+                ref={el => { menuItemsRef.current[2] = el; }}
                 onClick={handleLogout}
                 role="menuitem"
+                tabIndex={0}
                 className="flex w-full items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
               >
                 {t('nav.logout')}

@@ -17,11 +17,7 @@ import api from '../lib/api';
 import DiffCompare from '../components/DiffCompare';
 import { useNotification } from '../contexts/NotificationContext';
 
-const TIERS = [
-  { id: 'green', label: '🟢 低风险', desc: '可直接应用', color: 'badge-green' },
-  { id: 'yellow', label: '🟡 待确认', desc: '需人工确认', color: 'badge-yellow' },
-  { id: 'red', label: '🔴 高风险', desc: '需谨慎审核', color: 'badge-red' }
-] as const;
+const TIER_IDS = ['green', 'yellow', 'red'] as const;
 
 export default function DiffReviewPage() {
   const { t } = useTranslation();
@@ -29,6 +25,12 @@ export default function DiffReviewPage() {
   const [activeTier, setActiveTier] = useState<string>('yellow');
   const [activeIndex, setActiveIndex] = useState<number>(0);
   const queryClient = useQueryClient();
+
+  const TIERS = [
+    { id: 'green', label: t('review.tierGreen', '🟢 低风险'), desc: t('review.tierGreenDesc', '可直接应用'), color: 'badge-green' },
+    { id: 'yellow', label: t('review.tierYellow', '🟡 待确认'), desc: t('review.tierYellowDesc', '需人工确认'), color: 'badge-yellow' },
+    { id: 'red', label: t('review.tierRed', '🔴 高风险'), desc: t('review.tierRedDesc', '需谨慎审核'), color: 'badge-red' }
+  ] as const;
 
   const allDiffsQuery = useQuery({
     queryKey: ['diffs'],
@@ -42,15 +44,15 @@ export default function DiffReviewPage() {
       queryClient.invalidateQueries({ queryKey: ['diffs'] });
       addNotification({
         type: 'system',
-        title: '变更已应用',
-        description: '知识变更已成功应用到知识库'
+        title: t('review.applySuccess', '变更已应用'),
+        description: t('review.applySuccessDesc', '知识变更已成功应用到知识库')
       });
     },
     onError: (error: Error) => {
       addNotification({
         type: 'system',
-        title: '应用失败',
-        description: error.message || '应用变更时发生错误'
+        title: t('review.applyFailed', '应用失败'),
+        description: error.message || t('review.applyFailedDesc', '应用变更时发生错误')
       });
     }
   });
@@ -61,15 +63,15 @@ export default function DiffReviewPage() {
       queryClient.invalidateQueries({ queryKey: ['diffs'] });
       addNotification({
         type: 'system',
-        title: '变更已拒绝',
-        description: '已拒绝该知识变更建议'
+        title: t('review.rejectSuccess', '变更已拒绝'),
+        description: t('review.rejectSuccessDesc', '已拒绝该知识变更建议')
       });
     },
     onError: (error: Error) => {
       addNotification({
         type: 'system',
-        title: '操作失败',
-        description: error.message || '拒绝变更时发生错误'
+        title: t('review.operationFailed', '操作失败'),
+        description: error.message || t('review.rejectFailedDesc', '拒绝变更时发生错误')
       });
     }
   });
@@ -150,12 +152,12 @@ export default function DiffReviewPage() {
               {t('review.title')}
             </h1>
             <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-              人类掌权 · 所有 AI 自动生成的知识变更需经你确认才会写入知识库
+              {t('review.subtitle', '人类掌权 · 所有 AI 自动生成的知识变更需经你确认才会写入知识库')}
             </p>
           </div>
           <div className="flex items-center gap-2 text-xs text-slate-400">
             <Keyboard size={14} />
-            <span className="hidden sm:inline">快捷键: J/K 切换 · Enter 应用 · R 拒绝</span>
+            <span className="hidden sm:inline">{t('review.shortcuts', '快捷键: J/K 切换 · Enter 应用 · R 拒绝')}</span>
             <span className="sm:hidden">J/K/Enter/R</span>
           </div>
         </div>
@@ -188,7 +190,7 @@ export default function DiffReviewPage() {
 
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">
-          {TIERS.find(t => t.id === activeTier)?.label} 待审核变更
+          {t('review.pendingDiffs', '{{tier}} 待审核变更', { tier: TIERS.find(t => t.id === activeTier)?.label || '' })}
           {diffs.length > 0 && (
             <span className="ml-2 text-sm font-normal text-slate-500">
               ({activeIndex + 1} / {diffs.length})
@@ -238,10 +240,10 @@ export default function DiffReviewPage() {
         <div className="card flex flex-col items-center justify-center py-16 text-center">
           <Empty size={48} className="mb-3 text-slate-300 dark:text-slate-600" />
           <p className="text-slate-500 dark:text-slate-400">
-            当前队列没有 {TIERS.find(t => t.id === activeTier)?.label} 变更。
+            {t('review.emptyQueue', '当前队列没有 {{tier}} 变更。', { tier: TIERS.find(t => t.id === activeTier)?.label || '' })}
           </p>
           <p className="mt-1 text-xs text-slate-400">
-            当 AI 从上传文件中提取新知识，或检测到知识缺口时，这里会出现待审核条目。
+            {t('review.emptyQueueHint', '当 AI 从上传文件中提取新知识，或检测到知识缺口时，这里会出现待审核条目。')}
           </p>
         </div>
       ) : (
@@ -274,13 +276,18 @@ interface DiffCardProps {
 
 function DiffCard({ diff, onApply, onReject, applying, rejecting, isActive }: DiffCardProps) {
   const { t } = useTranslation();
+  const TIERS = [
+    { id: 'green', label: t('review.tierGreen', '🟢 低风险'), desc: t('review.tierGreenDesc', '可直接应用'), color: 'badge-green' },
+    { id: 'yellow', label: t('review.tierYellow', '🟡 待确认'), desc: t('review.tierYellowDesc', '需人工确认'), color: 'badge-yellow' },
+    { id: 'red', label: t('review.tierRed', '🔴 高风险'), desc: t('review.tierRedDesc', '需谨慎审核'), color: 'badge-red' }
+  ];
   const tierMeta = TIERS.find(t => t.id === diff.tier) || TIERS[0];
   const impactMeta =
     diff.impact === 'high'
-      ? { icon: Warning, color: 'text-red-500', label: '高影响' }
+      ? { icon: Warning, color: 'text-red-500', label: t('review.impactHigh', '高影响') }
       : diff.impact === 'medium'
-        ? { icon: Info, color: 'text-yellow-500', label: '中影响' }
-        : { icon: Info, color: 'text-green-500', label: '低影响' };
+        ? { icon: Info, color: 'text-yellow-500', label: t('review.impactMedium', '中影响') }
+        : { icon: Info, color: 'text-green-500', label: t('review.impactLow', '低影响') };
   const ImpactIcon = impactMeta.icon;
   const isGhost = diff.type === 'ghost_cleanup';
 
@@ -295,14 +302,14 @@ function DiffCard({ diff, onApply, onReject, applying, rejecting, isActive }: Di
           {isGhost && (
             <span className="badge badge-red flex items-center gap-1">
               <Ghost size={12} />
-              幽灵清理
+              {t('review.ghostCleanup', '幽灵清理')}
             </span>
           )}
           <span className="text-xs text-slate-500 dark:text-slate-400">
-            实体：<span className="font-mono text-primary-600 dark:text-primary-400">{diff.slug}</span>
+            {t('review.entity', '实体：')}<span className="font-mono text-primary-600 dark:text-primary-400">{diff.slug}</span>
           </span>
           <span className="text-xs text-slate-500 dark:text-slate-400">
-            类型：{diff.type}
+            {t('review.type', '类型：')}{diff.type}
           </span>
         </div>
         <div className={`flex items-center gap-1 text-xs font-medium ${impactMeta.color}`}>
@@ -314,13 +321,13 @@ function DiffCard({ diff, onApply, onReject, applying, rejecting, isActive }: Di
       <DiffCompare
         oldValue={String(oldValue)}
         newValue={String(newValue)}
-        title={`变更字段：${diff.payload?.field || '-'}`}
+        title={t('review.diffField', '变更字段：{{field}}', { field: diff.payload?.field || '-' })}
       />
 
       {diff.payload?.context && (
         <div className="mt-3 rounded-lg bg-slate-50 p-3 dark:bg-slate-700/50">
           <div className="mb-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
-            上下文
+            {t('review.context', '上下文')}
           </div>
           <p className="text-sm text-slate-600 dark:text-slate-300">
             {diff.payload.context}
@@ -330,8 +337,8 @@ function DiffCard({ diff, onApply, onReject, applying, rejecting, isActive }: Di
 
       <div className="mt-4 flex items-center justify-between">
         <div className="text-xs text-slate-400">
-          置信度：{Math.round((diff.confidence || 0) * 100)}% · 创建于{' '}
-          {new Date(diff.createdAt).toLocaleString('zh-CN')}
+          {t('review.confidence', '置信度：{{value}}%', { value: Math.round((diff.confidence || 0) * 100) })} · {t('review.createdAt', '创建于')}{' '}
+          {new Date(diff.createdAt).toLocaleString()}
         </div>
         <div className="flex gap-2">
           <button

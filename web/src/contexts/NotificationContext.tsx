@@ -171,12 +171,13 @@ export function NotificationCenter({ isOpen, onClose }: NotificationCenterProps)
       ? notifications
       : notifications.filter((n) => n.type === activeTab);
 
+  const { t: tNotif } = useTranslation();
   const tabs: { key: TabType; label: string }[] = [
-    { key: 'all', label: '全部' },
-    { key: 'review', label: '审核' },
-    { key: 'system', label: '系统' },
-    { key: 'extraction', label: '补提取' },
-    { key: 'anomaly', label: '异常' },
+    { key: 'all', label: tNotif('notification.filterAll', '全部') },
+    { key: 'review', label: tNotif('notification.filterReview', '审核') },
+    { key: 'system', label: tNotif('notification.filterSystem', '系统') },
+    { key: 'extraction', label: tNotif('notification.filterExtraction', '补提取') },
+    { key: 'anomaly', label: tNotif('notification.filterAnomaly', '异常') },
   ];
 
   const handleNotificationClick = (id: string) => {
@@ -197,7 +198,7 @@ export function NotificationCenter({ isOpen, onClose }: NotificationCenterProps)
           <div className="flex items-center gap-2">
             <Bell size={18} className="text-slate-600 dark:text-slate-300" />
             <span className="font-semibold text-slate-900 dark:text-white">
-              通知中心
+              {tNotif('notification.title', '通知中心')}
             </span>
             {unreadCount > 0 && (
               <span className="badge badge-red">
@@ -208,7 +209,7 @@ export function NotificationCenter({ isOpen, onClose }: NotificationCenterProps)
           <button
             onClick={onClose}
             className="btn btn-ghost p-1.5"
-            aria-label="关闭"
+            aria-label={tNotif('notification.close', '关闭')}
           >
             <X size={16} />
           </button>
@@ -249,7 +250,7 @@ export function NotificationCenter({ isOpen, onClose }: NotificationCenterProps)
           {filteredNotifications.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-slate-500 dark:text-slate-400">
               <CheckCircle size={40} weight="thin" />
-              <p className="mt-2 text-sm">暂无通知</p>
+              <p className="mt-2 text-sm">{tNotif('notification.empty', '暂无通知')}</p>
             </div>
           ) : (
             <ul className="divide-y divide-slate-200 dark:divide-slate-700">
@@ -308,13 +309,13 @@ export function NotificationCenter({ isOpen, onClose }: NotificationCenterProps)
             className="flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Check size={14} />
-            全部标为已读
+            {tNotif('notification.markAllRead', '全部标为已读')}
           </button>
           <button
             onClick={(e) => { e.stopPropagation(); onClose(); navigate('/notifications'); }}
             className="flex items-center gap-1.5 text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 font-medium"
           >
-            查看全部
+            {tNotif('notification.viewAll', '查看全部')}
             <ArrowRight size={14} />
           </button>
         </div>

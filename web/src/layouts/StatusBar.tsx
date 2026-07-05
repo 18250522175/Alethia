@@ -1,9 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { CheckCircle, Warning, XCircle, Clock } from '@phosphor-icons/react';
+import { useTranslation } from 'react-i18next';
 import api from '../lib/api';
 import { formatRelativeTime, formatDuration } from '../lib/format';
 
 export default function StatusBar() {
+  const { t } = useTranslation();
   const healthQuery = useQuery({
     queryKey: ['health'],
     queryFn: () => api.getHealth(),
@@ -18,9 +20,9 @@ export default function StatusBar() {
   const version = health?.version || 'v5.0.0';
 
   const statusConfig = {
-    ok: { color: 'bg-green-500', label: '服务正常', Icon: CheckCircle, iconColor: 'text-green-500' },
-    degraded: { color: 'bg-yellow-500', label: '服务降级', Icon: Warning, iconColor: 'text-yellow-500' },
-    error: { color: 'bg-red-500', label: '服务异常', Icon: XCircle, iconColor: 'text-red-500' }
+    ok: { color: 'bg-green-500', label: t('status.ok', '服务正常'), Icon: CheckCircle, iconColor: 'text-green-500' },
+    degraded: { color: 'bg-yellow-500', label: t('status.degraded', '服务降级'), Icon: Warning, iconColor: 'text-yellow-500' },
+    error: { color: 'bg-red-500', label: t('status.error', '服务异常'), Icon: XCircle, iconColor: 'text-red-500' }
   };
 
   const { color, label, Icon } = statusConfig[status as keyof typeof statusConfig] || statusConfig.error;
@@ -36,12 +38,12 @@ export default function StatusBar() {
         {health?.lastSync && (
           <span className="flex items-center gap-1" title={new Date(health.lastSync!).toLocaleString()}>
             <Clock size={12} />
-            最后同步：{formatRelativeTime(health.lastSync)}
+            {t('status.lastSync', '最后同步')}：{formatRelativeTime(health.lastSync)}
           </span>
         )}
         {health?.uptimeMs && (
           <span className="hidden sm:inline text-slate-400">
-            运行 {formatDuration(health.uptimeMs)}
+            {t('status.uptime', '运行 {{duration}}', { duration: formatDuration(health.uptimeMs) })}
           </span>
         )}
       </div>
