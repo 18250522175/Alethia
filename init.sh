@@ -26,15 +26,15 @@ done
 echo "  ✓ PostgreSQL 已就绪"
 echo ""
 
-# 运行打包后的迁移与种子脚本（Dockerfile 多阶段构建产物位于 dist/）
+# 运行打包后的迁移与种子脚本（Dockerfile 多阶段构建产物位于 dist/，bun build 保留源目录结构）
 echo "[2/3] 执行数据库迁移..."
 cd /app/server
-bun run dist/migrate.js
+bun run dist/scripts/migrate.js
 echo "  ✓ 迁移完成"
 echo ""
 
 echo "[3/3] 写入种子数据..."
-bun run dist/seed.js
+bun run dist/scripts/seed.js
 echo "  ✓ 种子数据写入完成"
 echo ""
 

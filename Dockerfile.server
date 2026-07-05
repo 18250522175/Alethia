@@ -63,5 +63,5 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD curl -fs http://localhost:3000/health || exit 1
 
-# 启动编译产物
-CMD ["bun", "run", "dist/index.js"]
+# 启动编译产物（bun build 保留源目录结构：src/index.ts → dist/src/index.js）
+CMD ["bun", "run", "dist/src/index.js"]
