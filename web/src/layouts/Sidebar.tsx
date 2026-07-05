@@ -1,8 +1,10 @@
-import { House, Graph, CheckCircle, ChatsCircle, Gauge, Clock, ClockCounterClockwise, Gear, BookOpen, Brain, Bell, User, ChevronDown, ChevronRight, Ghost } from '@phosphor-icons/react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { House, Graph, CheckCircle, ChatsCircle, Gauge, Clock, ClockCounterClockwise, Gear, BookOpen, Brain, Bell, User, CaretDown, CaretRight, Ghost } from '@phosphor-icons/react';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
 import type { ComponentType } from 'react';
+import { useNotification } from '../contexts/NotificationContext';
+import api from '../lib/api';
 
 interface SidebarProps {
   open: boolean;
@@ -109,9 +111,9 @@ function WikiNavGroup({ open }: { open: boolean }) {
           <BookOpen size={20} className="flex-shrink-0" />
           <span className="flex-1 truncate text-left">{t('nav.wiki', '百科')}</span>
           {expanded ? (
-            <ChevronDown size={16} />
+            <CaretDown size={16} />
           ) : (
-            <ChevronRight size={16} />
+            <CaretRight size={16} />
           )}
         </button>
         {expanded && (
@@ -159,14 +161,18 @@ function WikiNavGroup({ open }: { open: boolean }) {
   );
 }
 
-export default function Sidebar({ open }: SidebarProps) {
+export default function Sidebar({ open, onClose }: SidebarProps) {
   const { t } = useTranslation();
   const location = useLocation();
+  const navigate = useNavigate();
+  const { notifications } = useNotification();
+
+  const reviewCount = notifications.filter(n => n.type === 'review' && !n.read).length;
 
   const navItems: NavItem[] = [
     { path: '/', icon: House, label: t('nav.home') },
     { path: '/graph', icon: Graph, label: t('nav.graph') },
-    { path: '/review', icon: CheckCircle, label: t('nav.review'), badge: '3', badgeColor: 'yellow' },
+    { path: '/review', icon: CheckCircle, label: t('nav.review'), badge: reviewCount > 0 ? String(reviewCount) : undefined, badgeColor: 'yellow' },
     { path: '/qa', icon: ChatsCircle, label: t('nav.qa') },
     { path: '/dashboard', icon: Gauge, label: t('nav.dashboard') },
     { path: '/timeline', icon: Clock, label: t('nav.timeline') },
@@ -175,6 +181,20 @@ export default function Sidebar({ open }: SidebarProps) {
   ];
 
   const ghostCount = 2;
+
+  const handleRebuild = async () => {
+    try {
+      await api.rebuildStruct();
+      onClose?.();
+    } catch {
+      // silent fail
+    }
+  };
+
+  const handleNewPage = () => {
+    navigate('/wiki/new');
+    onClose?.();
+  };
 
   return (
     <aside
@@ -232,11 +252,19 @@ export default function Sidebar({ open }: SidebarProps) {
             快速操作
           </div>
           <div className="mt-2 flex gap-2">
-            <button className="btn btn-secondary flex-1 px-2 py-1.5 text-xs">
+            <button
+              onClick={handleRebuild}
+              className="btn btn-secondary flex-1 px-2 py-1.5 text-xs"
+              title="重建知识结构"
+            >
               <Brain size={16} className="mr-1" />
               重建
             </button>
-            <button className="btn btn-secondary flex-1 px-2 py-1.5 text-xs">
+            <button
+              onClick={handleNewPage}
+              className="btn btn-secondary flex-1 px-2 py-1.5 text-xs"
+              title="新建页面"
+            >
               <BookOpen size={16} className="mr-1" />
               新建
             </button>

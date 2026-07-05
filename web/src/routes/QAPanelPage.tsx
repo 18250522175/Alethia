@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMutation } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -16,11 +16,13 @@ import {
   List,
   X,
   Archive,
-  Compress,
-  Expand,
+  ArrowsIn,
+  ArrowsOut,
   Clock
 } from '@phosphor-icons/react';
 import api from '../lib/api';
+import MarkdownRenderer from '../components/MarkdownRenderer';
+import type { EvidenceSpan } from '@shared/evidence';
 
 interface ChatMessage {
   id: string;
@@ -71,6 +73,11 @@ export default function QAPanelPage() {
   const [showSidebar, setShowSidebar] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>('detailed');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [activeEvidence, setActiveEvidence] = useState<{ spanId: string; data?: any } | null>(null);
+
+  const handleEvidenceClick = useCallback((spanId: string) => {
+    setActiveEvidence(prev => prev?.spanId === spanId ? null : { spanId });
+  }, []);
 
   const askMutation = useMutation({
     mutationFn: ({ question, convId }: { question: string; convId?: string }) =>
@@ -239,7 +246,7 @@ export default function QAPanelPage() {
                               className="flex-shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
                               title="已压缩"
                             >
-                              <Compress size={10} className="inline" />
+                              <ArrowsIn size={10} className="inline" />
                             </span>
                           )}
                         </div>
@@ -256,7 +263,7 @@ export default function QAPanelPage() {
                         className="flex-shrink-0 rounded p-1 text-slate-400 opacity-0 transition-opacity hover:bg-slate-100 hover:text-amber-500 group-hover:opacity-100 dark:hover:bg-slate-700"
                         title={conv.compressed ? '展开对话' : '压缩对话'}
                       >
-                        {conv.compressed ? <Expand size={12} /> : <Compress size={12} />}
+                        {conv.compressed ? <ArrowsOut size={12} /> : <ArrowsIn size={12} />}
                       </button>
                     </button>
                   ))}
@@ -297,7 +304,7 @@ export default function QAPanelPage() {
                     : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
                 }`}
               >
-                <Compress size={12} className="mr-1 inline" />
+                <ArrowsIn size={12} className="mr-1 inline" />
                 简洁
               </button>
               <button
@@ -308,7 +315,7 @@ export default function QAPanelPage() {
                     : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
                 }`}
               >
-                <Expand size={12} className="mr-1 inline" />
+                <ArrowsOut size={12} className="mr-1 inline" />
                 详细
               </button>
             </div>
@@ -345,7 +352,7 @@ export default function QAPanelPage() {
           ) : (
             <div className="space-y-6">
               {messages.map(msg => (
-                <MessageBubble key={msg.id} message={msg} viewMode={viewMode} />
+                <MessageBubble key={msg.id} message={msg} viewMode={viewMode} onEvidenceClick={handleEvidenceClick} />
               ))}
               {askMutation.isPending && (
                 <div className="flex items-center gap-2 text-sm text-slate-500">
@@ -382,7 +389,7 @@ export default function QAPanelPage() {
   );
 }
 
-function MessageBubble({ message, viewMode }: { message: ChatMessage; viewMode: ViewMode }) {
+function MessageBubble({ message, viewMode, onEvidenceClick }: { message: ChatMessage; viewMode: ViewMode; onEvidenceClick?: (spanId: string) => void }) {
   const { t } = useTranslation();
   const isUser = message.role === 'user';
   const confidenceColor =
@@ -396,6 +403,13 @@ function MessageBubble({ message, viewMode }: { message: ChatMessage; viewMode: 
 
   const showDetails = viewMode === 'detailed';
 
+  const evidenceSpans: Partial<EvidenceSpan>[] = (message.sources || []).map((src: any, i: number) => ({
+    span_id: src.span_id || String(i + 1),
+    original_location: src.original_location || '',
+    span_text: src.span_text || '',
+    source_type: src.source_type || 'library_file'
+  }));
+
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
       <div
@@ -405,9 +419,17 @@ function MessageBubble({ message, viewMode }: { message: ChatMessage; viewMode: 
             : 'bg-slate-50 text-slate-800 dark:bg-slate-700 dark:text-slate-100'
         }`}
       >
-        <div className="whitespace-pre-wrap break-words text-sm leading-relaxed">
-          {message.content}
-        </div>
+        {isUser ? (
+          <div className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+            {message.content}
+          </div>
+        ) : (
+          <MarkdownRenderer
+            content={message.content}
+            evidenceSpans={evidenceSpans}
+            onEvidenceClick={onEvidenceClick}
+          />
+        )}
 
         {!isUser && showDetails && message.sources && message.sources.length > 0 && (
           <div className="mt-3 border-t border-slate-200 pt-2 dark:border-slate-600">

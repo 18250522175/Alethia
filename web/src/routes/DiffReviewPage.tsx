@@ -28,9 +28,9 @@ export default function DiffReviewPage() {
   const [activeIndex, setActiveIndex] = useState<number>(0);
   const queryClient = useQueryClient();
 
-  const diffsQuery = useQuery({
-    queryKey: ['diffs', activeTier],
-    queryFn: () => api.getPendingDiffs(activeTier),
+  const allDiffsQuery = useQuery({
+    queryKey: ['diffs'],
+    queryFn: () => api.getPendingDiffs(),
     staleTime: 30_000
   });
 
@@ -48,7 +48,15 @@ export default function DiffReviewPage() {
     }
   });
 
-  const diffs = diffsQuery.data?.items || [];
+  const allDiffs = allDiffsQuery.data?.items || [];
+  const diffs = allDiffs.filter(d => d.tier === activeTier);
+
+  const tierCounts: Record<string, number> = { green: 0, yellow: 0, red: 0 };
+  allDiffs.forEach(d => {
+    if (d.tier && tierCounts[d.tier] !== undefined) {
+      tierCounts[d.tier]++;
+    }
+  });
 
   const handleApply = useCallback((diffId: string) => {
     applyMutation.mutate(diffId);
@@ -59,7 +67,7 @@ export default function DiffReviewPage() {
   }, [rejectMutation]);
 
   const handleBatchApply = async () => {
-    const items = diffsQuery.data?.items || [];
+    const items = allDiffsQuery.data?.items || [];
     for (const item of items) {
       if (item.tier === 'green') {
         await api.applyDiff(item.id);
@@ -104,12 +112,7 @@ export default function DiffReviewPage() {
     setActiveIndex(0);
   }, [activeTier]);
 
-  const tierCounts: Record<string, number> = { green: 0, yellow: 0, red: 0 };
-  (diffsQuery.data?.items || []).forEach(d => {
-    tierCounts[d.tier] = (tierCounts[d.tier] || 0) + 1;
-  });
-
-  const isLoading = diffsQuery.isLoading;
+  const isLoading = allDiffsQuery.isLoading;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -134,7 +137,7 @@ export default function DiffReviewPage() {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         {TIERS.map(tier => {
-          const count = activeTier === tier.id ? diffs.length : 0;
+          const count = tierCounts[tier.id] || 0;
           return (
             <button
               key={tier.id}

@@ -8,7 +8,7 @@ import type { EvidenceSpan } from '@shared/evidence';
 
 interface MarkdownRendererProps {
   content: string;
-  evidenceSpans?: EvidenceSpan[];
+  evidenceSpans?: EvidenceSpan[] | Partial<EvidenceSpan>[];
   showFrontmatter?: boolean;
   onEvidenceClick?: (spanId: string) => void;
 }
@@ -255,10 +255,12 @@ export default function MarkdownRenderer({
 
   const env = useMemo(() => {
     const evidenceIds = new Set<string>();
-    const evidenceMap = new Map<string, EvidenceSpan>();
+    const evidenceMap = new Map<string, Partial<EvidenceSpan>>();
     (evidenceSpans || []).forEach(s => {
-      evidenceIds.add(s.span_id);
-      evidenceMap.set(s.span_id, s);
+      if (s.span_id) {
+        evidenceIds.add(s.span_id);
+        evidenceMap.set(s.span_id, s);
+      }
     });
     return { evidenceIds, evidenceMap };
   }, [evidenceSpans]);

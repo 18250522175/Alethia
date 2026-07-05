@@ -318,6 +318,129 @@ export const api = {
       }[];
       contentUrl: string;
     }>(`/library-files/${hash}`);
+  },
+
+  getLibraryFileContent(hash: string) {
+    return request<{ content: string; format: string }>(`/library-files/${hash}/content`);
+  },
+
+  submitFeedback(messageId: string, helpful: boolean, comment?: string) {
+    return request<{ success: boolean }>('/feedback', {
+      method: 'POST',
+      body: JSON.stringify({ messageId, helpful, comment })
+    });
+  },
+
+  translateEvidence(spanId: string, targetLang: string) {
+    return request<{ spanId: string; translatedText: string; targetLang: string }>(
+      '/translate-evidence',
+      {
+        method: 'POST',
+        body: JSON.stringify({ spanId, targetLang })
+      }
+    );
+  },
+
+  getObservedFiles() {
+    return request<{
+      items: Array<{
+        hash: string;
+        path: string;
+        mtime: string;
+        size: number;
+        status: string;
+      }>;
+      total: number;
+    }>('/observed-files');
+  },
+
+  extractObservedFile(hash: string) {
+    return request<{ success: boolean; hash: string; triggered: boolean }>(
+      `/observed-files/${hash}/extract`,
+      { method: 'POST' }
+    );
+  },
+
+  generateDraft(slug: string, prompt?: string) {
+    return request<{
+      slug: string;
+      draftMd: string;
+      sources: string[];
+      tokensUsed: number;
+    }>('/generate-draft', {
+      method: 'POST',
+      body: JSON.stringify({ slug, prompt })
+    });
+  },
+
+  generateStaticSite() {
+    return request<{
+      success: boolean;
+      outputPath: string;
+      pagesGenerated: number;
+      durationMs: number;
+    }>('/generate-static-site', { method: 'POST' });
+  },
+
+  getExtractPending() {
+    return request<{
+      pending: number;
+      items: Array<{
+        hash: string;
+        originalName: string;
+        addedAt: string;
+        priority: number;
+      }>;
+    }>('/extract-pending');
+  },
+
+  getArchiveVersions(slug: string) {
+    return request<{
+      versions: Array<{
+        version: number;
+        hash: string;
+        updatedAt: string;
+        changeSummary: string;
+      }>;
+    }>(`/archive-versions?slug=${encodeURIComponent(slug)}`);
+  },
+
+  cleanGhostRelations() {
+    return request<{
+      success: boolean;
+      removed: number;
+      details: string;
+    }>('/clean-ghost-relations', { method: 'POST' });
+  },
+
+  getBudgetRemaining() {
+    return request<{
+      remaining: number;
+      total: number;
+      used: number;
+      period: string;
+      currency: string;
+    }>('/budget/remaining');
+  },
+
+  getBudgetAlerts() {
+    return request<{
+      alerts: Array<{
+        id: string;
+        level: 'info' | 'warning' | 'critical';
+        message: string;
+        threshold: number;
+        current: number;
+        ts: string;
+      }>;
+    }>('/budget/alerts');
+  },
+
+  updateDailyBudget(amount: number) {
+    return request<{ success: boolean; dailyBudget: number }>('/settings/daily-budget', {
+      method: 'PUT',
+      body: JSON.stringify({ dailyBudget: amount })
+    });
   }
 };
 

@@ -16,10 +16,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (apiKey: string, remember: boolean = true) => {
     const result = await api.login(apiKey);
-    if (result.success) {
-      api.setToken(apiKey, remember);
-      setTokenState(apiKey);
+    if (result.success && result.token) {
+      api.setToken(result.token, remember);
+      setTokenState(result.token);
       setIsAuthenticated(true);
+    } else {
+      throw new Error('登录失败：API 密钥无效');
     }
   };
 
