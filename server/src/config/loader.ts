@@ -31,7 +31,9 @@ export function loadEnv(): EnvConfig {
     ZERANK_API_KEY: process.env.ZERANK_API_KEY || '',
     NLI_PROVIDER: process.env.NLI_PROVIDER || 'local',
     HF_API_KEY: process.env.HF_API_KEY || '',
-    NODE_ENV: process.env.NODE_ENV || 'development'
+    NODE_ENV: process.env.NODE_ENV || 'development',
+    BRAIN_CORS_ORIGINS: process.env.BRAIN_CORS_ORIGINS || '',
+    LIBRARY_PATH: process.env.LIBRARY_PATH || '/data/library'
   };
 
   const result = EnvConfigSchema.safeParse(raw);

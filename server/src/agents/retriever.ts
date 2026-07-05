@@ -27,7 +27,7 @@ export async function retrieve(plan: RetrievalPlan): Promise<RetrievalResult> {
 
   let graphContext: string[] = [];
   if (queryResult.items.length > 0) {
-    const links = await graphTraverse(queryResult.items[0].slug, 1);
+    const links = await graphTraverse(queryResult.items[0].slug, 2);
     graphContext = links.map(l => l.targetSlug);
   }
 

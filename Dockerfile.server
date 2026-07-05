@@ -29,6 +29,11 @@ ENV NLI_PROVIDER=local
 # 数据卷：wiki、library、changelog、raw、summaries 持久化
 VOLUME ["/app/wiki", "/app/server/data/library", "/app/server/data/changelog", "/app/server/data/raw", "/app/server/data/summaries"]
 
+# 安全: 创建非 root 用户运行服务
+RUN addgroup --system app && adduser --system --ingroup app app
+RUN chown -R app:app /app
+USER app
+
 EXPOSE 3000
 
 # 健康检查：每 30s 探测 /health

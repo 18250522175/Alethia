@@ -6,7 +6,6 @@ import { getErrorMessage } from '../i18n/errors.zh-CN';
 const PUBLIC_PATHS = [
   '/health',
   '/api/auth/login',
-  '/api/llm/test'
 ];
 
 function isPublicPath(path: string, method: string): boolean {

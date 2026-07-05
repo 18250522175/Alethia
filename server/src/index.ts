@@ -6,6 +6,7 @@ import { loadEnv } from './config/loader';
 import loggerInstance from './i18n/logger';
 import { getErrorMessage } from './i18n/errors.zh-CN';
 import { bearerAuth, validateApiKeyOnStartup } from './auth/bearer';
+import { rateLimiter } from './middleware/rate-limit';
 import { waitForDatabase, getPool } from './db/pool';
 import llmRoutes from './routes/llm';
 import settingsRoutes from './routes/settings';
@@ -23,7 +24,21 @@ app.use('*', cors({
     if (env.NODE_ENV === 'development') {
       return origin || '*';
     }
-    return origin || '*';
+    // 生产环境：仅允许白名单中的 origin
+    const CORS_ORIGINS = env.BRAIN_CORS_ORIGINS
+      .split(',')
+      .map(o => o.trim())
+      .filter(o => o.length > 0);
+    if (CORS_ORIGINS.length === 0) {
+      // 未配置白名单时，默认只允许同源请求
+      loggerInstance.warn('生产环境未配置 BRAIN_CORS_ORIGINS，仅允许同源请求');
+      return origin || '';
+    }
+    if (origin && CORS_ORIGINS.includes(origin)) {
+      return origin;
+    }
+    // 不在白名单中，拒绝（返回空字符串而非 '*'）
+    return '';
   },
   credentials: true,
   allowHeaders: ['Content-Type', 'Authorization'],
@@ -35,6 +50,12 @@ app.use('*', logger((msg, ...rest) => {
 }));
 
 app.use('*', bearerAuth);
+
+// 全局限速：每 IP 每分钟最多 60 请求
+app.use('*', rateLimiter({
+  windowMs: 60_000,
+  max: 60
+}));
 
 app.get('/health', async (c) => {
   let dbStatus: 'connected' | 'disconnected' = 'disconnected';
@@ -68,7 +89,7 @@ app.get('/health', async (c) => {
     llm: llmStatus,
     embedding: embeddingStatus,
     version: VERSION
-  });
+  }, 200);
 });
 
 app.post('/api/auth/login', async (c) => {

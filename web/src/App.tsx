@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from './store/AuthContext';
 import { ThemeProvider } from './store/ThemeContext';
 import { SettingsProvider } from './store/SettingsContext';
 import { NotificationProvider } from './contexts/NotificationContext';
+import ErrorBoundary from './components/ErrorBoundary';
 import Shell from './layouts/Shell';
 import LoginPage from './routes/LoginPage';
 import WikiHomePage from './routes/WikiHomePage';
@@ -70,19 +71,21 @@ function AppRoutes() {
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <ThemeProvider>
-        <AuthProvider>
-          <SettingsProvider>
-            <NotificationProvider>
-              <BrowserRouter>
-                <AppRoutes />
-              </BrowserRouter>
-            </NotificationProvider>
-          </SettingsProvider>
-        </AuthProvider>
-      </ThemeProvider>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider>
+          <AuthProvider>
+            <SettingsProvider>
+              <NotificationProvider>
+                <BrowserRouter>
+                  <AppRoutes />
+                </BrowserRouter>
+              </NotificationProvider>
+            </SettingsProvider>
+          </AuthProvider>
+        </ThemeProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }
 

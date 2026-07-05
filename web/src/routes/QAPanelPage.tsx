@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMutation } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -16,11 +16,13 @@ import {
   List,
   X,
   Archive,
-  Compress,
-  Expand,
+  ArrowsIn,
+  ArrowsOut,
   Clock
 } from '@phosphor-icons/react';
 import api from '../lib/api';
+import MarkdownRenderer from '../components/MarkdownRenderer';
+import type { EvidenceSpan } from '@shared/evidence';
 
 interface ChatMessage {
   id: string;
@@ -71,13 +73,18 @@ export default function QAPanelPage() {
   const [showSidebar, setShowSidebar] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>('detailed');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [activeEvidence, setActiveEvidence] = useState<{ spanId: string; data?: any } | null>(null);
+
+  const handleEvidenceClick = useCallback((spanId: string) => {
+    setActiveEvidence(prev => prev?.spanId === spanId ? null : { spanId });
+  }, []);
 
   const askMutation = useMutation({
     mutationFn: ({ question, convId }: { question: string; convId?: string }) =>
       api.askQuestion(question, { conversationId: convId, maxReflections: 3 }),
     onSuccess: (data, variables) => {
       const assistantMessage: ChatMessage = {
-        id: `msg-${Date.now()}`,
+        id: crypto.randomUUID(),
         role: 'assistant',
         content: data.answer,
         sources: data.sources,
@@ -96,9 +103,9 @@ export default function QAPanelPage() {
     },
     onError: (err: Error, variables) => {
       const errorMessage: ChatMessage = {
-        id: `err-${Date.now()}`,
+        id: crypto.randomUUID(),
         role: 'assistant',
-        content: `处理失败：${err.message}`,
+        content: `${t('qa.errorPrefix', '处理失败')}：${err.message}`,
         ts: Date.now()
       };
       setMessages(prev => [...prev, errorMessage]);
@@ -117,7 +124,7 @@ export default function QAPanelPage() {
     if (!q || askMutation.isPending) return;
 
     const userMessage: ChatMessage = {
-      id: `user-${Date.now()}`,
+      id: crypto.randomUUID(),
       role: 'user',
       content: q,
       ts: Date.now()
@@ -182,11 +189,11 @@ export default function QAPanelPage() {
     const mins = Math.floor(diff / (1000 * 60));
     const hours = Math.floor(diff / (1000 * 60 * 60));
     const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    if (mins < 1) return '刚刚';
-    if (mins < 60) return `${mins} 分钟前`;
-    if (hours < 24) return `${hours} 小时前`;
-    if (days < 7) return `${days} 天前`;
-    return new Date(ts).toLocaleDateString('zh-CN');
+    if (mins < 1) return t('common.justNow', '刚刚');
+    if (mins < 60) return t('common.minutesAgo', '{{count}} 分钟前', { count: mins });
+    if (hours < 24) return t('common.hoursAgo', '{{count}} 小时前', { count: hours });
+    if (days < 7) return t('common.daysAgo', '{{count}} 天前', { count: days });
+    return new Date(ts).toLocaleDateString();
   };
 
   return (
@@ -197,12 +204,12 @@ export default function QAPanelPage() {
             <div className="flex items-center justify-between border-b border-slate-200 p-3 dark:border-slate-700">
               <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
                 <ChatCircleDots size={16} className="text-primary-500" />
-                对话历史
+                {t('qa.conversationHistory', '对话历史')}
               </div>
               <button
                 onClick={handleNewChat}
                 className="rounded p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-200"
-                title="新对话"
+                title={t('qa.newChat', '新对话')}
               >
                 <Sparkle size={16} />
               </button>
@@ -211,7 +218,7 @@ export default function QAPanelPage() {
               {conversations.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-8 text-center text-xs text-slate-400">
                   <Archive size={24} className="mb-2" />
-                  暂无对话
+                  {t('qa.noConversations', '暂无对话')}
                 </div>
               ) : (
                 <div className="space-y-1">
@@ -237,9 +244,9 @@ export default function QAPanelPage() {
                           {conv.compressed && (
                             <span
                               className="flex-shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
-                              title="已压缩"
+                              title={t('qa.compressed', '已压缩')}
                             >
-                              <Compress size={10} className="inline" />
+                              <ArrowsIn size={10} className="inline" />
                             </span>
                           )}
                         </div>
@@ -254,9 +261,9 @@ export default function QAPanelPage() {
                       <button
                         onClick={(e) => toggleCompressConversation(conv.id, e)}
                         className="flex-shrink-0 rounded p-1 text-slate-400 opacity-0 transition-opacity hover:bg-slate-100 hover:text-amber-500 group-hover:opacity-100 dark:hover:bg-slate-700"
-                        title={conv.compressed ? '展开对话' : '压缩对话'}
+                        title={conv.compressed ? t('qa.expandChat', '展开对话') : t('qa.compressChat', '压缩对话')}
                       >
-                        {conv.compressed ? <Expand size={12} /> : <Compress size={12} />}
+                        {conv.compressed ? <ArrowsOut size={12} /> : <ArrowsIn size={12} />}
                       </button>
                     </button>
                   ))}
@@ -273,7 +280,7 @@ export default function QAPanelPage() {
             <button
               onClick={() => setShowSidebar(!showSidebar)}
               className="btn btn-ghost p-2"
-              title={showSidebar ? '隐藏侧边栏' : '显示侧边栏'}
+              title={showSidebar ? t('qa.hideSidebar', '隐藏侧边栏') : t('qa.showSidebar', '显示侧边栏')}
             >
               <List size={18} />
             </button>
@@ -283,7 +290,7 @@ export default function QAPanelPage() {
                 {t('qa.title')}
               </h1>
               <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                每个 AI 答案都附带可追溯的来源证据，最大 3 轮反思
+                {t('qa.subtitle', '每个 AI 答案都附带可追溯的来源证据，最大 3 轮反思')}
               </p>
             </div>
           </div>
@@ -297,8 +304,8 @@ export default function QAPanelPage() {
                     : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
                 }`}
               >
-                <Compress size={12} className="mr-1 inline" />
-                简洁
+                <ArrowsIn size={12} className="mr-1 inline" />
+                {t('qa.concise', '简洁')}
               </button>
               <button
                 onClick={() => setViewMode('detailed')}
@@ -308,8 +315,8 @@ export default function QAPanelPage() {
                     : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
                 }`}
               >
-                <Expand size={12} className="mr-1 inline" />
-                详细
+                <ArrowsOut size={12} className="mr-1 inline" />
+                {t('qa.detailed', '详细')}
               </button>
             </div>
             <button onClick={handleNewChat} className="btn btn-secondary">
@@ -325,9 +332,9 @@ export default function QAPanelPage() {
               <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary-100 dark:bg-primary-900/30">
                 <ChatCircleDots size={32} className="text-primary-500" />
               </div>
-              <h2 className="mb-2 text-lg font-semibold">向你的知识库提问</h2>
+              <h2 className="mb-2 text-lg font-semibold">{t('qa.welcomeTitle', '向你的知识库提问')}</h2>
               <p className="mb-6 max-w-md text-sm text-slate-500 dark:text-slate-400">
-                AI 将基于知识库中已提取的内容进行多轮反思问答，并标注每条结论的来源。
+                {t('qa.welcomeSubtitle', 'AI 将基于知识库中已提取的内容进行多轮反思问答，并标注每条结论的来源。')}
               </p>
               <div className="grid w-full max-w-2xl grid-cols-1 gap-3 sm:grid-cols-2">
                 {SUGGESTED_QUESTIONS.map((q, i) => (
@@ -345,12 +352,12 @@ export default function QAPanelPage() {
           ) : (
             <div className="space-y-6">
               {messages.map(msg => (
-                <MessageBubble key={msg.id} message={msg} viewMode={viewMode} />
+                <MessageBubble key={msg.id} message={msg} viewMode={viewMode} onEvidenceClick={handleEvidenceClick} />
               ))}
               {askMutation.isPending && (
                 <div className="flex items-center gap-2 text-sm text-slate-500">
                   <Brain size={16} className="animate-pulse text-primary-500" />
-                  AI 正在思考并多轮反思...
+                  {t('qa.thinking', 'AI 正在思考并多轮反思...')}
                 </div>
               )}
               <div ref={messagesEndRef} />
@@ -382,7 +389,7 @@ export default function QAPanelPage() {
   );
 }
 
-function MessageBubble({ message, viewMode }: { message: ChatMessage; viewMode: ViewMode }) {
+function MessageBubble({ message, viewMode, onEvidenceClick }: { message: ChatMessage; viewMode: ViewMode; onEvidenceClick?: (spanId: string) => void }) {
   const { t } = useTranslation();
   const isUser = message.role === 'user';
   const confidenceColor =
@@ -396,6 +403,13 @@ function MessageBubble({ message, viewMode }: { message: ChatMessage; viewMode: 
 
   const showDetails = viewMode === 'detailed';
 
+  const evidenceSpans: Partial<EvidenceSpan>[] = (message.sources || []).map((src: any, i: number) => ({
+    span_id: src.span_id || String(i + 1),
+    original_location: src.original_location || '',
+    span_text: src.span_text || '',
+    source_type: src.source_type || 'library_file'
+  }));
+
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
       <div
@@ -405,14 +419,22 @@ function MessageBubble({ message, viewMode }: { message: ChatMessage; viewMode: 
             : 'bg-slate-50 text-slate-800 dark:bg-slate-700 dark:text-slate-100'
         }`}
       >
-        <div className="whitespace-pre-wrap break-words text-sm leading-relaxed">
-          {message.content}
-        </div>
+        {isUser ? (
+          <div className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+            {message.content}
+          </div>
+        ) : (
+          <MarkdownRenderer
+            content={message.content}
+            evidenceSpans={evidenceSpans}
+            onEvidenceClick={onEvidenceClick}
+          />
+        )}
 
         {!isUser && showDetails && message.sources && message.sources.length > 0 && (
           <div className="mt-3 border-t border-slate-200 pt-2 dark:border-slate-600">
             <div className="mb-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
-              📎 {message.sources.length} 条来源证据
+              📎 {t('qa.sourceEvidence', '{{count}} 条来源证据', { count: message.sources.length })}
             </div>
             <div className="space-y-1">
               {message.sources.slice(0, 3).map((src: any, i) => (

@@ -8,7 +8,7 @@ import type { EvidenceSpan } from '@shared/evidence';
 
 interface MarkdownRendererProps {
   content: string;
-  evidenceSpans?: EvidenceSpan[];
+  evidenceSpans?: EvidenceSpan[] | Partial<EvidenceSpan>[];
   showFrontmatter?: boolean;
   onEvidenceClick?: (spanId: string) => void;
 }
@@ -141,7 +141,12 @@ const origLinkClose = md.renderer.rules.link_close;
 
 md.renderer.rules.link_open = (tokens, idx, options, env, self) => {
   const href = tokens[idx].attrGet('href') || '';
-  if (href.startsWith('library://')) {
+  // XSS 防护：过滤危险协议
+  const sanitizedHref = /^(javascript|data|vbscript):/i.test(href) ? '#' : href;
+  if (sanitizedHref !== href) {
+    tokens[idx].attrSet('href', sanitizedHref);
+  }
+  if (sanitizedHref.startsWith('library://')) {
     const hash = href.slice('library://'.length);
     env._mediaStack = env._mediaStack || [];
     env._mediaStack.push(true);
@@ -255,10 +260,12 @@ export default function MarkdownRenderer({
 
   const env = useMemo(() => {
     const evidenceIds = new Set<string>();
-    const evidenceMap = new Map<string, EvidenceSpan>();
+    const evidenceMap = new Map<string, Partial<EvidenceSpan>>();
     (evidenceSpans || []).forEach(s => {
-      evidenceIds.add(s.span_id);
-      evidenceMap.set(s.span_id, s);
+      if (s.span_id) {
+        evidenceIds.add(s.span_id);
+        evidenceMap.set(s.span_id, s);
+      }
     });
     return { evidenceIds, evidenceMap };
   }, [evidenceSpans]);

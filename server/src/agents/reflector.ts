@@ -1,6 +1,5 @@
 import { llmRouter } from '../llm/router';
-import { readFileSync } from 'fs';
-import { join } from 'path';
+import { loadPrompt, parseJSONResponse } from './utils';
 import logger from '../i18n/logger';
 import type { LLMMessage } from '@shared/index';
 import type { GradeResult } from './grader';
@@ -17,18 +16,6 @@ export interface ReflectionResult {
 const reflectorPrompt = loadPrompt('reflector.zh-CN.md');
 const MAX_ROUNDS = 5;
 const MAX_DURATION_MS = 3000;
-
-function loadPrompt(name: string): string {
-  try {
-    return readFileSync(join(process.cwd(), 'skills/prompts', name), 'utf-8');
-  } catch {
-    try {
-      return readFileSync(join(__dirname, '../../skills/prompts', name), 'utf-8');
-    } catch {
-      return '';
-    }
-  }
-}
 
 export class Reflector {
   private roundCount = 0;
@@ -89,7 +76,7 @@ export class Reflector {
     try {
       const adapter = llmRouter.route('qa_gen');
       const response = await adapter.chat({ messages, jsonMode: true, temperature: 0.1 });
-      reflection = parseReflectionResponse(response.content);
+      reflection = parseJSONResponse<ReflectionResult>(response.content, ruleBasedReflection(grade, newEntityCount, newEvidenceCount, this.consecutiveNoGain));
       reflection.new_entities_count = newEntityCount;
       reflection.new_evidence_count = newEvidenceCount;
     } catch (err) {
@@ -123,34 +110,6 @@ export class Reflector {
   }
 }
 
-function parseReflectionResponse(content: string): ReflectionResult {
-  try {
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]);
-      return {
-        should_continue: parsed.should_continue ?? false,
-        new_entities_count: parsed.new_entities_count ?? 0,
-        new_evidence_count: parsed.new_evidence_count ?? 0,
-        completeness: parsed.completeness ?? 0.5,
-        gaps: parsed.gaps ?? [],
-        next_action: parsed.next_action ?? '停止'
-      };
-    }
-  } catch {
-    logger.warn('无法解析反思器响应');
-  }
-
-  return {
-    should_continue: false,
-    new_entities_count: 0,
-    new_evidence_count: 0,
-    completeness: 0.5,
-    gaps: [],
-    next_action: '解析失败，停止'
-  };
-}
-
 function ruleBasedReflection(
   grade: GradeResult,
   newEntityCount: number,
@@ -170,4 +129,4 @@ function ruleBasedReflection(
   };
 }
 
-export const reflector = new Reflector();
+// Reflector 应作为请求级实例使用，见 BrainAPI.askQuestion()

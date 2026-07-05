@@ -36,7 +36,7 @@ export async function vectorSearch(query: string, k: number = 10): Promise<Vecto
       score: parseFloat(row.score)
     }));
   } catch (err) {
-    logger.error({ err }, '向量检索失败');
-    return [];
+    logger.error({ err, query: query.slice(0, 100) }, '向量检索失败，可能是向量数据库未就绪');
+    throw err;
   }
 }

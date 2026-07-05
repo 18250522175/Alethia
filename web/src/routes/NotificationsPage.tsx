@@ -12,7 +12,7 @@ import {
   Trash,
   ArrowLeft,
   ArrowRight,
-  Filter,
+  Funnel,
   Clock
 } from '@phosphor-icons/react';
 import { useNotification, NotificationType } from '../contexts/NotificationContext';
@@ -126,7 +126,7 @@ export default function NotificationsPage() {
       <div className="card overflow-hidden">
         <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-700">
           <div className="flex items-center gap-2">
-            <Filter size={16} className="text-slate-400" />
+            <Funnel size={16} className="text-slate-400" />
             <div className="flex gap-1">
               {tabs.map((tab) => {
                 const count = getUnreadByType(tab.key);

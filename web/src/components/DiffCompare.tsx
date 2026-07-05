@@ -10,6 +10,7 @@ import {
   PencilSimple,
   FileText,
   Empty,
+  Warning,
 } from '@phosphor-icons/react';
 
 type DiffRowType = 'added' | 'removed' | 'modified' | 'unchanged';
@@ -30,15 +31,61 @@ export interface DiffCompareProps {
   defaultCollapsed?: boolean;
 }
 
+const MAX_LCS_LINES = 1000;
+
 /**
  * 基于 LCS（最长公共子序列）的逐行差异计算。
  * 无外部依赖，纯 DP 实现，适合知识库字段级别的文本对比。
+ * 超过 MAX_LCS_LINES 行时降级为简单逐行对比，避免 UI 冻结。
  */
-function computeDiff(oldStr: string, newStr: string): DiffRow[] {
+function computeDiff(oldStr: string, newStr: string): { rows: DiffRow[]; truncated: boolean } {
   const oldLines = oldStr.length ? oldStr.split('\n') : [];
   const newLines = newStr.length ? newStr.split('\n') : [];
   const m = oldLines.length;
   const n = newLines.length;
+
+  if (m > MAX_LCS_LINES || n > MAX_LCS_LINES) {
+    const rows: DiffRow[] = [];
+    const maxLines = Math.max(m, n);
+    for (let i = 0; i < maxLines; i++) {
+      const oldLine = i < m ? oldLines[i] : '';
+      const newLine = i < n ? newLines[i] : '';
+      if (i >= m) {
+        rows.push({
+          type: 'added',
+          leftContent: '',
+          rightContent: newLine,
+          leftLineNo: null,
+          rightLineNo: i + 1,
+        });
+      } else if (i >= n) {
+        rows.push({
+          type: 'removed',
+          leftContent: oldLine,
+          rightContent: '',
+          leftLineNo: i + 1,
+          rightLineNo: null,
+        });
+      } else if (oldLine === newLine) {
+        rows.push({
+          type: 'unchanged',
+          leftContent: oldLine,
+          rightContent: newLine,
+          leftLineNo: i + 1,
+          rightLineNo: i + 1,
+        });
+      } else {
+        rows.push({
+          type: 'modified',
+          leftContent: oldLine,
+          rightContent: newLine,
+          leftLineNo: i + 1,
+          rightLineNo: i + 1,
+        });
+      }
+    }
+    return { rows, truncated: true };
+  }
 
   // 构建 LCS DP 表
   const dp: number[][] = Array.from({ length: m + 1 }, () =>
@@ -126,7 +173,7 @@ function computeDiff(oldStr: string, newStr: string): DiffRow[] {
       });
     }
   }
-  return rows;
+  return { rows, truncated: false };
 }
 
 interface RowStyle {
@@ -194,7 +241,7 @@ export default function DiffCompare({
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const [copied, setCopied] = useState(false);
 
-  const rows = useMemo(
+  const { rows, truncated } = useMemo(
     () => computeDiff(oldValue ?? '', newValue ?? ''),
     [oldValue, newValue]
   );
@@ -339,6 +386,14 @@ export default function DiffCompare({
             </div>
           ) : (
             <>
+              {truncated && (
+                <div className="flex items-center gap-2 border-b border-yellow-200 bg-yellow-50 px-4 py-2 text-xs text-yellow-700 dark:border-yellow-800/30 dark:bg-yellow-900/20 dark:text-yellow-300">
+                  <Warning size={14} weight="bold" />
+                  <span>
+                    文件过大（超过 {MAX_LCS_LINES} 行），已使用简化对比模式。完整 LCS 对比可能导致浏览器卡顿。
+                  </span>
+                </div>
+              )}
               {/* 摘要条 */}
               <div className="flex items-center gap-2 border-b border-slate-100 bg-slate-50 px-4 py-2 text-xs text-slate-500 dark:border-slate-700/50 dark:bg-slate-900/30 dark:text-slate-400">
                 {hasChanges

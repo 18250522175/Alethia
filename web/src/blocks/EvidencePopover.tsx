@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   PushPin,
@@ -129,9 +129,28 @@ export default function EvidencePopover({
     setIsOpen(false);
   };
 
-  // Close on outside click (only when not pinned) & Escape (always).
+  // Focus first focusable element in popover
+  const focusFirst = useCallback(() => {
+    if (!popoverRef.current) return;
+    const focusables = popoverRef.current.querySelectorAll<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    );
+    if (focusables.length > 0) {
+      focusables[0].focus();
+    }
+  }, []);
+
+  // Focus trap + outside click + Escape
   useEffect(() => {
     if (!isOpen) return;
+
+    let previouslyFocused: HTMLElement | null = null;
+    if (document.activeElement && document.activeElement !== document.body) {
+      previouslyFocused = document.activeElement as HTMLElement;
+    }
+
+    focusFirst();
+
     const handleOutside = (e: MouseEvent) => {
       if (isPinned) return;
       const target = e.target as Node;
@@ -139,19 +158,43 @@ export default function EvidencePopover({
       if (popoverRef.current?.contains(target)) return;
       setIsOpen(false);
     };
+
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        e.stopPropagation();
         setIsPinned(false);
         setIsOpen(false);
+        return;
+      }
+      if (e.key === 'Tab' && popoverRef.current) {
+        const focusables = Array.from(
+          popoverRef.current.querySelectorAll<HTMLElement>(
+            'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+          )
+        ).filter(el => !el.hasAttribute('disabled'));
+        if (focusables.length === 0) return;
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
       }
     };
+
     document.addEventListener('mousedown', handleOutside);
-    document.addEventListener('keydown', handleKey);
+    document.addEventListener('keydown', handleKey, true);
     return () => {
       document.removeEventListener('mousedown', handleOutside);
-      document.removeEventListener('keydown', handleKey);
+      document.removeEventListener('keydown', handleKey, true);
+      if (previouslyFocused) {
+        previouslyFocused.focus();
+      }
     };
-  }, [isOpen, isPinned]);
+  }, [isOpen, isPinned, focusFirst]);
 
   const showTranslation = isNonChinese(evidence.lang) && !!translation;
   const confidence = evidence.confidence;
@@ -258,7 +301,9 @@ export default function EvidencePopover({
                     <Translate size={11} />
                     {t('evidence.original', '原文')} · {evidence.lang}
                     <span className="ml-auto text-[9px]">
-                      {showOriginal ? '▲ 收起' : '▼ 展开'}
+                      {showOriginal
+                    ? t('evidence.collapse', '▲ 收起')
+                    : t('evidence.expand', '▼ 展开')}
                     </span>
                   </button>
                   {showOriginal && (

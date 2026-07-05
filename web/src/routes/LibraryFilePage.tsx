@@ -19,6 +19,7 @@ import {
   ListBullets
 } from '@phosphor-icons/react';
 import api from '../lib/api';
+import { formatFileSize, formatDateTime } from '../lib/format';
 
 interface LibraryFile {
   hash: string;
@@ -37,32 +38,6 @@ interface EvidenceSpanItem {
 }
 
 const TIMECODE_REGEX = /(\d{1,2}):(\d{2})(?::(\d{2}))?/g;
-
-function formatFileSize(bytes: number): string {
-  if (!bytes || bytes < 0) return '0 B';
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  let v = bytes;
-  let i = 0;
-  while (v >= 1024 && i < units.length - 1) {
-    v /= 1024;
-    i++;
-  }
-  return `${v.toFixed(v >= 100 ? 0 : 1)} ${units[i]}`;
-}
-
-function formatDateTime(ts: string): string {
-  try {
-    return new Date(ts).toLocaleString('zh-CN', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  } catch {
-    return ts;
-  }
-}
 
 function parseTimecodeToSeconds(text: string): number | null {
   const match = text.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
@@ -230,12 +205,20 @@ export default function LibraryFilePage() {
             </div>
             <dl className="space-y-2 text-xs">
               <MetaRow label="文件名" value={file.originalName} mono />
-              <MetaRow label="MIME 类型" value={file.mime} mono badge={category} />
+              <MetaRow
+                label="MIME 类型"
+                value={file.mime}
+                mono
+                badge={{
+                  className: 'badge-blue',
+                  label: category.toUpperCase()
+                }}
+              />
               <MetaRow label="大小" value={formatFileSize(file.size)} />
               <MetaRow
                 label="状态"
                 value={file.status}
-                badge={statusBadgeClass(file.status)}
+                badge={statusBadgeInfo(file.status)}
               />
               <MetaRow
                 label="上传时间"
@@ -390,12 +373,12 @@ function categoryIcon(category: ReturnType<typeof detectCategory>): {
   }
 }
 
-function statusBadgeClass(status: string): string {
+function statusBadgeInfo(status: string): { className: string; label: string } {
   const s = (status || '').toLowerCase();
-  if (s === 'ready' || s === 'processed' || s === 'active') return 'badge-green';
-  if (s === 'pending' || s === 'processing' || s === 'queued') return 'badge-yellow';
-  if (s === 'failed' || s === 'error' || s === 'rejected') return 'badge-red';
-  return 'badge-blue';
+  if (s === 'ready' || s === 'processed' || s === 'active') return { className: 'badge-green', label: '已就绪' };
+  if (s === 'pending' || s === 'processing' || s === 'queued') return { className: 'badge-yellow', label: '处理中' };
+  if (s === 'failed' || s === 'error' || s === 'rejected') return { className: 'badge-red', label: '失败' };
+  return { className: 'badge-blue', label: status || '未知' };
 }
 
 function MetaRow({
@@ -407,14 +390,14 @@ function MetaRow({
   label: string;
   value: string;
   mono?: boolean;
-  badge?: string;
+  badge?: { className: string; label: string };
 }) {
   return (
     <div className="flex items-start justify-between gap-3">
       <dt className="flex-shrink-0 text-slate-500 dark:text-slate-400">{label}</dt>
       <dd className="min-w-0 flex flex-wrap items-center gap-1 text-right">
         {badge && (
-          <span className={`badge ${badge} text-[10px]`}>{badge}</span>
+          <span className={`badge ${badge.className} text-[10px]`}>{badge.label}</span>
         )}
         <span
           className={`break-all text-slate-700 dark:text-slate-200 ${mono ? 'font-mono text-[11px]' : ''}`}

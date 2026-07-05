@@ -18,6 +18,7 @@ import {
   FileX
 } from '@phosphor-icons/react';
 import api from '../lib/api';
+import { formatRelativeTime, formatDateTime } from '../lib/format';
 
 interface ChangeLogBatch {
   batchId: string;
@@ -33,28 +34,6 @@ const OP_FILTERS = [
   { id: 'update', label: '更新', icon: Pencil },
   { id: 'delete', label: '删除', icon: FileX }
 ] as const;
-
-function formatRelativeTime(ts: string): string {
-  const now = Date.now();
-  const time = new Date(ts).getTime();
-  const diff = now - time;
-
-  if (diff < 60_000) return '刚刚';
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)} 分钟前`;
-  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)} 小时前`;
-  return `${Math.floor(diff / 86_400_000)} 天前`;
-}
-
-function formatDateTime(ts: string): string {
-  return new Date(ts).toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit'
-  });
-}
 
 function copyToClipboard(text: string): Promise<void> {
   return navigator.clipboard.writeText(text);
@@ -220,7 +199,7 @@ export default function ChangelogPage() {
       {rollbackMutation.data && (
         <div className="card border-green-300 bg-green-50 p-4 text-sm dark:border-green-700 dark:bg-green-900/20">
           <strong>回滚成功：</strong>
-          已恢复 {rollbackMutation.data.files.length} 个文件
+          已恢复 {rollbackMutation.data.restoredFiles.length} 个文件
           {rollbackMutation.data.rebuildTriggered && ' · 已触发结构重建'}
         </div>
       )}

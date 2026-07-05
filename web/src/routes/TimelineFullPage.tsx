@@ -19,6 +19,7 @@ import {
   X
 } from '@phosphor-icons/react';
 import api from '../lib/api';
+import { formatRelativeTime, formatDateTime } from '../lib/format';
 
 interface TimelineItem {
   id: number;
@@ -32,12 +33,7 @@ interface TimelineItem {
 
 const PAGE_SIZE = 20;
 
-const RANGES = [
-  { id: 'all', label: '全部时间' },
-  { id: 'day', label: '近 24 小时' },
-  { id: 'week', label: '近 7 天' },
-  { id: 'month', label: '近 30 天' }
-] as const;
+const RANGE_IDS = ['all', 'day', 'week', 'month'] as const;
 
 const TYPE_META: Record<string, { badge: string; label: string; Icon: typeof FilePlus }> = {
   create: { badge: 'badge-green', label: '创建', Icon: FilePlus },
@@ -46,32 +42,6 @@ const TYPE_META: Record<string, { badge: string; label: string; Icon: typeof Fil
   archive: { badge: 'badge-red', label: '归档', Icon: Archive },
   qa: { badge: 'badge-blue', label: '问答', Icon: ChatsCircle }
 };
-
-function formatRelativeTime(ts: string): string {
-  const now = Date.now();
-  const time = new Date(ts).getTime();
-  if (Number.isNaN(time)) return ts;
-  const diff = now - time;
-  if (diff < 60_000) return '刚刚';
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)} 分钟前`;
-  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)} 小时前`;
-  return `${Math.floor(diff / 86_400_000)} 天前`;
-}
-
-function formatDateTime(ts: string): string {
-  try {
-    return new Date(ts).toLocaleString('zh-CN', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
-    });
-  } catch {
-    return ts;
-  }
-}
 
 function isWithinRange(ts: string, range: string): boolean {
   if (range === 'all') return true;
@@ -91,8 +61,15 @@ export default function TimelineFullPage() {
   const [range, setRange] = useState<string>('all');
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
+  const RANGES = [
+    { id: 'all', label: t('timeline.rangeAll', '全部时间') },
+    { id: 'day', label: t('timeline.rangeDay', '近 24 小时') },
+    { id: 'week', label: t('timeline.rangeWeek', '近 7 天') },
+    { id: 'month', label: t('timeline.rangeMonth', '近 30 天') }
+  ];
+
   const timelineQuery = useInfiniteQuery({
-    queryKey: ['timeline', slug, range],
+    queryKey: ['timeline', slug],
     queryFn: ({ pageParam = 0 }) =>
       api.getTimeline({
         slug: slug || undefined,
@@ -107,10 +84,13 @@ export default function TimelineFullPage() {
     staleTime: 30_000
   });
 
+  const allItems = useMemo<TimelineItem[]>(() => {
+    return timelineQuery.data?.pages?.flatMap(p => p.items ?? []) ?? [];
+  }, [timelineQuery.data]);
+
   const items = useMemo<TimelineItem[]>(() => {
-    const all = timelineQuery.data?.pages?.flatMap(p => p.items ?? []) ?? [];
-    return all.filter(item => isWithinRange(item.ts, range));
-  }, [timelineQuery.data, range]);
+    return allItems.filter(item => isWithinRange(item.ts, range));
+  }, [allItems, range]);
 
   const total = timelineQuery.data?.pages?.[0]?.total ?? 0;
   const hasMore = !!timelineQuery.hasNextPage && !timelineQuery.isFetching;
@@ -160,7 +140,7 @@ export default function TimelineFullPage() {
             {t('nav.timeline')}
           </h1>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            按时间倒序浏览实体事件流 · 支持按实体和时间范围筛选
+            {t('timeline.subtitle', '按时间倒序浏览实体事件流 · 支持按实体和时间范围筛选')}
           </p>
         </div>
         <button
@@ -172,7 +152,7 @@ export default function TimelineFullPage() {
             size={16}
             className={`mr-1.5 ${timelineQuery.isFetching ? 'animate-spin' : ''}`}
           />
-          刷新
+          {t('common.refresh', '刷新')}
         </button>
       </header>
 
@@ -180,7 +160,7 @@ export default function TimelineFullPage() {
         <div className="flex items-center gap-2">
           <Funnel size={16} className="text-slate-400" />
           <span className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">
-            筛选
+            {t('timeline.filter', '筛选')}
           </span>
         </div>
         <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-2 dark:border-slate-700 dark:bg-slate-800">
@@ -191,7 +171,7 @@ export default function TimelineFullPage() {
             value={slugInput}
             onChange={e => setSlugInput(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleApplySlug()}
-            placeholder="按实体 slug 过滤..."
+            placeholder={t('timeline.slugPlaceholder', '按实体 slug 过滤...')}
             className="w-48 border-0 bg-transparent px-1 py-1.5 text-sm focus:outline-none dark:text-slate-100"
           />
           <datalist id="timeline-slug-options">
@@ -203,14 +183,14 @@ export default function TimelineFullPage() {
             <button
               onClick={handleClearSlug}
               className="rounded p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-              aria-label="清除"
+              aria-label={t('common.clear', '清除')}
             >
               <X size={14} />
             </button>
           )}
         </div>
         <button onClick={handleApplySlug} className="btn btn-primary text-sm">
-          应用
+          {t('common.apply', '应用')}
         </button>
         <div className="ml-auto flex items-center gap-2">
           <select
@@ -229,7 +209,7 @@ export default function TimelineFullPage() {
 
       {slug && (
         <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
-          <span>当前实体：</span>
+          <span>{t('timeline.currentEntity', '当前实体：')}</span>
           <RouterLink
             to={`/wiki/${slug}`}
             className="inline-flex items-center gap-1 font-mono text-primary-600 hover:underline dark:text-primary-400"
@@ -240,7 +220,7 @@ export default function TimelineFullPage() {
           <button
             onClick={handleClearSlug}
             className="rounded p-0.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-            aria-label="清除筛选"
+            aria-label={t('timeline.clearFilter', '清除筛选')}
           >
             <X size={14} />
           </button>
@@ -255,23 +235,23 @@ export default function TimelineFullPage() {
       ) : isError ? (
         <div className="card flex flex-col items-center justify-center py-16 text-center">
           <Warning size={40} className="mb-2 text-red-400" />
-          <p className="text-slate-600 dark:text-slate-300">时间线加载失败</p>
-          <p className="mt-1 text-xs text-slate-400">请检查后端 /api/timeline 路由是否已实现</p>
+          <p className="text-slate-600 dark:text-slate-300">{t('timeline.errorTitle', '时间线加载失败')}</p>
+          <p className="mt-1 text-xs text-slate-400">{t('timeline.errorHint', '请检查后端 /api/timeline 路由是否已实现')}</p>
         </div>
       ) : items.length === 0 ? (
         <div className="card flex flex-col items-center justify-center py-16 text-center">
           <Empty size={48} className="mb-3 text-slate-300 dark:text-slate-600" />
-          <p className="text-slate-500 dark:text-slate-400">暂无时间线事件</p>
+          <p className="text-slate-500 dark:text-slate-400">{t('timeline.emptyTitle', '暂无时间线事件')}</p>
           <p className="mt-1 text-xs text-slate-400">
             {slug
-              ? '该实体当前没有可显示的事件，尝试更换 slug 或清除筛选。'
-              : '当 AI 创建、更新、合并、归档条目或回答问题时，事件会按时间倒序出现在这里。'}
+              ? t('timeline.emptySlugHint', '该实体当前没有可显示的事件，尝试更换 slug 或清除筛选。')
+              : t('timeline.emptyHint', '当 AI 创建、更新、合并、归档条目或回答问题时，事件会按时间倒序出现在这里。')}
           </p>
         </div>
       ) : (
         <div className="space-y-3">
           <div className="text-xs text-slate-500 dark:text-slate-400">
-            共 {total} 条事件 · 当前显示 {items.length} 条
+            {t('timeline.eventSummary', '共 {{total}} 条事件 · 当前显示 {{shown}} 条', { total, shown: items.length })}
           </div>
           <ol className="relative space-y-3 before:absolute before:left-3 before:top-2 before:bottom-2 before:w-px before:bg-slate-200 dark:before:bg-slate-700">
             {items.map(item => (
@@ -284,12 +264,12 @@ export default function TimelineFullPage() {
           {timelineQuery.isFetchingNextPage && (
             <div className="flex items-center justify-center py-4 text-sm text-slate-500 dark:text-slate-400">
               <Spinner size={16} className="mr-2 animate-spin" />
-              加载更多...
+              {t('timeline.loadingMore', '加载更多...')}
             </div>
           )}
           {!hasMore && items.length > 0 && (
             <div className="py-2 text-center text-xs text-slate-400">
-              已加载全部事件
+              {t('timeline.allLoaded', '已加载全部事件')}
             </div>
           )}
         </div>
@@ -299,9 +279,17 @@ export default function TimelineFullPage() {
 }
 
 function TimelineCard({ item }: { item: TimelineItem }) {
-  const meta = TYPE_META[item.type] ?? {
+  const { t } = useTranslation();
+  const typeMeta: Record<string, { badge: string; label: string; Icon: typeof FilePlus }> = {
+    create: { badge: 'badge-green', label: t('timeline.typeCreate', '创建'), Icon: FilePlus },
+    update: { badge: 'badge-yellow', label: t('timeline.typeUpdate', '更新'), Icon: Pencil },
+    merge: { badge: 'badge-blue', label: t('timeline.typeMerge', '合并'), Icon: GitMerge },
+    archive: { badge: 'badge-red', label: t('timeline.typeArchive', '归档'), Icon: Archive },
+    qa: { badge: 'badge-blue', label: t('timeline.typeQa', '问答'), Icon: ChatsCircle }
+  };
+  const meta = typeMeta[item.type] ?? {
     badge: 'badge-blue',
-    label: item.type || '事件',
+    label: item.type || t('timeline.typeEvent', '事件'),
     Icon: Clock
   };
   const Icon = meta.Icon;
@@ -359,7 +347,7 @@ function TimelineCard({ item }: { item: TimelineItem }) {
 
         {relatedSlugs.length > 0 && (
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            <span className="text-xs text-slate-500 dark:text-slate-400">关联：</span>
+            <span className="text-xs text-slate-500 dark:text-slate-400">{t('timeline.related', '关联：')}</span>
             {relatedSlugs.map(s => (
               <RouterLink
                 key={s}
@@ -376,17 +364,17 @@ function TimelineCard({ item }: { item: TimelineItem }) {
           <div className="mt-3 space-y-2 rounded-lg bg-slate-50 p-3 dark:bg-slate-700/50">
             <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400">
               <ChatsCircle size={12} />
-              问答日志
+              {t('timeline.qaLog', '问答日志')}
             </div>
             {qaTurns.map((turn, i) => (
               <div key={i} className="text-xs">
                 <div className="text-slate-700 dark:text-slate-200">
-                  <span className="text-slate-400">问：</span>
+                  <span className="text-slate-400">{t('timeline.qaQuestion', '问：')}</span>
                   {turn.question}
                 </div>
                 {turn.answer && (
                   <div className="mt-0.5 text-slate-600 dark:text-slate-300">
-                    <span className="text-slate-400">答：</span>
+                    <span className="text-slate-400">{t('timeline.qaAnswer', '答：')}</span>
                     {turn.answer}
                   </div>
                 )}

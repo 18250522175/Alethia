@@ -132,7 +132,7 @@ export default function GraphFullPage() {
             'width': 24,
             'height': 24,
             'transition-property': 'background-color, width, height, border-width',
-            'transition-duration': '0.2s'
+            'transition-duration': 0.2
           }
         },
         {
@@ -230,6 +230,22 @@ export default function GraphFullPage() {
       cyInstanceRef.current = null;
     };
   }, [graphQuery.data, graphQuery.isLoading, layout]);
+
+  useEffect(() => {
+    const cy = cyInstanceRef.current;
+    if (!cy) return;
+
+    if (filterType === 'all') {
+      cy.elements().style('display', 'element');
+    } else {
+      cy.nodes().style('display', 'none');
+      cy.edges().style('display', 'none');
+      const filtered = cy.nodes(`node[type="${filterType}"]`);
+      filtered.style('display', 'element');
+      filtered.connectedEdges().style('display', 'element');
+      filtered.neighborhood().nodes().style('display', 'element');
+    }
+  }, [filterType]);
 
   useEffect(() => {
     const handleClickOutside = () => {

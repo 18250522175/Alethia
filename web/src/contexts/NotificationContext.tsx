@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useCallback, ReactNode, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import {
   Bell,
   CheckCircle,
@@ -12,6 +13,8 @@ import {
   Check,
   ArrowRight,
 } from '@phosphor-icons/react';
+import { formatRelativeTime } from '../lib/format';
+import api from '../lib/api';
 
 export type NotificationType = 'review' | 'system' | 'extraction' | 'anomaly';
 
@@ -33,74 +36,38 @@ interface NotificationContextType {
   markAsRead: (id: string) => void;
   markAllAsRead: () => void;
   clearAll: () => void;
+  refetch: () => void;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
 
-const initialNotifications: Notification[] = [
-  {
-    id: '1',
-    type: 'review',
-    title: '新的审核任务待处理',
-    description: '有 3 条知识变更等待您的审核确认',
-    ts: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
-    read: false,
-    actionUrl: '/review',
-    actionLabel: '前往审核',
-  },
-  {
-    id: '2',
-    type: 'system',
-    title: '系统维护通知',
-    description: '系统将于今晚 23:00-24:00 进行例行维护',
-    ts: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-    read: false,
-  },
-  {
-    id: '3',
-    type: 'extraction',
-    title: '补提取任务完成',
-    description: '文档「产品说明书 v2.0」知识提取已完成',
-    ts: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
-    read: true,
-    actionUrl: '/wiki/doc-123',
-    actionLabel: '查看详情',
-  },
-  {
-    id: '4',
-    type: 'anomaly',
-    title: '异常检测告警',
-    description: '检测到知识库中存在 2 条幽灵关系，请及时处理',
-    ts: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(),
-    read: false,
-    actionUrl: '/dashboard',
-    actionLabel: '查看详情',
-  },
-  {
-    id: '5',
-    type: 'review',
-    title: '审核通过通知',
-    description: '您提交的 5 条知识变更已全部通过审核',
-    ts: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
-    read: true,
-  },
-  {
-    id: '6',
-    type: 'extraction',
-    title: '自动提取失败',
-    description: '文档「技术规格.pdf」提取失败，原因：格式不支持',
-    ts: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(),
-    read: true,
-  },
-];
-
 function generateId(): string {
-  return Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return Date.now().toString(36) + Math.random().toString(36).substring(2, 11);
 }
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
-  const [notifications, setNotifications] = useState<Notification[]>(initialNotifications);
+  const [localNotifications, setLocalNotifications] = useState<Notification[]>([]);
 
+  const { data, refetch } = useQuery({
+    queryKey: ['notifications'],
+    queryFn: async () => {
+      try {
+        const result = await api.request<{ items: Notification[]; total: number }>('/notifications');
+        return result.items || [];
+      } catch {
+        return [];
+      }
+    },
+    staleTime: 60_000,
+    refetchInterval: 120_000,
+    retry: 1
+  });
+
+  const serverNotifications = data || [];
+  const notifications = [...localNotifications, ...serverNotifications];
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   const addNotification = useCallback(
@@ -111,28 +78,28 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         ts: new Date().toISOString(),
         read: false,
       };
-      setNotifications((prev) => [newNotification, ...prev]);
+      setLocalNotifications((prev) => [newNotification, ...prev]);
     },
     []
   );
 
   const markAsRead = useCallback((id: string) => {
-    setNotifications((prev) =>
+    setLocalNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, read: true } : n))
     );
   }, []);
 
   const markAllAsRead = useCallback(() => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    setLocalNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
   }, []);
 
   const clearAll = useCallback(() => {
-    setNotifications([]);
+    setLocalNotifications([]);
   }, []);
 
   return (
     <NotificationContext.Provider
-      value={{ notifications, unreadCount, addNotification, markAsRead, markAllAsRead, clearAll }}
+      value={{ notifications, unreadCount, addNotification, markAsRead, markAllAsRead, clearAll, refetch }}
     >
       {children}
     </NotificationContext.Provider>
@@ -145,21 +112,6 @@ export function useNotification() {
     throw new Error('useNotification must be used within a NotificationProvider');
   }
   return context;
-}
-
-function formatTime(isoString: string): string {
-  const now = new Date();
-  const date = new Date(isoString);
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / (1000 * 60));
-  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-  if (diffMins < 1) return '刚刚';
-  if (diffMins < 60) return `${diffMins} 分钟前`;
-  if (diffHours < 24) return `${diffHours} 小时前`;
-  if (diffDays < 7) return `${diffDays} 天前`;
-  return date.toLocaleDateString('zh-CN');
 }
 
 function getTypeIcon(type: NotificationType) {
@@ -219,12 +171,13 @@ export function NotificationCenter({ isOpen, onClose }: NotificationCenterProps)
       ? notifications
       : notifications.filter((n) => n.type === activeTab);
 
+  const { t: tNotif } = useTranslation();
   const tabs: { key: TabType; label: string }[] = [
-    { key: 'all', label: '全部' },
-    { key: 'review', label: '审核' },
-    { key: 'system', label: '系统' },
-    { key: 'extraction', label: '补提取' },
-    { key: 'anomaly', label: '异常' },
+    { key: 'all', label: tNotif('notification.filterAll', '全部') },
+    { key: 'review', label: tNotif('notification.filterReview', '审核') },
+    { key: 'system', label: tNotif('notification.filterSystem', '系统') },
+    { key: 'extraction', label: tNotif('notification.filterExtraction', '补提取') },
+    { key: 'anomaly', label: tNotif('notification.filterAnomaly', '异常') },
   ];
 
   const handleNotificationClick = (id: string) => {
@@ -245,7 +198,7 @@ export function NotificationCenter({ isOpen, onClose }: NotificationCenterProps)
           <div className="flex items-center gap-2">
             <Bell size={18} className="text-slate-600 dark:text-slate-300" />
             <span className="font-semibold text-slate-900 dark:text-white">
-              通知中心
+              {tNotif('notification.title', '通知中心')}
             </span>
             {unreadCount > 0 && (
               <span className="badge badge-red">
@@ -256,7 +209,7 @@ export function NotificationCenter({ isOpen, onClose }: NotificationCenterProps)
           <button
             onClick={onClose}
             className="btn btn-ghost p-1.5"
-            aria-label="关闭"
+            aria-label={tNotif('notification.close', '关闭')}
           >
             <X size={16} />
           </button>
@@ -297,7 +250,7 @@ export function NotificationCenter({ isOpen, onClose }: NotificationCenterProps)
           {filteredNotifications.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-slate-500 dark:text-slate-400">
               <CheckCircle size={40} weight="thin" />
-              <p className="mt-2 text-sm">暂无通知</p>
+              <p className="mt-2 text-sm">{tNotif('notification.empty', '暂无通知')}</p>
             </div>
           ) : (
             <ul className="divide-y divide-slate-200 dark:divide-slate-700">
@@ -331,7 +284,7 @@ export function NotificationCenter({ isOpen, onClose }: NotificationCenterProps)
                         </p>
                         <div className="flex items-center justify-between mt-2">
                           <span className="text-xs text-slate-400 dark:text-slate-500">
-                            {formatTime(notification.ts)}
+                            {formatRelativeTime(notification.ts)}
                           </span>
                           {notification.actionLabel && notification.actionUrl && (
                             <span className="flex items-center gap-1 text-xs font-medium text-primary-600 dark:text-primary-400">
@@ -356,13 +309,13 @@ export function NotificationCenter({ isOpen, onClose }: NotificationCenterProps)
             className="flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Check size={14} />
-            全部标为已读
+            {tNotif('notification.markAllRead', '全部标为已读')}
           </button>
           <button
             onClick={(e) => { e.stopPropagation(); onClose(); navigate('/notifications'); }}
             className="flex items-center gap-1.5 text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 font-medium"
           >
-            查看全部
+            {tNotif('notification.viewAll', '查看全部')}
             <ArrowRight size={14} />
           </button>
         </div>

@@ -1,10 +1,12 @@
 import { syncEngine } from '../storage/sync';
+import { storage } from '../storage/markdown';
+import { parser } from '../storage/parser';
 import { executeQuery } from '../retrieval/router';
 import { plan } from '../agents/planner';
 import { retrieve } from '../agents/retriever';
 import { grade } from '../agents/grader';
 import { generate } from '../agents/generator';
-import { reflector } from '../agents/reflector';
+import { Reflector } from '../agents/reflector';
 import { submitFeedback as submitFeedbackAgent } from '../agents/feedback';
 import { extractFacts } from '../agents/observe';
 import { translateEvidence as translateEvidenceAgent } from '../agents/translate';
@@ -14,6 +16,9 @@ import { loadEnv } from '../config/loader';
 import logger from '../i18n/logger';
 import { getErrorMessage } from '../i18n/errors.zh-CN';
 import { budgetManager } from '../evolution/budget';
+import { randomUUID } from 'crypto';
+import { join } from 'path';
+import { existsSync, unlinkSync } from 'fs';
 import type {
   RebuildReport,
   ExtractReport,
@@ -81,7 +86,8 @@ class BrainAPI {
 
     logger.info({ question: request.question, conversationId }, '开始处理问答');
 
-    reflector.reset();
+    const ref = new Reflector();
+    ref.reset();
 
     const hasLlm = llmRouter.hasAnyConfigured();
     if (!hasLlm) {
@@ -124,10 +130,10 @@ class BrainAPI {
       totalTokens += generationResult.tokensUsed;
       totalCost += generationResult.estimatedCost;
 
-      reflector.trackEntities(planResult.entities);
-      reflector.trackEvidence(retrievalResult.evidence.map(e => e.span_id));
+      ref.trackEntities(planResult.entities);
+      ref.trackEvidence(retrievalResult.evidence.map(e => e.span_id));
 
-      const reflection = await reflector.reflect(
+      const reflection = await ref.reflect(
         gradeResult,
         planResult.entities,
         retrievalResult.evidence.map(e => e.span_id)
@@ -247,6 +253,10 @@ class BrainAPI {
 
       const env = loadEnv();
 
+      const snapshot = budgetManager.getSnapshot();
+      const alerts = budgetManager.getAlerts();
+      const budgetExceeded = alerts.some(a => a.metric === 'budget_exceeded');
+
       return {
         scale: {
           nodes: parseInt(nodesResult.rows[0].count),
@@ -262,8 +272,8 @@ class BrainAPI {
         },
         aiQuality: { correctness: 0, trend: [] },
         budget: {
-          daily: { spent: 0, limit: env.DAILY_BUDGET, exceeded: false },
-          monthly: { spent: 0, limit: env.MONTHLY_BUDGET, exceeded: false },
+          daily: { spent: snapshot.dailyUsed, limit: snapshot.dailyBudget, exceeded: snapshot.remaining.daily <= 0 },
+          monthly: { spent: snapshot.monthlyUsed, limit: snapshot.monthlyBudget, exceeded: snapshot.remaining.monthly <= 0 },
           perQueryLimit: env.PER_QUERY_BUDGET
         },
         ghostRelations: parseInt(ghostResult.rows[0].count || '0'),
@@ -355,19 +365,69 @@ class BrainAPI {
 
     logger.info({ diffId, slug: diff.slug }, '变更已通过审核，正在应用');
 
-    return {
-      diffId,
-      applied: true,
-      newVersion: 0,
-      modifiedFiles: []
-    };
+    // 实际写入：读取当前 wiki 页面 → 应用 payload 变更 → 写回文件 → 重新同步
+    try {
+      const wikiPath = storage.getWikiPath();
+      const targetFile = join(wikiPath, `${diff.slug}.md`);
+      const modifiedFiles: string[] = [];
+
+      if (existsSync(targetFile)) {
+        const currentContent = storage.readFile(targetFile);
+        const payload = diff.payload || {};
+
+        // 根据变更类型处理内容
+        const newContent = applyContentChange(currentContent, payload, diff.type);
+        if (newContent !== currentContent) {
+          storage.atomicWrite(targetFile, newContent);
+          modifiedFiles.push(`${diff.slug}.md`);
+
+          // 记录版本历史
+          const versionId = randomUUID();
+          await pool.query(
+            `INSERT INTO knowledge_versions (id, slug, version, content, batch_id, created_at)
+             VALUES ($1, $2, $3, $4, $5, NOW())`,
+            [versionId, diff.slug, 1, newContent.slice(0, 5000), `diff-${diffId}`]
+          );
+
+          // 触发重新同步
+          await syncEngine.syncAll();
+        }
+      } else {
+        // 页面不存在时，创建新页面
+        const payload = diff.payload || {};
+        let newContent = `---\nslug: ${diff.slug}\ntype: ${diff.type || 'concept'}\n---\n\n`;
+        if (payload.content) {
+          newContent += typeof payload.content === 'string' ? payload.content : JSON.stringify(payload.content, null, 2);
+        }
+        storage.writeFile(targetFile, newContent);
+        modifiedFiles.push(`${diff.slug}.md`);
+
+        await syncEngine.syncAll();
+      }
+
+      logger.info({ diffId, modifiedFiles }, '变更已成功应用');
+      return {
+        diffId,
+        applied: true,
+        newVersion: 1,
+        modifiedFiles
+      };
+    } catch (err) {
+      logger.error({ err, diffId }, '应用变更失败');
+      // 回滚 resolved 标记
+      await pool.query(
+        'UPDATE pending_diffs SET resolved = false, approved = NULL, resolved_at = NULL WHERE id = $1',
+        [diffId]
+      );
+      throw new Error(`应用变更失败: ${(err as Error).message}`);
+    }
   }
 
   async rollbackAutoChange(batchId: string): Promise<RollbackResult> {
     const pool = getPool();
 
     const logResult = await pool.query(
-      'SELECT * FROM auto_change_log WHERE batch_id = $1',
+      'SELECT * FROM auto_change_log WHERE batch_id = $1 ORDER BY id DESC',
       [batchId]
     );
 
@@ -375,14 +435,51 @@ class BrainAPI {
       throw new Error(`批次 ${batchId} 不存在`);
     }
 
-    logger.info({ batchId }, '执行回滚');
+    logger.info({ batchId, count: logResult.rows.length }, '执行回滚');
 
-    return {
-      batchId,
-      restored: true,
-      restoredFiles: [],
-      rebuildTriggered: false
-    };
+    const restoredFiles: string[] = [];
+
+    try {
+      const wikiPath = storage.getWikiPath();
+
+      for (const logEntry of logResult.rows) {
+        const slug = logEntry.slug;
+        const targetFile = join(wikiPath, `${slug}.md`);
+
+        // 查找变更前的版本
+        const versionResult = await pool.query(
+          `SELECT * FROM knowledge_versions
+           WHERE slug = $1 AND created_at < $2
+           ORDER BY created_at DESC LIMIT 1`,
+          [slug, logEntry.created_at]
+        );
+
+        if (versionResult.rows.length > 0) {
+          const prevVersion = versionResult.rows[0];
+          storage.atomicWrite(targetFile, prevVersion.content);
+          restoredFiles.push(`${slug}.md`);
+
+          // 重新同步回滚后的页面
+          await syncEngine.syncAll();
+        } else if (logEntry.op === 'create') {
+          // 如果是创建操作且没有历史版本，删除文件
+          if (existsSync(targetFile)) {
+            unlinkSync(targetFile);
+            restoredFiles.push(`${slug}.md (已删除)`);
+          }
+        }
+      }
+
+      return {
+        batchId,
+        restored: true,
+        restoredFiles,
+        rebuildTriggered: restoredFiles.length > 0
+      };
+    } catch (err) {
+      logger.error({ err, batchId }, '回滚失败');
+      throw new Error(`回滚失败: ${(err as Error).message}`);
+    }
   }
 
   // Task 7.6: 提交反馈
@@ -548,6 +645,101 @@ ${relationsBlock}
     return { slug, content };
   }
 
+  // Wiki 页面读取与编辑
+  async getWikiPage(slug: string): Promise<{
+    page: {
+      slug: string;
+      title: string;
+      type: string;
+      contexts: string[];
+      rawMd: string;
+      contentMd: string;
+      hash: string;
+      updatedAt: string;
+      version: number;
+    };
+    evidenceSpans: any[];
+    links: { incoming: any[]; outgoing: any[] };
+  }> {
+    const wikiPath = storage.getWikiPath();
+    const targetFile = join(wikiPath, `${slug}.md`);
+
+    if (!existsSync(targetFile)) {
+      throw new Error(`页面 ${slug} 不存在`);
+    }
+
+    const rawMd = storage.readFile(targetFile);
+    const parsed = await parser.parse(targetFile, rawMd);
+
+    // 查询证据跨度
+    const pool = getPool();
+    const evidenceResult = await pool.query(
+      'SELECT span_id, source_file_hash, span_text, source_type, confidence FROM evidence_spans WHERE slug = $1',
+      [slug]
+    );
+
+    // 查询关联链接
+    const [incomingResult, outgoingResult] = await Promise.all([
+      pool.query(
+        `SELECT l.*, p.title as target_title FROM links l
+         LEFT JOIN pages p ON p.slug = l.source_slug
+         WHERE l.target_slug = $1`,
+        [slug]
+      ),
+      pool.query(
+        `SELECT l.*, p.title as target_title FROM links l
+         LEFT JOIN pages p ON p.slug = l.target_slug
+         WHERE l.source_slug = $1`,
+        [slug]
+      )
+    ]);
+
+    // 查询版本号
+    const versionResult = await pool.query(
+      'SELECT MAX(version) as max_version FROM knowledge_versions WHERE slug = $1',
+      [slug]
+    );
+    const version = versionResult.rows[0]?.max_version || 1;
+
+    return {
+      page: {
+        slug: parsed.slug || slug,
+        title: parsed.title || slug,
+        type: parsed.type || 'concept',
+        contexts: parsed.contexts || [],
+        rawMd,
+        contentMd: parsed.contentMd || '',
+        hash: storage.getFileHash(targetFile),
+        updatedAt: new Date(storage.getFileMtime(targetFile)).toISOString(),
+        version
+      },
+      evidenceSpans: evidenceResult.rows,
+      links: {
+        incoming: incomingResult.rows,
+        outgoing: outgoingResult.rows
+      }
+    };
+  }
+
+  async updateWikiPage(slug: string, content: string): Promise<{ success: boolean; hash: string }> {
+    const wikiPath = storage.getWikiPath();
+    const targetFile = join(wikiPath, `${slug}.md`);
+
+    if (!existsSync(targetFile)) {
+      throw new Error(`页面 ${slug} 不存在`);
+    }
+
+    storage.atomicWrite(targetFile, content);
+
+    // 触发重新同步
+    await syncEngine.syncAll();
+
+    const hash = storage.getFileHash(targetFile);
+    logger.info({ slug, hash }, 'Wiki 页面已更新');
+
+    return { success: true, hash };
+  }
+
   async generateStaticSite(options?: any): Promise<any> {
     const { generateStaticSite } = await import('./static');
     return generateStaticSite(options);
@@ -559,28 +751,46 @@ ${relationsBlock}
       const limit = params?.limit || 100;
       const opFilter = params?.op;
 
-      const whereClause = opFilter ? 'WHERE op = $2' : '';
-      const queryParams = opFilter ? [opFilter, limit] : [limit];
+      // 使用两个独立查询避免动态参数索引混乱
+      const subResult = opFilter
+        ? await pool.query(
+            `SELECT batch_id, op, target, ts,
+                    COUNT(*) OVER (PARTITION BY batch_id, op) as cnt
+             FROM auto_change_log
+             WHERE op = $1
+             ORDER BY ts DESC
+             LIMIT $2 * 1000`,
+            [opFilter, limit]
+          )
+        : await pool.query(
+            `SELECT batch_id, op, target, ts,
+                    COUNT(*) OVER (PARTITION BY batch_id, op) as cnt
+             FROM auto_change_log
+             ORDER BY ts DESC
+             LIMIT $1 * 1000`,
+            [limit]
+          );
 
-      const result = await pool.query(
-        `SELECT batch_id, 
-                MIN(ts) as batch_ts,
-                COUNT(*) as total_ops,
-                json_object_agg(op, cnt) as op_counts,
-                array_agg(DISTINCT target) as targets
-         FROM (
-           SELECT batch_id, op, target, ts,
-                  COUNT(*) OVER (PARTITION BY batch_id, op) as cnt
-           FROM auto_change_log
-           ${whereClause}
-           ORDER BY ts DESC
-           LIMIT $${opFilter ? '3' : '1'} * 1000
-         ) sub
-         GROUP BY batch_id
-         ORDER BY batch_ts DESC
-         LIMIT $${opFilter ? '2' : '1'}`,
-        queryParams
-      );
+      // 构建 batch_id 列表用于外层查询
+      const batchIds = [...new Set(subResult.rows.map((r: any) => r.batch_id))].slice(0, limit);
+      const result = batchIds.length > 0
+        ? await pool.query(
+            `SELECT batch_id,
+                    MIN(ts) as batch_ts,
+                    COUNT(*) as total_ops,
+                    json_object_agg(op, cnt) as op_counts,
+                    array_agg(DISTINCT target) as targets
+             FROM (
+               SELECT batch_id, op, target, ts,
+                      COUNT(*) OVER (PARTITION BY batch_id, op) as cnt
+               FROM auto_change_log
+               WHERE batch_id = ANY($1::text[])
+             ) sub
+             GROUP BY batch_id
+             ORDER BY batch_ts DESC`,
+            [batchIds]
+          )
+        : { rows: [] };
 
       const batches = result.rows.map(row => ({
         batchId: row.batch_id,
@@ -619,15 +829,39 @@ ${relationsBlock}
         pool.query('SELECT id, metric, threshold, actual, ts, message FROM eval_anomaly_flags ORDER BY ts DESC LIMIT 20')
       ]);
 
-      const benchmarks = benchResult.rows.map(row => ({
-        id: row.id,
-        type: row.type,
-        slug: row.slug,
-        sourceText: row.source_text,
-        expectedOutput: row.expected_output,
-        gitCommit: row.git_commit,
-        passed: null,
-        score: null
+      const benchmarks = await Promise.all(benchResult.rows.map(async (row) => {
+        let passed: boolean | null = null;
+        let score: number | null = null;
+
+        // 尝试评估：检查当前页面内容是否匹配预期输出
+        try {
+          if (row.slug && row.type === 'factual') {
+            const wikiPath = storage.getWikiPath();
+            const targetFile = join(wikiPath, `${row.slug}.md`);
+            if (existsSync(targetFile)) {
+              const currentContent = storage.readFile(targetFile);
+              const similarity = currentContent.length > 0 && row.expected_output.length > 0
+                ? Math.min(currentContent.length, row.expected_output.length) /
+                  Math.max(currentContent.length, row.expected_output.length)
+                : 0;
+              passed = similarity >= 0.5;
+              score = similarity;
+            }
+          }
+        } catch {
+          // 评估失败时保持 null
+        }
+
+        return {
+          id: row.id,
+          type: row.type,
+          slug: row.slug,
+          sourceText: row.source_text,
+          expectedOutput: row.expected_output,
+          gitCommit: row.git_commit,
+          passed,
+          score
+        };
       }));
 
       const anomalies = anomalyResult.rows.map(row => ({
@@ -877,6 +1111,60 @@ ${relationsBlock}
     const alerts = budgetManager.getAlerts();
     return { items: alerts, total: alerts.length };
   }
+}
+
+/**
+ * 将 diff payload 应用到 Markdown 内容上。
+ * 支持三种操作模式：
+ * 1. 替换正文（payload.content 存在时）
+ * 2. 更新 frontmatter 字段（payload.frontmatter 存在时）
+ * 3. 追加/更新章节（payload.sections 存在时）
+ */
+function applyContentChange(currentContent: string, payload: any, _type?: string): string {
+  let result = currentContent;
+
+  // 模式 1：替换整个正文
+  if (payload.content && typeof payload.content === 'string') {
+    const fmMatch = result.match(/^---\n([\s\S]*?)\n---\n*/);
+    const frontmatter = fmMatch ? fmMatch[0] : '';
+    result = frontmatter + payload.content;
+  }
+
+  // 模式 2：更新 frontmatter 字段
+  if (payload.frontmatter && typeof payload.frontmatter === 'object') {
+    const fmMatch = result.match(/^---\n([\s\S]*?)\n---\n*/);
+    if (fmMatch) {
+      let fm = fmMatch[1];
+      for (const [key, value] of Object.entries(payload.frontmatter)) {
+        const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const lineRegex = new RegExp(`^${escapedKey}:.*$`, 'm');
+        const newLine = `${key}: ${value}`;
+        if (lineRegex.test(fm)) {
+          fm = fm.replace(lineRegex, newLine);
+        } else {
+          fm += `\n${newLine}`;
+        }
+      }
+      result = `---\n${fm}\n---\n${result.replace(/^---\n[\s\S]*?\n---\n*/, '')}`;
+    }
+  }
+
+  // 模式 3：追加/更新 Markdown 章节
+  if (payload.sections && typeof payload.sections === 'object') {
+    for (const [heading, sectionContent] of Object.entries(payload.sections)) {
+      const sectionRegex = new RegExp(
+        `(^#{1,4}\\s+${heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\n)([\\s\\S]*?)(?=\\n#{1,4}\\s|$)`,
+        'm'
+      );
+      if (sectionRegex.test(result)) {
+        result = result.replace(sectionRegex, `$1${sectionContent}\n`);
+      } else {
+        result += `\n## ${heading}\n${sectionContent}\n`;
+      }
+    }
+  }
+
+  return result;
 }
 
 function generateConversationId(): string {

@@ -70,12 +70,37 @@ class BudgetManager {
 
   recordUsage(tokens: number, cost: number, task: string): void {
     this.maybeRollover();
+    // 使用数据库原子操作确保并发安全
     this.dailyUsed += cost;
     this.monthlyUsed += cost;
     logger.debug(
       { task, tokens, cost, dailyUsed: this.dailyUsed, monthlyUsed: this.monthlyUsed },
       '预算消耗记录'
     );
+    // 异步持久化到数据库（不阻塞调用方）
+    this.persistUsage(cost).catch(err => {
+      logger.error({ err }, '持久化预算使用记录失败');
+    });
+  }
+
+  private async persistUsage(cost: number): Promise<void> {
+    const pool = getPool();
+    const today = this.formatDay(new Date());
+    const month = this.formatMonth(new Date());
+    try {
+      await pool.query(
+        `INSERT INTO budget_usage (key, cost, updated_at) VALUES ($1, $2, NOW())
+         ON CONFLICT (key) DO UPDATE SET cost = budget_usage.cost + $2, updated_at = NOW()`,
+        [`daily:${today}`, cost]
+      );
+      await pool.query(
+        `INSERT INTO budget_usage (key, cost, updated_at) VALUES ($1, $2, NOW())
+         ON CONFLICT (key) DO UPDATE SET cost = budget_usage.cost + $2, updated_at = NOW()`,
+        [`monthly:${month}`, cost]
+      );
+    } catch (err) {
+      logger.error({ err }, '持久化预算记录失败');
+    }
   }
 
   getRemainingBudget(): RemainingBudget {

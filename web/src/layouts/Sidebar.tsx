@@ -1,8 +1,10 @@
-import { House, Graph, CheckCircle, ChatsCircle, Gauge, Clock, ClockCounterClockwise, Gear, BookOpen, Brain, Bell, User, ChevronDown, ChevronRight, Ghost } from '@phosphor-icons/react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { House, Graph, CheckCircle, ChatsCircle, Gauge, Clock, ClockCounterClockwise, Gear, BookOpen, Brain, Bell, User, CaretDown, CaretRight, Ghost } from '@phosphor-icons/react';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
 import type { ComponentType } from 'react';
+import { useNotification } from '../contexts/NotificationContext';
+import api from '../lib/api';
 
 interface SidebarProps {
   open: boolean;
@@ -87,10 +89,10 @@ function WikiNavGroup({ open }: { open: boolean }) {
   const [showTooltip, setShowTooltip] = useState(false);
 
   const portals: SubNavItem[] = [
-    { path: '/wiki/portal-product', label: '产品门户' },
-    { path: '/wiki/portal-engineering', label: '工程门户' },
-    { path: '/wiki/portal-research', label: '研究门户' },
-    { path: '/wiki/portal-operations', label: '运营门户' },
+    { path: '/wiki/portal-product', label: t('sidebar.portalProduct', '产品门户') },
+    { path: '/wiki/portal-engineering', label: t('sidebar.portalEngineering', '工程门户') },
+    { path: '/wiki/portal-research', label: t('sidebar.portalResearch', '研究门户') },
+    { path: '/wiki/portal-operations', label: t('sidebar.portalOperations', '运营门户') },
   ];
 
   const isWikiActive = location.pathname.startsWith('/wiki');
@@ -109,9 +111,9 @@ function WikiNavGroup({ open }: { open: boolean }) {
           <BookOpen size={20} className="flex-shrink-0" />
           <span className="flex-1 truncate text-left">{t('nav.wiki', '百科')}</span>
           {expanded ? (
-            <ChevronDown size={16} />
+            <CaretDown size={16} />
           ) : (
-            <ChevronRight size={16} />
+            <CaretRight size={16} />
           )}
         </button>
         {expanded && (
@@ -159,14 +161,18 @@ function WikiNavGroup({ open }: { open: boolean }) {
   );
 }
 
-export default function Sidebar({ open }: SidebarProps) {
+export default function Sidebar({ open, onClose }: SidebarProps) {
   const { t } = useTranslation();
   const location = useLocation();
+  const navigate = useNavigate();
+  const { notifications } = useNotification();
+
+  const reviewCount = notifications.filter(n => n.type === 'review' && !n.read).length;
 
   const navItems: NavItem[] = [
     { path: '/', icon: House, label: t('nav.home') },
     { path: '/graph', icon: Graph, label: t('nav.graph') },
-    { path: '/review', icon: CheckCircle, label: t('nav.review'), badge: '3', badgeColor: 'yellow' },
+    { path: '/review', icon: CheckCircle, label: t('nav.review'), badge: reviewCount > 0 ? String(reviewCount) : undefined, badgeColor: 'yellow' },
     { path: '/qa', icon: ChatsCircle, label: t('nav.qa') },
     { path: '/dashboard', icon: Gauge, label: t('nav.dashboard') },
     { path: '/timeline', icon: Clock, label: t('nav.timeline') },
@@ -175,6 +181,20 @@ export default function Sidebar({ open }: SidebarProps) {
   ];
 
   const ghostCount = 2;
+
+  const handleRebuild = async () => {
+    try {
+      await api.rebuildStruct();
+      onClose?.();
+    } catch {
+      // silent fail
+    }
+  };
+
+  const handleNewPage = () => {
+    navigate('/wiki/new');
+    onClose?.();
+  };
 
   return (
     <aside
@@ -217,10 +237,10 @@ export default function Sidebar({ open }: SidebarProps) {
               className={`flex items-center gap-2 rounded-lg bg-red-50 px-2 py-1.5 text-xs text-red-600 dark:bg-red-900/20 dark:text-red-400 ${
                 open ? '' : 'justify-center w-8'
               }`}
-              title={`${ghostCount} 条幽灵关系待处理`}
+              title={t('sidebar.ghostRelationsTitle', '{{count}} 条幽灵关系待处理', { count: ghostCount })}
             >
               <Ghost size={14} />
-              {open && <span>{ghostCount} 幽灵关系</span>}
+              {open && <span>{t('sidebar.ghostRelations', '{{count}} 幽灵关系', { count: ghostCount })}</span>}
             </div>
           </div>
         )}
@@ -229,16 +249,24 @@ export default function Sidebar({ open }: SidebarProps) {
       {open && (
         <div className="border-t border-slate-200 p-3 dark:border-slate-700">
           <div className="text-xs text-slate-500 dark:text-slate-400">
-            快速操作
+            {t('sidebar.quickActions', '快速操作')}
           </div>
           <div className="mt-2 flex gap-2">
-            <button className="btn btn-secondary flex-1 px-2 py-1.5 text-xs">
+            <button
+              onClick={handleRebuild}
+              className="btn btn-secondary flex-1 px-2 py-1.5 text-xs"
+              title={t('sidebar.rebuildTitle', '重建知识结构')}
+            >
               <Brain size={16} className="mr-1" />
-              重建
+              {t('sidebar.rebuild', '重建')}
             </button>
-            <button className="btn btn-secondary flex-1 px-2 py-1.5 text-xs">
+            <button
+              onClick={handleNewPage}
+              className="btn btn-secondary flex-1 px-2 py-1.5 text-xs"
+              title={t('sidebar.newPageTitle', '新建页面')}
+            >
               <BookOpen size={16} className="mr-1" />
-              新建
+              {t('sidebar.newPage', '新建')}
             </button>
           </div>
         </div>
