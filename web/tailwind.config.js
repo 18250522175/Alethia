@@ -1,3 +1,5 @@
+import typography from '@tailwindcss/typography';
+
 /** @type {import('tailwindcss').Config} */
 export default {
   content: [
@@ -7,6 +9,57 @@ export default {
   darkMode: 'class',
   theme: {
     extend: {
+      typography: ({ theme }) => ({
+        DEFAULT: {
+          css: {
+            maxWidth: 'none',
+            color: theme('colors.slate.700'),
+            a: {
+              color: theme('colors.primary.600'),
+              '&:hover': {
+                color: theme('colors.primary.700'),
+              },
+            },
+            'h1, h2, h3, h4, h5, h6': {
+              color: theme('colors.slate.900'),
+            },
+            'blockquote': {
+              borderLeftColor: theme('colors.primary.300'),
+            },
+          },
+        },
+        dark: {
+          css: {
+            color: theme('colors.slate.200'),
+            a: {
+              color: theme('colors.primary.400'),
+              '&:hover': {
+                color: theme('colors.primary.300'),
+              },
+            },
+            'h1, h2, h3, h4, h5, h6': {
+              color: theme('colors.slate.100'),
+            },
+            'blockquote': {
+              color: theme('colors.slate.300'),
+              borderLeftColor: theme('colors.primary.600'),
+            },
+            'code': {
+              backgroundColor: theme('colors.slate.800'),
+              color: theme('colors.slate.200'),
+            },
+            'pre': {
+              backgroundColor: theme('colors.slate.800'),
+            },
+            'th, td': {
+              borderColor: theme('colors.slate.700'),
+            },
+            'hr': {
+              borderColor: theme('colors.slate.700'),
+            },
+          },
+        },
+      }),
       colors: {
         primary: {
           50: '#f0f9ff',
@@ -79,5 +132,5 @@ export default {
       }
     }
   },
-  plugins: []
+  plugins: [typography]
 };

@@ -1,12 +1,13 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import type { Settings } from '@shared/settings';
 import api from '../lib/api';
 
 interface SettingsContextType {
-  settings: any;
+  settings: Settings | undefined;
   isLoading: boolean;
   error: Error | null;
-  updateSettings: (settings: any) => Promise<void>;
+  updateSettings: (settings: Partial<Settings>) => Promise<void>;
   refetch: () => void;
 }
 
@@ -25,7 +26,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   });
 
   const mutation = useMutation({
-    mutationFn: async (newSettings: any) => {
+    mutationFn: async (newSettings: Partial<Settings>) => {
       const result = await api.updateSettings(newSettings);
       return result.settings;
     },
@@ -34,7 +35,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     }
   });
 
-  const updateSettings = async (newSettings: any) => {
+  const updateSettings = async (newSettings: Partial<Settings>) => {
     await mutation.mutateAsync(newSettings);
   };
 

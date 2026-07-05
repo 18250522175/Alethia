@@ -1,5 +1,10 @@
 import type { EvidenceSpan } from '@shared/evidence';
 import type { Link } from '@shared/entities';
+import type { Settings } from '@shared/settings';
+import type { HealthDashboard } from '@shared/health';
+import type { PendingDiff, ApplyResult } from '@shared/diff';
+import type { QueryResult } from '@shared/query';
+import type { AskResponse, ConversationMessage } from '@shared/ask';
 
 const API_BASE = '/api';
 const DEFAULT_TIMEOUT = 30_000;
@@ -154,18 +159,18 @@ export const api = {
   },
 
   getSettings() {
-    return request<{ settings: any }>('/settings');
+    return request<{ settings: Settings }>('/settings');
   },
 
-  updateSettings(settings: any) {
-    return request<{ success: boolean; settings: any }>('/settings', {
+  updateSettings(settings: Partial<Settings>) {
+    return request<{ success: boolean; settings: Settings }>('/settings', {
       method: 'PUT',
       body: JSON.stringify({ settings })
     });
   },
 
   getLlmAdapters() {
-    return request<{ adapters: any[] }>('/llm/adapters');
+    return request<{ adapters: Array<{ id: string; name: string; enabled: boolean; models: string[] }> }>('/llm/adapters');
   },
 
   testLlmAdapter(adapterId: string) {
@@ -176,7 +181,15 @@ export const api = {
   },
 
   rebuildStruct() {
-    return request<any>('/rebuild-struct', {
+    return request<{
+      success: boolean;
+      triggered: boolean;
+      estimatedDurationMs: number;
+      pages?: number;
+      links?: number;
+      ghostCount?: number;
+      durationMs?: number;
+    }>('/rebuild-struct', {
       method: 'POST'
     });
   },
@@ -192,19 +205,11 @@ export const api = {
   },
 
   getHealthDashboard() {
-    return request<any>('/health-dashboard');
+    return request<HealthDashboard>('/health-dashboard');
   },
 
   askQuestion(question: string, options?: { conversationId?: string; maxReflections?: number; signal?: AbortSignal }) {
-    return request<{
-      answer: string;
-      sources: any[];
-      confidence: number;
-      relatedEntities: { slug: string; title: string }[];
-      conversationId: string;
-      tokensUsed: number;
-      estimatedCost: number;
-    }>('/ask', {
+    return request<AskResponse>('/ask', {
       method: 'POST',
       body: JSON.stringify({ question, ...options }),
       timeout: 120_000,
@@ -213,28 +218,41 @@ export const api = {
   },
 
   queryKnowledge(query: string, options?: { intent?: string; topK?: number; contexts?: string[] }) {
-    return request<{
-      items: Array<{ slug: string; title: string; snippet: string; score: number }>;
-      intent: string;
-      tier: string;
-      durationMs: number;
-    }>('/query', {
+    return request<QueryResult>('/query', {
       method: 'POST',
       body: JSON.stringify({ query, ...options })
     });
   },
 
   getGraphData() {
-    return request<{ nodes: any[]; edges: any[] }>('/graph');
+    return request<{
+      nodes: Array<{
+        id: string;
+        label: string;
+        title?: string;
+        type: string;
+        slug?: string;
+        weight?: number;
+        x?: number;
+        y?: number;
+      }>;
+      edges: Array<{
+        id: string;
+        source: string;
+        target: string;
+        relation: string;
+        weight: number;
+      }>;
+    }>('/graph');
   },
 
   getPendingDiffs(tier?: string) {
     const qs = tier ? `?tier=${tier}` : '';
-    return request<{ items: any[]; total: number }>(`/diffs${qs}`);
+    return request<{ items: PendingDiff[]; total: number }>(`/diffs${qs}`);
   },
 
   applyDiff(diffId: string) {
-    return request<{ diffId: string; applied: boolean; newVersion: number; modifiedFiles: string[] }>(
+    return request<ApplyResult>(
       `/diffs/${diffId}/apply`,
       { method: 'POST' }
     );
@@ -248,7 +266,7 @@ export const api = {
   },
 
   getConversation(conversationId: string) {
-    return request<{ items: any[]; total: number }>(`/conversations/${conversationId}`);
+    return request<{ items: ConversationMessage[]; total: number }>(`/conversations/${conversationId}`);
   },
 
   getWikiPage(slug: string) {
@@ -347,15 +365,15 @@ export const api = {
     if (params?.limit) query.set('limit', String(params.limit));
     if (params?.offset) query.set('offset', String(params.offset));
     return request<{
-      items: {
+      items: Array<{
         id: number;
         slug: string;
         type: string;
-        payload: any;
+        payload: Record<string, unknown>;
         ts: string;
         title?: string;
         description?: string;
-      }[];
+      }>;
       total: number;
     }>(`/timeline?${query.toString()}`);
   },

@@ -1,7 +1,11 @@
 {
   "name": "alethia",
   "private": true,
-  "workspaces": ["shared", "server", "web"],
+  "workspaces": [
+    "shared",
+    "server",
+    "web"
+  ],
   "scripts": {
     "dev:server": "cd server && bun run dev",
     "dev:web": "cd web && bun run dev",
@@ -9,5 +13,8 @@
     "db:migrate": "cd server && bun run db:migrate",
     "seed": "cd server && bun run seed",
     "brain": "cd server && bun run brain"
+  },
+  "devDependencies": {
+    "@tailwindcss/typography": "^0.5.20"
   }
 }

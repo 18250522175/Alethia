@@ -19,6 +19,7 @@ import {
 } from '@phosphor-icons/react';
 import api from '../lib/api';
 import { formatRelativeTime, formatFileSize, truncateText } from '../lib/format';
+import HighlightText from '../components/HighlightText';
 
 const PREVIEW_COUNT = 10;
 
@@ -222,7 +223,7 @@ export default function SearchResultPage() {
               onToggle={() => toggleGroup('pages')}
             >
               {pages.map(p => (
-                <PageResultCard key={p.slug} page={p} />
+                <PageResultCard key={p.slug} page={p} query={query} />
               ))}
             </ResultGroup>
 
@@ -235,7 +236,7 @@ export default function SearchResultPage() {
               onToggle={() => toggleGroup('files')}
             >
               {files.map(f => (
-                <FileResultCard key={f.hash} file={f} />
+                <FileResultCard key={f.hash} file={f} query={query} />
               ))}
             </ResultGroup>
 
@@ -248,7 +249,7 @@ export default function SearchResultPage() {
               onToggle={() => toggleGroup('conversations')}
             >
               {conversations.map(c => (
-                <ConversationResultCard key={c.id} conv={c} />
+                <ConversationResultCard key={c.id} conv={c} query={query} />
               ))}
             </ResultGroup>
           </div>
@@ -327,7 +328,7 @@ function ResultGroup({
   );
 }
 
-function PageResultCard({ page }: { page: PageResult }) {
+function PageResultCard({ page, query }: { page: PageResult; query: string }) {
   return (
     <RouterLink
       to={`/wiki/${page.slug}`}
@@ -336,7 +337,7 @@ function PageResultCard({ page }: { page: PageResult }) {
       <div className="flex items-center justify-between gap-2">
         <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
           <FileText size={14} className="text-primary-500" />
-          {page.title || page.slug}
+          <HighlightText text={page.title || page.slug} keyword={query} />
         </h3>
         <span className="flex items-center gap-1 font-mono text-[10px] text-slate-500 dark:text-slate-400">
           <Hash size={10} />
@@ -346,7 +347,7 @@ function PageResultCard({ page }: { page: PageResult }) {
       </div>
       {page.snippet && (
         <p className="mt-1 line-clamp-2 text-xs text-slate-600 dark:text-slate-300">
-          {page.snippet}
+          <HighlightText text={page.snippet} keyword={query} />
         </p>
       )}
       {page.type && (
@@ -358,7 +359,7 @@ function PageResultCard({ page }: { page: PageResult }) {
   );
 }
 
-function FileResultCard({ file }: { file: FileResult }) {
+function FileResultCard({ file, query }: { file: FileResult; query: string }) {
   const statusBadge =
     file.status === 'ready' || file.status === 'processed'
       ? 'badge-green'
@@ -376,7 +377,9 @@ function FileResultCard({ file }: { file: FileResult }) {
       <div className="flex items-center justify-between gap-2">
         <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
           <Files size={14} className="text-primary-500" />
-          <span className="truncate">{file.originalName || file.hash}</span>
+          <span className="truncate">
+            <HighlightText text={file.originalName || file.hash} keyword={query} />
+          </span>
         </h3>
         <ArrowRight size={11} className="flex-shrink-0 text-slate-400" />
       </div>
@@ -391,7 +394,7 @@ function FileResultCard({ file }: { file: FileResult }) {
   );
 }
 
-function ConversationResultCard({ conv }: { conv: ConversationResult }) {
+function ConversationResultCard({ conv, query }: { conv: ConversationResult; query: string }) {
   return (
     <RouterLink
       to={`/qa/${conv.id}`}
@@ -400,7 +403,9 @@ function ConversationResultCard({ conv }: { conv: ConversationResult }) {
       <div className="flex items-start justify-between gap-2">
         <h3 className="flex items-start gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
           <ChatsCircle size={14} className="mt-0.5 flex-shrink-0 text-primary-500" />
-          <span className="line-clamp-2">{conv.question}</span>
+          <span className="line-clamp-2">
+            <HighlightText text={conv.question} keyword={query} />
+          </span>
         </h3>
         <span
           className="flex flex-shrink-0 items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400"
