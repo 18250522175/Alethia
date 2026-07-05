@@ -28,6 +28,9 @@ services:
       - alethia-net
 
   # === Brain API 后端服务 ===
+  # 注意：敏感配置（API Key、预算、模型密钥等）统一从 .env 文件注入，
+  # .env 文件切勿提交到 Git 仓库（已在 .gitignore 中忽略）。
+  # 本地启动前请复制 .env.example 为 .env 并填写真实值。
   server:
     build:
       context: .
@@ -37,33 +40,21 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    # 从 .env 文件注入敏感配置（API Key、预算、模型参数等）
+    env_file:
+      - .env
+    # 仅保留由 compose 组合 / 注入的非敏感运行参数
     environment:
       NODE_ENV: production
       DATABASE_URL: postgres://${POSTGRES_USER:-alethia}:${POSTGRES_PASSWORD:-alethia}@postgres:5432/${POSTGRES_DB:-alethia}
       BRAIN_PORT: "3000"
-      LANGUAGE: zh-CN
-      BRAIN_API_KEY: ${BRAIN_API_KEY:-}
-      DAILY_BUDGET: ${DAILY_BUDGET:-5}
-      MONTHLY_BUDGET: ${MONTHLY_BUDGET:-50}
-      PER_QUERY_BUDGET: ${PER_QUERY_BUDGET:-0.5}
-      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-local}
-      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-all-MiniLM-L6-v2}
-      NLI_PROVIDER: ${NLI_PROVIDER:-local}
-      RERANKER_ENABLED: ${RERANKER_ENABLED:-false}
-      # 大模型密钥（按需填写）
-      BAILIAN_API_KEY: ${BAILIAN_API_KEY:-}
-      ZHIPU_API_KEY: ${ZHIPU_API_KEY:-}
-      MOONSHOT_API_KEY: ${MOONSHOT_API_KEY:-}
-      ERNIE_API_KEY: ${ERNIE_API_KEY:-}
-      SPARK_API_KEY: ${SPARK_API_KEY:-}
-      HUNYUAN_API_KEY: ${HUNYUAN_API_KEY:-}
-      MINIMAX_API_KEY: ${MINIMAX_API_KEY:-}
-      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
-      YI_API_KEY: ${YI_API_KEY:-}
-      BAICHUAN_API_KEY: ${BAICHUAN_API_KEY:-}
-      HF_API_KEY: ${HF_API_KEY:-}
-      ZERANK_API_KEY: ${ZERANK_API_KEY:-}
       TZ: Asia/Shanghai
+    # 日志轮转：避免日志文件无限增长撑满磁盘
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
     volumes:
       - wiki_data:/app/wiki
       - library_data:/app/server/data/library
@@ -94,6 +85,12 @@ services:
     ports:
       - "80:80"
       # 如需 HTTPS，请使用反向代理（如 Traefik/Caddy）或在此处挂载证书
+    # 日志轮转：避免日志文件无限增长撑满磁盘
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - alethia-net
     healthcheck:

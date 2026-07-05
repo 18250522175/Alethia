@@ -1,6 +1,6 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   PaperPlaneTilt,
@@ -18,11 +18,13 @@ import {
   Archive,
   ArrowsIn,
   ArrowsOut,
-  Clock
+  Clock,
+  Spinner
 } from '@phosphor-icons/react';
 import api from '../lib/api';
 import MarkdownRenderer from '../components/MarkdownRenderer';
 import type { EvidenceSpan } from '@shared/evidence';
+import type { ConversationMessage } from '@shared/ask';
 
 interface ChatMessage {
   id: string;
@@ -42,7 +44,8 @@ interface Conversation {
   id: string;
   title: string;
   preview: string;
-  updatedAt: number;
+  updatedAt: string;
+  messageCount?: number;
   compressed?: boolean;
 }
 
@@ -51,13 +54,6 @@ const SUGGESTED_QUESTIONS = [
   '热力学第二定律如何应用于信息论？',
   '知识库中有哪些核心概念？',
   '什么是 Compiled Truth Markdown？'
-];
-
-const MOCK_CONVERSATIONS: Conversation[] = [
-  { id: '1', title: '关于熵的讨论', preview: '熵的概念是什么？', updatedAt: Date.now() - 1000 * 60 * 30, compressed: false },
-  { id: '2', title: '热力学第二定律', preview: '热力学第二定律的应用...', updatedAt: Date.now() - 1000 * 60 * 60 * 2, compressed: false },
-  { id: '3', title: '知识库结构咨询', preview: '核心概念有哪些？', updatedAt: Date.now() - 1000 * 60 * 60 * 24, compressed: true },
-  { id: '4', title: 'CTM 格式说明', preview: 'Compiled Truth Markdown...', updatedAt: Date.now() - 1000 * 60 * 60 * 24 * 3, compressed: true },
 ];
 
 type ViewMode = 'detailed' | 'concise';
@@ -69,11 +65,33 @@ export default function QAPanelPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [conversationId, setConversationId] = useState<string | undefined>(urlConvId);
-  const [conversations, setConversations] = useState<Conversation[]>(MOCK_CONVERSATIONS);
   const [showSidebar, setShowSidebar] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>('detailed');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [activeEvidence, setActiveEvidence] = useState<{ spanId: string; data?: any } | null>(null);
+  const lastLoadedConvIdRef = useRef<string | undefined>(undefined);
+
+  const conversationsQuery = useInfiniteQuery({
+    queryKey: ['conversations'],
+    queryFn: ({ pageParam = 0 }) => api.getConversations({ limit: 20, offset: pageParam }),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, allPages) => {
+      if (!lastPage.hasMore) return undefined;
+      const loaded = allPages.reduce((sum, p) => sum + (p.items?.length || 0), 0);
+      return loaded;
+    },
+    staleTime: 30_000
+  });
+
+  const conversations = useMemo<Conversation[]>(() => {
+    return conversationsQuery.data?.pages?.flatMap(p => p.items ?? []) ?? [];
+  }, [conversationsQuery.data]);
+
+  const conversationMessagesQuery = useQuery({
+    queryKey: ['conversation-messages', conversationId],
+    queryFn: () => api.getConversation(conversationId!),
+    enabled: !!conversationId
+  });
 
   const handleEvidenceClick = useCallback((spanId: string) => {
     setActiveEvidence(prev => prev?.spanId === spanId ? null : { spanId });
@@ -96,7 +114,12 @@ export default function QAPanelPage() {
         ts: Date.now()
       };
       setMessages(prev => [...prev, assistantMessage]);
-      setConversationId(data.conversationId || variables.convId);
+      const newConvId = data.conversationId || variables.convId;
+      // 标记该会话已加载，避免后续 query 数据覆盖本地新增消息
+      if (newConvId) {
+        lastLoadedConvIdRef.current = newConvId;
+      }
+      setConversationId(newConvId);
       if (data.conversationId) {
         navigate(`/qa/${data.conversationId}`, { replace: true });
       }
@@ -118,6 +141,31 @@ export default function QAPanelPage() {
       setConversationId(urlConvId);
     }
   }, [urlConvId]);
+
+  // 当切换会话时，从服务器加载历史消息；同一会话内的后续新增消息不会被覆盖
+  useEffect(() => {
+    if (!conversationId) {
+      setMessages([]);
+      lastLoadedConvIdRef.current = undefined;
+      return;
+    }
+    if (conversationId === lastLoadedConvIdRef.current) return;
+    if (!conversationMessagesQuery.data) return;
+
+    const historicalMessages: ChatMessage[] = (conversationMessagesQuery.data.items || [])
+      .filter((m: ConversationMessage) => m.role === 'user' || m.role === 'assistant')
+      .map((m: ConversationMessage) => ({
+        id: m.id,
+        role: m.role as 'user' | 'assistant',
+        content: m.content,
+        ts: new Date(m.ts).getTime(),
+        tokensUsed: m.tokens,
+        estimatedCost: m.cost,
+        conversationId: m.conversationId
+      }));
+    setMessages(historicalMessages);
+    lastLoadedConvIdRef.current = conversationId;
+  }, [conversationId, conversationMessagesQuery.data]);
 
   const handleSend = (question?: string) => {
     const q = (question ?? input).trim();
@@ -144,47 +192,28 @@ export default function QAPanelPage() {
   const handleNewChat = () => {
     setMessages([]);
     setConversationId(undefined);
+    lastLoadedConvIdRef.current = undefined;
     navigate('/qa');
   };
 
   const handleSelectConversation = (id: string) => {
+    if (id === conversationId) {
+      setShowSidebar(false);
+      return;
+    }
     setConversationId(id);
     navigate(`/qa/${id}`);
-    const found = conversations.find(c => c.id === id);
-    if (found) {
-      setMessages([
-        {
-          id: '1',
-          role: 'user',
-          content: found.preview,
-          ts: found.updatedAt
-        },
-        {
-          id: '2',
-          role: 'assistant',
-          content: '这是一个示例回答，展示对话历史记录的功能。实际应用中会从服务器加载历史消息。',
-          ts: found.updatedAt + 1000 * 60,
-          confidence: 0.85,
-          tokensUsed: 512,
-          estimatedCost: 0.0023
-        }
-      ]);
-    }
+    // 历史消息由监听 conversationMessagesQuery 的 useEffect 注入
     setShowSidebar(false);
-  };
-
-  const toggleCompressConversation = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setConversations(prev => prev.map(c =>
-      c.id === id ? { ...c, compressed: !c.compressed } : c
-    ));
   };
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const formatConvTime = (ts: number): string => {
+  const formatConvTime = (isoTs: string): string => {
+    const ts = new Date(isoTs).getTime();
+    if (Number.isNaN(ts)) return '';
     const diff = Date.now() - ts;
     const mins = Math.floor(diff / (1000 * 60));
     const hours = Math.floor(diff / (1000 * 60 * 60));
@@ -215,7 +244,17 @@ export default function QAPanelPage() {
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-2">
-              {conversations.length === 0 ? (
+              {conversationsQuery.isLoading ? (
+                <div className="flex items-center justify-center py-8 text-xs text-slate-400">
+                  <Spinner size={16} className="mr-2 animate-spin" />
+                  {t('common.loading')}
+                </div>
+              ) : conversationsQuery.isError ? (
+                <div className="flex flex-col items-center justify-center py-8 text-center text-xs text-slate-400">
+                  <Warning size={20} className="mb-2 text-red-400" />
+                  {t('qa.loadConversationsFailed', '加载对话失败')}
+                </div>
+              ) : conversations.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-8 text-center text-xs text-slate-400">
                   <Archive size={24} className="mb-2" />
                   {t('qa.noConversations', '暂无对话')}
@@ -258,15 +297,27 @@ export default function QAPanelPage() {
                           {formatConvTime(conv.updatedAt)}
                         </p>
                       </div>
-                      <button
-                        onClick={(e) => toggleCompressConversation(conv.id, e)}
-                        className="flex-shrink-0 rounded p-1 text-slate-400 opacity-0 transition-opacity hover:bg-slate-100 hover:text-amber-500 group-hover:opacity-100 dark:hover:bg-slate-700"
-                        title={conv.compressed ? t('qa.expandChat', '展开对话') : t('qa.compressChat', '压缩对话')}
-                      >
-                        {conv.compressed ? <ArrowsOut size={12} /> : <ArrowsIn size={12} />}
-                      </button>
                     </button>
                   ))}
+                  {conversationsQuery.hasNextPage && (
+                    <button
+                      onClick={() => conversationsQuery.fetchNextPage()}
+                      disabled={conversationsQuery.isFetchingNextPage}
+                      className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-slate-300 p-2 text-xs text-slate-500 transition-colors hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:text-slate-400 dark:hover:bg-slate-700/50"
+                    >
+                      {conversationsQuery.isFetchingNextPage ? (
+                        <>
+                          <Spinner size={12} className="animate-spin" />
+                          {t('common.loading')}
+                        </>
+                      ) : (
+                        <>
+                          <ArrowsClockwise size={12} />
+                          {t('qa.loadMore', '加载更多')}
+                        </>
+                      )}
+                    </button>
+                  )}
                 </div>
               )}
             </div>

@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useCallback, ReactNode, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Bell,
   CheckCircle,
@@ -50,13 +50,14 @@ function generateId(): string {
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
   const [localNotifications, setLocalNotifications] = useState<Notification[]>([]);
+  const queryClient = useQueryClient();
 
   const { data, refetch } = useQuery({
     queryKey: ['notifications'],
     queryFn: async () => {
       try {
-        const result = await api.request<{ items: Notification[]; total: number }>('/notifications');
-        return result.items || [];
+        const result = await api.getNotifications();
+        return (result.items as Notification[]) || [];
       } catch {
         return [];
       }
@@ -84,14 +85,26 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   );
 
   const markAsRead = useCallback((id: string) => {
+    // 乐观更新本地状态
     setLocalNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, read: true } : n))
     );
-  }, []);
+    // 同步到后端，失败时刷新以恢复一致状态
+    api.markNotificationRead(id).catch(() => {
+      void queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    });
+  }, [queryClient]);
 
   const markAllAsRead = useCallback(() => {
     setLocalNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-  }, []);
+    api.markAllNotificationsRead()
+      .then(() => {
+        void queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      })
+      .catch(() => {
+        void queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      });
+  }, [queryClient]);
 
   const clearAll = useCallback(() => {
     setLocalNotifications([]);

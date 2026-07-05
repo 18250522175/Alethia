@@ -180,7 +180,7 @@ export const api = {
   },
 
   getLlmAdapters() {
-    return request<{ adapters: Array<{ id: string; name: string; enabled: boolean; models: string[] }> }>('/llm/adapters');
+    return request<{ adapters: Array<{ id: string; name: string; enabled: boolean; apiKeyConfigured?: boolean; models: string[] }> }>('/llm/adapters');
   },
 
   testLlmAdapter(adapterId: string) {
@@ -277,6 +277,24 @@ export const api = {
 
   getConversation(conversationId: string) {
     return request<{ items: ConversationMessage[]; total: number }>(`/conversations/${conversationId}`);
+  },
+
+  getConversations(params?: { limit?: number; offset?: number }) {
+    const query = new URLSearchParams();
+    if (params?.limit) query.set('limit', String(params.limit));
+    if (params?.offset) query.set('offset', String(params.offset));
+    return request<{
+      items: Array<{
+        id: string;
+        title: string;
+        preview: string;
+        updatedAt: string;
+        messageCount: number;
+        compressed?: boolean;
+      }>;
+      total: number;
+      hasMore: boolean;
+    }>(`/conversations?${query.toString()}`);
   },
 
   getWikiPage(slug: string) {
@@ -539,6 +557,22 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify({ dailyBudget: amount })
     });
+  },
+
+  getNotifications(params?: { limit?: number; offset?: number; unreadOnly?: boolean }) {
+    const query = new URLSearchParams();
+    if (params?.limit) query.set('limit', String(params.limit));
+    if (params?.offset) query.set('offset', String(params.offset));
+    if (params?.unreadOnly) query.set('unreadOnly', 'true');
+    return request<{ items: any[]; total: number }>(`/notifications?${query.toString()}`);
+  },
+
+  markNotificationRead(id: string) {
+    return request<{ success: boolean }>(`/notifications/${id}/read`, { method: 'POST' });
+  },
+
+  markAllNotificationsRead() {
+    return request<{ success: boolean }>('/notifications/read-all', { method: 'POST' });
   }
 };
 

@@ -1,0 +1,72 @@
+# Alethia 生产环境 Caddy 配置
+#
+# Caddy 会通过 Let's Encrypt 自动申请并续期 TLS 证书（auto-HTTPS）。
+# 使用前请：
+#   1. 将下方 alethia.example.com 替换为你的真实域名；
+#   2. 确保服务器 80 / 443 端口可被公网访问（用于 HTTP-01 验证）；
+#   3. 配置 DNS A 记录指向本机 IP。
+#
+# 本地测试（无需域名 / HTTPS）请注释掉下方域名块，并启用文件末尾的 :80 块。
+
+alethia.example.com {
+	# gzip / zstd 压缩响应
+	encode gzip zstd
+
+	# /api/* 反向代理到后端 Brain API（直接转发，保留原始路径）
+	handle /api/* {
+		reverse_proxy server:3000 {
+			# 透传真实客户端信息
+			header_up Host {host}
+			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+			# 流式问答（SSE / chunked）需关闭缓冲
+			flush_interval -1
+		}
+	}
+
+	# /health 健康检查直接转发到后端
+	handle /health {
+		reverse_proxy server:3000
+	}
+
+	# /media/* 媒体文件转发到后端（支持 Range 请求）
+	handle /media/* {
+		reverse_proxy server:3000
+	}
+
+	# 其余请求（前端页面、静态资源）反向代理到 web 服务
+	handle {
+		reverse_proxy web:80
+	}
+
+	# 安全响应头
+	header {
+		X-Frame-Options "SAMEORIGIN"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+	}
+
+	# 上传文件大小限制（用于 library 文件上传）
+	request_body {
+		max_size 100MB
+	}
+}
+
+# === 本地测试配置（无 HTTPS，仅 HTTP）===
+# 取消下方注释、并注释掉上方的生产域名块，即可在本地 :80 端口测试反向代理。
+# :80 {
+# 	encode gzip
+# 	handle /api/* {
+# 		reverse_proxy server:3000
+# 	}
+# 	handle /health {
+# 		reverse_proxy server:3000
+# 	}
+# 	handle /media/* {
+# 		reverse_proxy server:3000
+# 	}
+# 	handle {
+# 		reverse_proxy web:80
+# 	}
+# }

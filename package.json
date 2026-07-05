@@ -1,20 +1,41 @@
 {
   "name": "alethia",
   "private": true,
+  "type": "module",
   "workspaces": [
     "shared",
     "server",
     "web"
   ],
   "scripts": {
+    "dev": "turbo run dev",
     "dev:server": "cd server && bun run dev",
     "dev:web": "cd web && bun run dev",
     "build": "bun run --filter shared build && bun run --filter server build && bun run --filter web build",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
     "db:migrate": "cd server && bun run db:migrate",
     "seed": "cd server && bun run seed",
-    "brain": "cd server && bun run brain"
+    "brain": "cd server && bun run brain",
+    "prepare": "husky"
   },
   "devDependencies": {
-    "@tailwindcss/typography": "^0.5.20"
+    "@antfu/eslint-config": "^3.0.0",
+    "@tailwindcss/typography": "^0.5.20",
+    "eslint": "^9.0.0",
+    "husky": "^9.0.0",
+    "lint-staged": "^15.0.0",
+    "prettier": "^3.0.0",
+    "turbo": "^2.0.0"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md,yml}": [
+      "prettier --write"
+    ]
   }
 }

@@ -1,0 +1,52 @@
+# Alethia 生产环境 Docker Compose 编排
+# 在基础 docker-compose.yml 之上叠加 Caddy 反向代理，提供自动 HTTPS（Let's Encrypt）。
+#
+# 启动：docker compose -f docker-compose.prod.yml up -d
+# 停止：docker compose -f docker-compose.prod.yml down
+#
+# 注意：生产环境不再直接暴露 server / web 端口，统一由 Caddy 接管 80 / 443。
+# 需要 Docker Compose v2.20+ 以支持 !reset 标签。
+
+name: alethia
+
+# 引入基础编排（postgres / server / web / init 等）
+include:
+  - docker-compose.yml
+
+services:
+  # 生产环境：server 不再直接对外暴露端口，仅在内网供 Caddy 调用
+  server:
+    ports: !reset []
+
+  # 生产环境：web 不再直接对外暴露 80 端口，仅在内网供 Caddy 调用
+  web:
+    ports: !reset []
+
+  # === Caddy 反向代理（自动 HTTPS via Let's Encrypt）===
+  caddy:
+    image: caddy:2-alpine
+    container_name: alethia-caddy
+    restart: unless-stopped
+    depends_on:
+      - web
+      - server
+    ports:
+      - "80:80"     # HTTP -> Caddy 自动重定向到 HTTPS
+      - "443:443"   # HTTPS
+      - "443:443/udp" # HTTP/3 (QUIC)
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data     # Let's Encrypt 证书与状态持久化
+      - caddy_config:/config # Caddy 运行配置持久化
+    # 日志轮转：避免日志文件无限增长撑满磁盘
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - alethia-net
+
+volumes:
+  caddy_data:
+  caddy_config:

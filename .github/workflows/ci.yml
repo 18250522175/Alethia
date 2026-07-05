@@ -1,0 +1,130 @@
+# Alethia AI 知识库 · 持续集成 / 持续部署流水线
+# 触发条件：推送到 main/master 分支，或发起 Pull Request
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+
+# 同一分支的新提交取消旧的运行，节省资源
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # === 类型检查 & Lint ===
+  lint-typecheck:
+    name: Lint & TypeCheck
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: 缓存 Bun 依赖
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.bun/install/cache
+            node_modules
+            shared/node_modules
+            server/node_modules
+            web/node_modules
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: 安装依赖
+        run: bun install --frozen-lockfile
+
+      - name: 构建 shared 包（类型来源）
+        run: bun run --filter shared build
+
+      - name: 类型检查（server）
+        working-directory: server
+        run: bunx tsc --noEmit
+
+      - name: 类型检查（web）
+        working-directory: web
+        run: bunx tsc --noEmit
+
+      - name: ESLint 检查
+        run: bun run lint
+
+  # === 单元测试 ===
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: 缓存 Bun 依赖
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.bun/install/cache
+            node_modules
+            shared/node_modules
+            server/node_modules
+            web/node_modules
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: 安装依赖
+        run: bun install --frozen-lockfile
+
+      - name: 构建 shared 包（server/web 类型依赖）
+        run: bun run --filter shared build
+
+      - name: 单元测试（server）
+        working-directory: server
+        run: bun test
+
+      - name: 单元测试（web）
+        working-directory: web
+        run: bun test
+
+  # === Docker 镜像构建 ===
+  build:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 设置 Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: 构建后端镜像
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile.server
+          push: false
+          tags: alethia-server:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: 构建前端镜像
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile.web
+          push: false
+          tags: alethia-web:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

@@ -21,7 +21,12 @@ import {
   FloppyDisk,
   ArrowCounterClockwise,
   Trash,
-  DotsThreeVertical
+  DotsThreeVertical,
+  Plug,
+  CheckCircle,
+  XCircle,
+  Spinner,
+  Lightning
 } from '@phosphor-icons/react';
 import { useSettings } from '../store/SettingsContext';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -38,6 +43,7 @@ const sections = [
   { id: 'nli', icon: ClipboardText, label: 'NLI' },
   { id: 'data', icon: Folder, label: '数据' },
   { id: 'advanced', icon: SlidersHorizontal, label: '高级' },
+  { id: 'diagnostics', icon: Plug, label: '集成诊断' },
 ];
 
 export default function SettingsPage() {
@@ -184,6 +190,9 @@ export default function SettingsPage() {
           )}
           {activeSection === 'advanced' && (
             <AdvancedSettings settings={localSettings} onChange={handleChange} />
+          )}
+          {activeSection === 'diagnostics' && (
+            <DiagnosticsSettings />
           )}
         </div>
       </div>
@@ -824,6 +833,146 @@ function AdvancedSettings({ settings, onChange }: SettingsSectionProps) {
             className="input max-w-xs"
           />
         </div>
+      </div>
+    </div>
+  );
+}
+
+interface LlmAdapterInfo {
+  id: string;
+  name: string;
+  enabled: boolean;
+  apiKeyConfigured?: boolean;
+  models?: string[];
+}
+
+function DiagnosticsSettings() {
+  const { t } = useTranslation();
+
+  const adaptersQuery = useQuery({
+    queryKey: ['llm-adapters-diagnostics'],
+    queryFn: () => api.getLlmAdapters(),
+    staleTime: 60_000
+  });
+
+  const adapters: LlmAdapterInfo[] = adaptersQuery.data?.adapters || [];
+
+  return (
+    <div className="card p-6">
+      <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold">
+        <Plug size={20} className="text-primary-500" />
+        {t('diagnostics.title', '集成诊断')}
+      </h2>
+      <p className="mb-6 text-sm text-slate-500 dark:text-slate-400">
+        {t('diagnostics.subtitle', '检测每个 LLM 适配器的连通性与 API Key 配置情况。')}
+      </p>
+
+      {adaptersQuery.isLoading ? (
+        <div className="flex items-center justify-center py-8 text-sm text-slate-500 dark:text-slate-400">
+          <Spinner size={18} className="mr-2 animate-spin" />
+          {t('common.loading')}
+        </div>
+      ) : adaptersQuery.isError ? (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20">
+          <p className="flex items-center gap-2 text-sm font-medium text-red-700 dark:text-red-300">
+            <XCircle size={16} />
+            {t('diagnostics.loadFailed', '加载适配器列表失败')}
+          </p>
+        </div>
+      ) : adapters.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-10 text-center text-sm text-slate-400">
+          <Plug size={32} className="mb-2" />
+          {t('diagnostics.noAdapters', '暂无可用适配器')}
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {adapters.map(adapter => (
+            <AdapterDiagnosticRow key={adapter.id} adapter={adapter} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AdapterDiagnosticRow({ adapter }: { adapter: LlmAdapterInfo }) {
+  const { t } = useTranslation();
+
+  const testMutation = useMutation({
+    mutationFn: () => api.testLlmAdapter(adapter.id)
+  });
+
+  const isPending = testMutation.isPending;
+  const result = testMutation.data;
+  const isError = testMutation.isError;
+
+  return (
+    <div className="flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 p-4 dark:border-slate-700">
+      <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-primary-50 text-primary-600 dark:bg-primary-900/30 dark:text-primary-400">
+        <Lightning size={18} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="truncate text-sm font-medium text-slate-800 dark:text-slate-100">
+            {adapter.name}
+          </span>
+          <span
+            className={`badge ${adapter.enabled ? 'badge-green' : 'badge-red'}`}
+            title={adapter.enabled ? t('diagnostics.enabled', '已启用') : t('diagnostics.disabled', '未启用')}
+          >
+            {adapter.enabled ? t('diagnostics.enabled', '已启用') : t('diagnostics.disabled', '未启用')}
+          </span>
+          {adapter.apiKeyConfigured !== undefined && (
+            <span
+              className={`badge ${adapter.apiKeyConfigured ? 'badge-green' : 'badge-red'}`}
+              title={adapter.apiKeyConfigured ? t('diagnostics.apiKeyConfigured') : t('diagnostics.apiKeyMissing')}
+            >
+              {adapter.apiKeyConfigured
+                ? t('diagnostics.apiKeyConfigured')
+                : t('diagnostics.apiKeyMissing')}
+            </span>
+          )}
+        </div>
+        {adapter.models && adapter.models.length > 0 && (
+          <p className="mt-1 truncate text-xs text-slate-500 dark:text-slate-400">
+            {adapter.models.join(' · ')}
+          </p>
+        )}
+      </div>
+
+      <button
+        type="button"
+        onClick={() => testMutation.mutate()}
+        disabled={isPending}
+        className="btn btn-secondary text-sm"
+      >
+        {isPending ? (
+          <>
+            <Spinner size={14} className="mr-1.5 animate-spin" />
+            {t('diagnostics.testing', '测试中...')}
+          </>
+        ) : (
+          <>
+            <Plug size={14} className="mr-1.5" />
+            {t('diagnostics.testConnection', '测试连接')}
+          </>
+        )}
+      </button>
+
+      <div className="w-full">
+        {result && result.ok && (
+          <p className="flex items-center gap-1.5 text-xs font-medium text-green-600 dark:text-green-400">
+            <CheckCircle size={14} />
+            {t('diagnostics.success', '连接成功')} · {t('diagnostics.latency', '延迟')}：{result.latencyMs}ms
+          </p>
+        )}
+        {((result && !result.ok) || isError) && (
+          <p className="flex items-center gap-1.5 text-xs font-medium text-red-600 dark:text-red-400">
+            <XCircle size={14} />
+            {t('diagnostics.failed', '连接失败')}
+            {result?.error ? `：${result.error}` : ''}
+          </p>
+        )}
       </div>
     </div>
   );

@@ -7,6 +7,7 @@ import loggerInstance from './i18n/logger';
 import { getErrorMessage } from './i18n/errors.zh-CN';
 import { bearerAuth, validateApiKeyOnStartup } from './auth/bearer';
 import { rateLimiter } from './middleware/rate-limit';
+import { traceIdMiddleware } from './middleware/trace-id';
 import { waitForDatabase, getPool } from './db/pool';
 import llmRoutes from './routes/llm';
 import settingsRoutes from './routes/settings';
@@ -48,6 +49,10 @@ app.use('*', cors({
 app.use('*', logger((msg, ...rest) => {
   loggerInstance.debug(rest, msg);
 }));
+
+// TraceId 中间件：在 logger 之后、bearerAuth 之前注册，
+// 为每个请求生成 / 透传 X-Request-Id，便于链路追踪与日志关联
+app.use('*', traceIdMiddleware);
 
 app.use('*', bearerAuth);
 

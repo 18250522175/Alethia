@@ -145,6 +145,21 @@
     "connectionOk": "连接成功",
     "connectionFailed": "连接失败"
   },
+  "diagnostics": {
+    "title": "集成诊断",
+    "subtitle": "检测每个 LLM 适配器的连通性与 API Key 配置情况。",
+    "testConnection": "测试连接",
+    "testing": "测试中...",
+    "latency": "延迟",
+    "success": "连接成功",
+    "failed": "连接失败",
+    "noAdapters": "暂无可用适配器",
+    "apiKeyConfigured": "API Key 已配置",
+    "apiKeyMissing": "API Key 未配置",
+    "enabled": "已启用",
+    "disabled": "未启用",
+    "loadFailed": "加载适配器列表失败"
+  },
   "qa": {
     "title": "共生问答",
     "subtitle": "每个 AI 答案都附带可追溯的来源证据，最大 3 轮反思",
@@ -399,7 +414,9 @@
     "styleDetailed": "详细",
     "inputPlaceholder": "输入你的问题...",
     "send": "发送",
-    "errorPrefix": "处理失败："
+    "errorPrefix": "处理失败：",
+    "loadMore": "加载更多",
+    "loadConversationsFailed": "加载对话失败"
   },
   "errorBoundary": {
     "title": "页面出错了",
