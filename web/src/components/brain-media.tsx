@@ -53,7 +53,7 @@ class BrainMediaElement extends HTMLElement {
       const labelEl = this.shadowRoot?.querySelector('.label');
       if (labelEl) labelEl.textContent = value || this.getAttribute('src') || '';
     } else if (attr === 'start') {
-      const start = parseFloat(value) || 0;
+      const start = Number.parseFloat(value) || 0;
       if (this.jumpBtn) {
         this.jumpBtn.textContent = `跳转 ${formatTime(start)}`;
         this.jumpBtn.disabled = start <= 0;
@@ -87,7 +87,7 @@ class BrainMediaElement extends HTMLElement {
     const rawSrc = this.getAttribute('src') || '';
     const src = resolveSrc(rawSrc);
     const startAttr = this.getAttribute('start');
-    const start = startAttr ? parseFloat(startAttr) : 0;
+    const start = startAttr ? Number.parseFloat(startAttr) : 0;
     const type = (this.getAttribute('type') || 'audio') as 'audio' | 'video' | 'image';
     const label = this.getAttribute('label') || '';
 
@@ -228,9 +228,13 @@ class BrainMediaElement extends HTMLElement {
       });
 
       if (start > 0) {
-        media.addEventListener('loadedmetadata', () => {
-          media.currentTime = start;
-        }, { once: true });
+        media.addEventListener(
+          'loadedmetadata',
+          () => {
+            media.currentTime = start;
+          },
+          { once: true }
+        );
       }
     }
 

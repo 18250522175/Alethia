@@ -1,34 +1,34 @@
-import { useTranslation } from 'react-i18next';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Gauge,
-  Database,
-  Link as LinkIcon,
-  Ghost,
   Archive,
-  Coins,
   ArrowsClockwise,
-  Wallet,
   Brain,
-  Warning,
-  Files,
-  TrendUp,
   ChartLine,
-  ChartPie
+  ChartPie,
+  Coins,
+  Database,
+  Files,
+  Gauge,
+  Ghost,
+  Link as LinkIcon,
+  TrendUp,
+  Wallet,
+  Warning
 } from '@phosphor-icons/react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
   ArcElement,
-  Title,
-  Tooltip,
+  CategoryScale,
+  Chart as ChartJS,
+  Filler,
   Legend,
-  Filler
+  LinearScale,
+  LineElement,
+  PointElement,
+  Title,
+  Tooltip
 } from 'chart.js';
 import { Line, Pie } from 'react-chartjs-2';
+import { useTranslation } from 'react-i18next';
 import api from '../lib/api';
 
 ChartJS.register(
@@ -169,7 +169,10 @@ export default function DashboardPage() {
           disabled={rebuildMutation.isPending}
           className="btn btn-primary"
         >
-          <ArrowsClockwise size={16} className={`mr-1.5 ${rebuildMutation.isPending ? 'animate-spin' : ''}`} />
+          <ArrowsClockwise
+            size={16}
+            className={`mr-1.5 ${rebuildMutation.isPending ? 'animate-spin' : ''}`}
+          />
           {rebuildMutation.isPending ? '重建中...' : '重建结构'}
         </button>
       </header>
@@ -250,12 +253,22 @@ export default function DashboardPage() {
                 {t('health.reviewBacklog')}
               </h2>
               <div className="space-y-3">
-                <BacklogRow label="🟢 低风险" count={data.reviewBacklog.green} color="text-green-600" />
-                <BacklogRow label="🟡 待确认" count={data.reviewBacklog.yellow} color="text-yellow-600" />
+                <BacklogRow
+                  label="🟢 低风险"
+                  count={data.reviewBacklog.green}
+                  color="text-green-600"
+                />
+                <BacklogRow
+                  label="🟡 待确认"
+                  count={data.reviewBacklog.yellow}
+                  color="text-yellow-600"
+                />
                 <BacklogRow label="🔴 高风险" count={data.reviewBacklog.red} color="text-red-600" />
               </div>
               <div className="mt-4 border-t border-slate-200 pt-3 text-xs text-slate-500 dark:border-slate-700 dark:text-slate-400">
-                总计：{data.reviewBacklog.green + data.reviewBacklog.yellow + data.reviewBacklog.red} 条待审核
+                总计：
+                {data.reviewBacklog.green + data.reviewBacklog.yellow + data.reviewBacklog.red}{' '}
+                条待审核
               </div>
             </section>
 
@@ -279,7 +292,8 @@ export default function DashboardPage() {
                 />
               </div>
               <div className="mt-3 border-t border-slate-200 pt-3 text-xs text-slate-500 dark:border-slate-700 dark:text-slate-400">
-                单次问答上限：${data.budget.perQueryLimit.toFixed(2)}
+                单次问答上限：$
+                {data.budget.perQueryLimit.toFixed(2)}
               </div>
             </section>
 
@@ -357,7 +371,8 @@ export default function DashboardPage() {
             <div className="card border-green-300 bg-green-50 p-4 text-sm dark:border-green-700 dark:bg-green-900/20">
               <strong>重建完成：</strong>
               处理页面 {rebuildMutation.data.pages} 条 · 链接 {rebuildMutation.data.links} 条 ·
-              幽灵关系 {rebuildMutation.data.ghostCount} 条 · 耗时 {rebuildMutation.data.durationMs}ms
+              幽灵关系 {rebuildMutation.data.ghostCount} 条 · 耗时 {rebuildMutation.data.durationMs}
+              ms
             </div>
           )}
         </>
@@ -424,7 +439,10 @@ function BudgetRow({
         </span>
       </div>
       <div className="h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700">
-        <div className={`h-full rounded-full ${barColor} transition-all`} style={{ width: `${ratio * 100}%` }} />
+        <div
+          className={`h-full rounded-full ${barColor} transition-all`}
+          style={{ width: `${ratio * 100}%` }}
+        />
       </div>
     </div>
   );

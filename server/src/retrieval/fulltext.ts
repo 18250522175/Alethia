@@ -9,10 +9,18 @@ export interface FulltextSearchResult {
   score: number;
 }
 
-export async function fulltextSearch(query: string, k: number = 10): Promise<FulltextSearchResult[]> {
+export async function fulltextSearch(
+  query: string,
+  k: number = 10
+): Promise<FulltextSearchResult[]> {
   try {
     const pool = getPool();
-    const tsQuery = query.replace(/[&|!():*]/g, ' ').trim().split(/\s+/).filter(Boolean).join(' & ');
+    const tsQuery = query
+      .replace(/[&|!():*]/g, ' ')
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .join(' & ');
 
     if (tsQuery) {
       const result = await pool.query(
@@ -34,7 +42,7 @@ export async function fulltextSearch(query: string, k: number = 10): Promise<Ful
           slug: row.slug,
           title: row.title,
           snippet: row.snippet || '',
-          score: parseFloat(row.score)
+          score: Number.parseFloat(row.score)
         }));
       }
     }
@@ -71,7 +79,7 @@ async function ilikeSearch(query: string, k: number): Promise<FulltextSearchResu
       slug: row.slug,
       title: row.title,
       snippet: row.snippet || '',
-      score: parseFloat(row.score)
+      score: Number.parseFloat(row.score)
     }));
   } catch (err) {
     logger.error({ err }, 'ILIKE 检索失败');

@@ -1,8 +1,16 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Combobox, ComboboxInput, ComboboxOption, ComboboxOptions } from '@headlessui/react';
+import {
+  ChatsCircle,
+  Command,
+  FileText,
+  Graph,
+  Hash,
+  MagnifyingGlass,
+  X
+} from '@phosphor-icons/react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { MagnifyingGlass, X, Command, FileText, Graph, ChatsCircle, Hash } from '@phosphor-icons/react';
-import { Combobox, ComboboxInput, ComboboxOptions, ComboboxOption } from '@headlessui/react';
+import { useNavigate } from 'react-router-dom';
 
 interface SearchSuggestion {
   id: string;
@@ -13,10 +21,28 @@ interface SearchSuggestion {
 }
 
 const STATIC_SUGGESTIONS: SearchSuggestion[] = [
-  { id: 'graph', type: 'graph', title: '知识图谱', description: '浏览全屏知识图谱', path: '/graph' },
+  {
+    id: 'graph',
+    type: 'graph',
+    title: '知识图谱',
+    description: '浏览全屏知识图谱',
+    path: '/graph'
+  },
   { id: 'qa', type: 'qa', title: 'AI 问答', description: '向知识库提问', path: '/qa' },
-  { id: 'review', type: 'file', title: '待审核变更', description: '审核 AI 生成的知识变更', path: '/review' },
-  { id: 'dashboard', type: 'file', title: '仪表盘', description: '查看知识库健康状态', path: '/dashboard' },
+  {
+    id: 'review',
+    type: 'file',
+    title: '待审核变更',
+    description: '审核 AI 生成的知识变更',
+    path: '/review'
+  },
+  {
+    id: 'dashboard',
+    type: 'file',
+    title: '仪表盘',
+    description: '查看知识库健康状态',
+    path: '/dashboard'
+  }
 ];
 
 function getTypeIcon(type: string) {
@@ -41,24 +67,29 @@ export default function SearchCombobox() {
   const [open, setOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const filteredSuggestions = query === ''
-    ? STATIC_SUGGESTIONS
-    : STATIC_SUGGESTIONS.filter(s =>
-        s.title.toLowerCase().includes(query.toLowerCase()) ||
-        s.description?.toLowerCase().includes(query.toLowerCase())
-      );
+  const filteredSuggestions =
+    query === ''
+      ? STATIC_SUGGESTIONS
+      : STATIC_SUGGESTIONS.filter(
+          (s) =>
+            s.title.toLowerCase().includes(query.toLowerCase()) ||
+            s.description?.toLowerCase().includes(query.toLowerCase())
+        );
 
-  const handleSelect = useCallback((suggestion: SearchSuggestion | null) => {
-    if (suggestion) {
-      navigate(suggestion.path);
-      setQuery('');
-      setOpen(false);
-    } else if (query.trim()) {
-      navigate(`/search?q=${encodeURIComponent(query.trim())}`);
-      setQuery('');
-      setOpen(false);
-    }
-  }, [navigate, query]);
+  const handleSelect = useCallback(
+    (suggestion: SearchSuggestion | null) => {
+      if (suggestion) {
+        navigate(suggestion.path);
+        setQuery('');
+        setOpen(false);
+      } else if (query.trim()) {
+        navigate(`/search?q=${encodeURIComponent(query.trim())}`);
+        setQuery('');
+        setOpen(false);
+      }
+    },
+    [navigate, query]
+  );
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

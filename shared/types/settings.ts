@@ -21,7 +21,20 @@ export interface LanguageSettings {
   fallbackLanguage: string;
 }
 
-export type ModelTier = 'fact_extract' | 'whitelist_fix' | 'disambiguate' | 'nli_pre' | 'translate' | 'compress' | 'archive_summary' | 'ring_gen' | 'contradiction' | 'gap_analysis' | 'narrate' | 'qa_gen' | 'embed';
+export type ModelTier =
+  | 'fact_extract'
+  | 'whitelist_fix'
+  | 'disambiguate'
+  | 'nli_pre'
+  | 'translate'
+  | 'compress'
+  | 'archive_summary'
+  | 'ring_gen'
+  | 'contradiction'
+  | 'gap_analysis'
+  | 'narrate'
+  | 'qa_gen'
+  | 'embed';
 
 export interface ModelAssignment {
   [task: string]: { adapterId: string; model: string };
@@ -66,7 +79,17 @@ export interface PathSettings {
   exportsPath: string;
 }
 
-export type AdapterId = 'bailian' | 'zhipu' | 'moonshot' | 'ernie' | 'spark' | 'hunyuan' | 'minimax' | 'deepseek' | 'yi' | 'baichuan';
+export type AdapterId =
+  | 'bailian'
+  | 'zhipu'
+  | 'moonshot'
+  | 'ernie'
+  | 'spark'
+  | 'hunyuan'
+  | 'minimax'
+  | 'deepseek'
+  | 'yi'
+  | 'baichuan';
 
 export interface IntegrationSettings {
   mcpHttpEnabled: boolean;

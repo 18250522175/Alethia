@@ -18,12 +18,14 @@ export function applySourceWeights(
     return results;
   }
 
-  return results.map(result => {
-    const sourceType = sourceTypes.get(result.slug) || 'text';
-    const weight = sourceWeights[sourceType] ?? 0.8;
-    return {
-      ...result,
-      score: result.score * weight
-    };
-  }).sort((a, b) => b.score - a.score);
+  return results
+    .map((result) => {
+      const sourceType = sourceTypes.get(result.slug) || 'text';
+      const weight = sourceWeights[sourceType] ?? 0.8;
+      return {
+        ...result,
+        score: result.score * weight
+      };
+    })
+    .sort((a, b) => b.score - a.score);
 }

@@ -1,30 +1,29 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { useTranslation } from 'react-i18next';
-import { useMutation, useInfiniteQuery, useQuery } from '@tanstack/react-query';
-import { useParams, useNavigate } from 'react-router-dom';
+import type { ConversationMessage } from '@shared/ask';
+import type { EvidenceSpan } from '@shared/evidence';
 import {
-  PaperPlaneTilt,
-  ThumbsUp,
-  ThumbsDown,
-  ArrowsClockwise,
-  Brain,
-  ChatCircleDots,
-  Tag,
-  Coins,
-  Sparkle,
-  Warning,
-  List,
-  X,
   Archive,
+  ArrowsClockwise,
   ArrowsIn,
   ArrowsOut,
+  Brain,
+  ChatCircleDots,
   Clock,
-  Spinner
+  Coins,
+  List,
+  PaperPlaneTilt,
+  Sparkle,
+  Spinner,
+  Tag,
+  ThumbsDown,
+  ThumbsUp,
+  Warning
 } from '@phosphor-icons/react';
-import api from '../lib/api';
+import { useInfiniteQuery, useMutation, useQuery } from '@tanstack/react-query';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useNavigate, useParams } from 'react-router-dom';
 import MarkdownRenderer from '../components/MarkdownRenderer';
-import type { EvidenceSpan } from '@shared/evidence';
-import type { ConversationMessage } from '@shared/ask';
+import api from '../lib/api';
 
 interface ChatMessage {
   id: string;
@@ -68,7 +67,7 @@ export default function QAPanelPage() {
   const [showSidebar, setShowSidebar] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>('detailed');
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const [activeEvidence, setActiveEvidence] = useState<{ spanId: string; data?: any } | null>(null);
+  const [, setActiveEvidence] = useState<{ spanId: string; data?: any } | null>(null);
   const lastLoadedConvIdRef = useRef<string | undefined>(undefined);
 
   const conversationsQuery = useInfiniteQuery({
@@ -84,7 +83,7 @@ export default function QAPanelPage() {
   });
 
   const conversations = useMemo<Conversation[]>(() => {
-    return conversationsQuery.data?.pages?.flatMap(p => p.items ?? []) ?? [];
+    return conversationsQuery.data?.pages?.flatMap((p) => p.items ?? []) ?? [];
   }, [conversationsQuery.data]);
 
   const conversationMessagesQuery = useQuery({
@@ -94,7 +93,7 @@ export default function QAPanelPage() {
   });
 
   const handleEvidenceClick = useCallback((spanId: string) => {
-    setActiveEvidence(prev => prev?.spanId === spanId ? null : { spanId });
+    setActiveEvidence((prev) => (prev?.spanId === spanId ? null : { spanId }));
   }, []);
 
   const askMutation = useMutation({
@@ -113,7 +112,7 @@ export default function QAPanelPage() {
         conversationId: data.conversationId,
         ts: Date.now()
       };
-      setMessages(prev => [...prev, assistantMessage]);
+      setMessages((prev) => [...prev, assistantMessage]);
       const newConvId = data.conversationId || variables.convId;
       // 标记该会话已加载，避免后续 query 数据覆盖本地新增消息
       if (newConvId) {
@@ -131,7 +130,7 @@ export default function QAPanelPage() {
         content: `${t('qa.errorPrefix', '处理失败')}：${err.message}`,
         ts: Date.now()
       };
-      setMessages(prev => [...prev, errorMessage]);
+      setMessages((prev) => [...prev, errorMessage]);
       void variables;
     }
   });
@@ -177,7 +176,7 @@ export default function QAPanelPage() {
       content: q,
       ts: Date.now()
     };
-    setMessages(prev => [...prev, userMessage]);
+    setMessages((prev) => [...prev, userMessage]);
     setInput('');
     askMutation.mutate({ question: q, convId: conversationId });
   };
@@ -227,7 +226,9 @@ export default function QAPanelPage() {
 
   return (
     <div className="flex h-[calc(100vh-8rem)] gap-4 animate-fade-in">
-      <div className={`relative flex-shrink-0 transition-all duration-300 ${showSidebar ? 'w-64' : 'w-0'}`}>
+      <div
+        className={`relative flex-shrink-0 transition-all duration-300 ${showSidebar ? 'w-64' : 'w-0'}`}
+      >
         {showSidebar && (
           <div className="absolute inset-0 flex flex-col rounded-2xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800 overflow-hidden">
             <div className="flex items-center justify-between border-b border-slate-200 p-3 dark:border-slate-700">
@@ -261,7 +262,7 @@ export default function QAPanelPage() {
                 </div>
               ) : (
                 <div className="space-y-1">
-                  {conversations.map(conv => (
+                  {conversations.map((conv) => (
                     <button
                       key={conv.id}
                       onClick={() => handleSelectConversation(conv.id)}
@@ -273,11 +274,13 @@ export default function QAPanelPage() {
                     >
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">
-                          <span className={`truncate text-sm font-medium ${
-                            conversationId === conv.id
-                              ? 'text-primary-700 dark:text-primary-300'
-                              : 'text-slate-700 dark:text-slate-200'
-                          }`}>
+                          <span
+                            className={`truncate text-sm font-medium ${
+                              conversationId === conv.id
+                                ? 'text-primary-700 dark:text-primary-300'
+                                : 'text-slate-700 dark:text-slate-200'
+                            }`}
+                          >
                             {conv.title}
                           </span>
                           {conv.compressed && (
@@ -331,7 +334,9 @@ export default function QAPanelPage() {
             <button
               onClick={() => setShowSidebar(!showSidebar)}
               className="btn btn-ghost p-2"
-              title={showSidebar ? t('qa.hideSidebar', '隐藏侧边栏') : t('qa.showSidebar', '显示侧边栏')}
+              title={
+                showSidebar ? t('qa.hideSidebar', '隐藏侧边栏') : t('qa.showSidebar', '显示侧边栏')
+              }
             >
               <List size={18} />
             </button>
@@ -383,9 +388,14 @@ export default function QAPanelPage() {
               <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary-100 dark:bg-primary-900/30">
                 <ChatCircleDots size={32} className="text-primary-500" />
               </div>
-              <h2 className="mb-2 text-lg font-semibold">{t('qa.welcomeTitle', '向你的知识库提问')}</h2>
+              <h2 className="mb-2 text-lg font-semibold">
+                {t('qa.welcomeTitle', '向你的知识库提问')}
+              </h2>
               <p className="mb-6 max-w-md text-sm text-slate-500 dark:text-slate-400">
-                {t('qa.welcomeSubtitle', 'AI 将基于知识库中已提取的内容进行多轮反思问答，并标注每条结论的来源。')}
+                {t(
+                  'qa.welcomeSubtitle',
+                  'AI 将基于知识库中已提取的内容进行多轮反思问答，并标注每条结论的来源。'
+                )}
               </p>
               <div className="grid w-full max-w-2xl grid-cols-1 gap-3 sm:grid-cols-2">
                 {SUGGESTED_QUESTIONS.map((q, i) => (
@@ -402,8 +412,13 @@ export default function QAPanelPage() {
             </div>
           ) : (
             <div className="space-y-6">
-              {messages.map(msg => (
-                <MessageBubble key={msg.id} message={msg} viewMode={viewMode} onEvidenceClick={handleEvidenceClick} />
+              {messages.map((msg) => (
+                <MessageBubble
+                  key={msg.id}
+                  message={msg}
+                  viewMode={viewMode}
+                  onEvidenceClick={handleEvidenceClick}
+                />
               ))}
               {askMutation.isPending && (
                 <div className="flex items-center gap-2 text-sm text-slate-500">
@@ -419,7 +434,7 @@ export default function QAPanelPage() {
         <div className="mt-4 flex items-end gap-3 rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-800">
           <textarea
             value={input}
-            onChange={e => setInput(e.target.value)}
+            onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={t('qa.inputPlaceholder')}
             rows={2}
@@ -440,7 +455,15 @@ export default function QAPanelPage() {
   );
 }
 
-function MessageBubble({ message, viewMode, onEvidenceClick }: { message: ChatMessage; viewMode: ViewMode; onEvidenceClick?: (spanId: string) => void }) {
+function MessageBubble({
+  message,
+  viewMode,
+  onEvidenceClick
+}: {
+  message: ChatMessage;
+  viewMode: ViewMode;
+  onEvidenceClick?: (spanId: string) => void;
+}) {
   const { t } = useTranslation();
   const isUser = message.role === 'user';
   const confidenceColor =
@@ -454,12 +477,14 @@ function MessageBubble({ message, viewMode, onEvidenceClick }: { message: ChatMe
 
   const showDetails = viewMode === 'detailed';
 
-  const evidenceSpans: Partial<EvidenceSpan>[] = (message.sources || []).map((src: any, i: number) => ({
-    span_id: src.span_id || String(i + 1),
-    original_location: src.original_location || '',
-    span_text: src.span_text || '',
-    source_type: src.source_type || 'library_file'
-  }));
+  const evidenceSpans: Partial<EvidenceSpan>[] = (message.sources || []).map(
+    (src: any, i: number) => ({
+      span_id: src.span_id || String(i + 1),
+      original_location: src.original_location || '',
+      span_text: src.span_text || '',
+      source_type: src.source_type || 'library_file'
+    })
+  );
 
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
@@ -491,7 +516,8 @@ function MessageBubble({ message, viewMode, onEvidenceClick }: { message: ChatMe
               {message.sources.slice(0, 3).map((src: any, i) => (
                 <div key={i} className="rounded bg-white/60 p-2 text-xs dark:bg-slate-800/60">
                   <span className="font-mono text-primary-600 dark:text-primary-400">
-                    [^{src.span_id || i + 1}]
+                    [^
+                    {src.span_id || i + 1}]
                   </span>{' '}
                   <span className="line-clamp-1">{src.span_text || src.original_location}</span>
                 </div>
@@ -500,35 +526,39 @@ function MessageBubble({ message, viewMode, onEvidenceClick }: { message: ChatMe
           </div>
         )}
 
-        {!isUser && showDetails && (message.confidence !== undefined || message.relatedEntities?.length || message.tokensUsed) && (
-          <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
-            {message.confidence !== undefined && (
-              <span className={`flex items-center gap-1 font-medium ${confidenceColor}`}>
-                <Brain size={12} />
-                {t('qa.confidence')}：{Math.round(message.confidence * 100)}%
-              </span>
-            )}
-            {message.tokensUsed ? (
-              <span className="flex items-center gap-1">
-                <Coins size={12} />
-                {message.tokensUsed} tokens · ${message.estimatedCost?.toFixed(4)}
-              </span>
-            ) : null}
-            {message.relatedEntities && message.relatedEntities.length > 0 && (
-              <div className="flex flex-wrap items-center gap-1">
-                <Tag size={12} />
-                {message.relatedEntities.slice(0, 3).map((e, i) => (
-                  <span
-                    key={i}
-                    className="rounded bg-primary-100 px-1.5 py-0.5 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300"
-                  >
-                    {e.title}
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+        {!isUser &&
+          showDetails &&
+          (message.confidence !== undefined ||
+            message.relatedEntities?.length ||
+            message.tokensUsed) && (
+            <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
+              {message.confidence !== undefined && (
+                <span className={`flex items-center gap-1 font-medium ${confidenceColor}`}>
+                  <Brain size={12} />
+                  {t('qa.confidence')}：{Math.round(message.confidence * 100)}%
+                </span>
+              )}
+              {message.tokensUsed ? (
+                <span className="flex items-center gap-1">
+                  <Coins size={12} />
+                  {message.tokensUsed} tokens · ${message.estimatedCost?.toFixed(4)}
+                </span>
+              ) : null}
+              {message.relatedEntities && message.relatedEntities.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1">
+                  <Tag size={12} />
+                  {message.relatedEntities.slice(0, 3).map((e, i) => (
+                    <span
+                      key={i}
+                      className="rounded bg-primary-100 px-1.5 py-0.5 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300"
+                    >
+                      {e.title}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
         {!isUser && (
           <div className="mt-3 flex gap-2">

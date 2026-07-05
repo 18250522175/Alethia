@@ -1,45 +1,11 @@
-import { vectorSearch } from './vector';
-import { fulltextSearch } from './fulltext';
-import { rrfFusion, type RRFResult } from './rrf';
-import { graphTraverse } from './graph';
-import { rerank } from './rerank';
-import { applySourceWeights } from './source';
+import type { QueryParams, QueryResult, QueryResultItem } from '@shared/index';
 import logger from '../i18n/logger';
-import type { QueryParams, QueryResult, QueryResultItem, QueryIntent, QueryTier } from '@shared/index';
-
-type Intent = QueryIntent;
-type Tier = QueryTier;
-
-function classifyIntent(query: string): { intent: Intent; tier: Tier } {
-  const lower = query.toLowerCase().trim();
-  const length = query.length;
-
-  if (length < 10 && /是什么|是什么|定义|概念/.test(query)) {
-    return { intent: 'factual', tier: 'T0' };
-  }
-
-  if (/比较|区别|关系|联系|综合|对比/.test(query)) {
-    return { intent: 'cross_domain', tier: 'T2' };
-  }
-
-  if (/文件|文档|pdf|来源|原始/.test(lower)) {
-    return { intent: 'file_search', tier: 'T1' };
-  }
-
-  if (/概述|总结|介绍|综述|全局|所有/.test(query)) {
-    return { intent: 'topic', tier: 'T1' };
-  }
-
-  if (/为什么|如何|怎么|怎样|为什么/.test(query)) {
-    return { intent: 'ai_qa', tier: 'T2' };
-  }
-
-  if (length < 20) {
-    return { intent: 'factual', tier: 'T0' };
-  }
-
-  return { intent: 'ai_qa', tier: 'T2' };
-}
+import { fulltextSearch } from './fulltext';
+import { graphTraverse } from './graph';
+import { classifyIntentByEmbedding } from './intent';
+import { rerank } from './rerank';
+import { rrfFusion } from './rrf';
+import { vectorSearch } from './vector';
 
 async function getSnippetsForPages(slugs: string[]): Promise<Map<string, string>> {
   const snippetMap = new Map<string, string>();
@@ -64,9 +30,18 @@ async function getSnippetsForPages(slugs: string[]): Promise<Map<string, string>
 
 export async function executeQuery(params: QueryParams): Promise<QueryResult> {
   const startTime = Date.now();
-  const { query, intent, tier, contexts, topK = 10, withGraph = false, withRerank = false } = params;
+  const {
+    query,
+    intent,
+    tier,
+    contexts,
+    topK = 10,
+    withGraph = false,
+    withRerank = false
+  } = params;
 
-  const classification = classifyIntent(query);
+  // 优先使用嵌入向量 + 余弦相似度分类，自动退化到正则规则
+  const classification = await classifyIntentByEmbedding(query);
   const finalIntent = intent || classification.intent;
   const finalTier = tier || classification.tier;
 
@@ -80,21 +55,29 @@ export async function executeQuery(params: QueryParams): Promise<QueryResult> {
   const vectorWeight = finalIntent === 'factual' ? 0.7 : 0.5;
   const fulltextWeight = finalIntent === 'factual' ? 0.3 : 0.5;
 
-  const fused = rrfFusion([
-    {
-      results: vectorResults.map(r => ({ slug: r.slug, title: r.title, score: r.score })),
-      weight: vectorWeight
-    },
-    {
-      results: fulltextResults.map(r => ({ slug: r.slug, title: r.title, score: r.score, snippet: r.snippet })),
-      weight: fulltextWeight
-    }
-  ], topK);
+  const fused = rrfFusion(
+    [
+      {
+        results: vectorResults.map((r) => ({ slug: r.slug, title: r.title, score: r.score })),
+        weight: vectorWeight
+      },
+      {
+        results: fulltextResults.map((r) => ({
+          slug: r.slug,
+          title: r.title,
+          score: r.score,
+          snippet: r.snippet
+        })),
+        weight: fulltextWeight
+      }
+    ],
+    topK
+  );
 
-  const slugs = fused.map(r => r.slug);
+  const slugs = fused.map((r) => r.slug);
   const snippetMap = await getSnippetsForPages(slugs);
 
-  let items: QueryResultItem[] = fused.map(result => ({
+  let items: QueryResultItem[] = fused.map((result) => ({
     slug: result.slug,
     title: result.title,
     snippet: snippetMap.get(result.slug) || result.snippet || '',
@@ -111,7 +94,7 @@ export async function executeQuery(params: QueryParams): Promise<QueryResult> {
   if (withGraph && items.length > 0) {
     const graphLinks = await graphTraverse(items[0].slug, 2);
     logger.debug({ graphLinks: graphLinks.length }, '图谱扩展完成');
-    const existingSlugs = new Set(items.map(i => i.slug));
+    const existingSlugs = new Set(items.map((i) => i.slug));
     for (const link of graphLinks) {
       const neighborSlug = link.sourceSlug === items[0].slug ? link.targetSlug : link.sourceSlug;
       if (!existingSlugs.has(neighborSlug)) {
@@ -135,13 +118,12 @@ export async function executeQuery(params: QueryParams): Promise<QueryResult> {
       try {
         const { getPool } = await import('../db/pool');
         const pool = getPool();
-        const pageResult = await pool.query(
-          'SELECT contexts FROM pages WHERE slug = $1',
-          [item.slug]
-        );
+        const pageResult = await pool.query('SELECT contexts FROM pages WHERE slug = $1', [
+          item.slug
+        ]);
         if (pageResult.rows.length > 0) {
           const pageContexts: string[] = pageResult.rows[0].contexts || [];
-          if (pageContexts.some(c => contextSet.has(c))) {
+          if (pageContexts.some((c) => contextSet.has(c))) {
             filteredItems.push(item);
           }
         }

@@ -24,9 +24,19 @@ export const LanguageSettingsSchema = z.object({
 });
 
 export const ModelTierSchema = z.enum([
-  'fact_extract', 'whitelist_fix', 'disambiguate', 'nli_pre',
-  'translate', 'compress', 'archive_summary', 'ring_gen',
-  'contradiction', 'gap_analysis', 'narrate', 'qa_gen', 'embed'
+  'fact_extract',
+  'whitelist_fix',
+  'disambiguate',
+  'nli_pre',
+  'translate',
+  'compress',
+  'archive_summary',
+  'ring_gen',
+  'contradiction',
+  'gap_analysis',
+  'narrate',
+  'qa_gen',
+  'embed'
 ]);
 
 export const ModelAssignmentEntrySchema = z.object({
@@ -81,8 +91,16 @@ export const PathSettingsSchema = z.object({
 });
 
 export const AdapterIdSchema = z.enum([
-  'bailian', 'zhipu', 'moonshot', 'ernie', 'spark',
-  'hunyuan', 'minimax', 'deepseek', 'yi', 'baichuan'
+  'bailian',
+  'zhipu',
+  'moonshot',
+  'ernie',
+  'spark',
+  'hunyuan',
+  'minimax',
+  'deepseek',
+  'yi',
+  'baichuan'
 ]);
 
 export const LLMAdapterConfigSchema = z.object({

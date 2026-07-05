@@ -1,6 +1,9 @@
 import { getPool } from '../db/pool';
-import { budgetManager } from './budget';
 import logger from '../i18n/logger';
+import { budgetManager } from './budget';
+import { clusterTopics, type TopicClusterResult } from './cluster';
+import { type CommunityDetectResult, detectCommunities } from './community';
+import { type NliPreCheckResult, runNliPreCheck } from './nli-precheck';
 
 export interface DreamReport {
   runAt: string;
@@ -8,12 +11,12 @@ export interface DreamReport {
   budgetAllowed: boolean;
   phases: {
     budgetCheck: { allowed: boolean; reason?: string };
-    communityDetect: { skipped: boolean };
-    nliPre: { skipped: boolean };
+    communityDetect: { skipped: boolean; result?: CommunityDetectResult };
+    nliPre: { skipped: boolean; result?: NliPreCheckResult };
     forgetDecay: { ok: boolean; decayed: number };
     lint: { ok: boolean };
     ghostCleanup: { detected: number; marked: number };
-    topicCluster: { skipped: boolean };
+    topicCluster: { skipped: boolean; result?: TopicClusterResult };
     gapAnalysis: { skipped: boolean };
     enrichExternal: { skipped: boolean };
     diff: { skipped: boolean };
@@ -28,9 +31,9 @@ const FORGET_DECAY_CONFIDENCE = 0.3;
 /**
  * Dream Cycle 编排器（Task 6.1）
  *
- * 执行完整的六阶段夜间任务。当前已实现：预算检查、forget_decay、lint、幽灵清理。
- * community_detect、NLI 预检、topic_cluster、gap_analysis、enrich_external、Diff、
- * 年轮 等阶段暂时跳过（仅记录日志）。
+ * 执行完整的六阶段夜间任务。已实现：预算检查、社区检测、NLI 预检、
+ * forget_decay、lint、幽灵清理、主题聚类。
+ * gap_analysis、enrich_external、Diff、年轮 等阶段待后续 LLM 集成后启用。
  */
 export async function runDreamCycle(): Promise<DreamReport> {
   const start = Date.now();
@@ -42,12 +45,12 @@ export async function runDreamCycle(): Promise<DreamReport> {
     budgetAllowed: false,
     phases: {
       budgetCheck: { allowed: false },
-      communityDetect: { skipped: true },
-      nliPre: { skipped: true },
+      communityDetect: { skipped: true, result: undefined },
+      nliPre: { skipped: true, result: undefined },
       forgetDecay: { ok: false, decayed: 0 },
       lint: { ok: false },
       ghostCleanup: { detected: 0, marked: 0 },
-      topicCluster: { skipped: true },
+      topicCluster: { skipped: true, result: undefined },
       gapAnalysis: { skipped: true },
       enrichExternal: { skipped: true },
       diff: { skipped: true },
@@ -73,11 +76,35 @@ export async function runDreamCycle(): Promise<DreamReport> {
   }
   logger.info('阶段 1 预算检查通过');
 
-  // 阶段 2：community_detect（跳过）
-  logger.info('阶段 2 community_detect 跳过（暂未实现）');
+  // 阶段 2：community_detect（社区检测）
+  try {
+    logger.info('阶段 2 社区检测开始');
+    const communityResult = await detectCommunities();
+    report.phases.communityDetect = { skipped: false, result: communityResult };
+    logger.info(
+      { communities: communityResult.detected, members: communityResult.marked },
+      '阶段 2 社区检测完成'
+    );
+  } catch (err) {
+    report.phases.communityDetect = { skipped: false };
+    errors.push(`社区检测失败: ${(err as Error).message}`);
+    logger.warn({ err }, '社区检测失败');
+  }
 
-  // 阶段 3：NLI 预检（跳过）
-  logger.info('阶段 3 NLI 预检跳过（暂未实现）');
+  // 阶段 3：NLI 预检（证据一致性检查）
+  try {
+    logger.info('阶段 3 NLI 预检开始');
+    const nliResult = await runNliPreCheck();
+    report.phases.nliPre = { skipped: false, result: nliResult };
+    logger.info(
+      { checked: nliResult.checked, contradictions: nliResult.contradictions },
+      '阶段 3 NLI 预检完成'
+    );
+  } catch (err) {
+    report.phases.nliPre = { skipped: false };
+    errors.push(`NLI 预检失败: ${(err as Error).message}`);
+    logger.warn({ err }, 'NLI 预检失败');
+  }
 
   // 阶段 4：forget_decay + lint + 幽灵清理
   try {
@@ -103,8 +130,23 @@ export async function runDreamCycle(): Promise<DreamReport> {
     errors.push(`幽灵清理失败: ${(err as Error).message}`);
   }
 
-  // 阶段 5：topic_cluster + gap_analysis（跳过）
-  logger.info('阶段 5 topic_cluster + gap_analysis 跳过（暂未实现）');
+  // 阶段 5：topic_cluster + gap_analysis
+  try {
+    logger.info('阶段 5 主题聚类开始');
+    const clusterResult = await clusterTopics();
+    report.phases.topicCluster = { skipped: false, result: clusterResult };
+    logger.info(
+      { clusters: clusterResult.clustersCreated, pages: clusterResult.pagesAssigned },
+      '阶段 5 主题聚类完成'
+    );
+  } catch (err) {
+    report.phases.topicCluster = { skipped: false };
+    errors.push(`主题聚类失败: ${(err as Error).message}`);
+    logger.warn({ err }, '主题聚类失败');
+  }
+
+  // gap_analysis：基于聚类结果识别知识盲区（暂跳过，待 LLM 集成）
+  logger.info('阶段 5 gap_analysis 跳过（待 LLM 集成）');
 
   // 阶段 6：enrich_external + Diff + 年轮（跳过）
   logger.info('阶段 6 enrich_external + Diff + 年轮 跳过（暂未实现）');

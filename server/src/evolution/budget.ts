@@ -1,4 +1,4 @@
-import { randomUUID } from 'crypto';
+import { randomUUID } from 'node:crypto';
 import { loadEnv } from '../config/loader';
 import { getPool } from '../db/pool';
 import logger from '../i18n/logger';
@@ -59,11 +59,17 @@ class BudgetManager {
     }
     if (this.dailyUsed >= this.dailyBudget) {
       await this.trip('budget.daily', this.dailyBudget, this.dailyUsed, task);
-      return { allowed: false, reason: `日预算已达上限 (${this.dailyUsed.toFixed(4)}/${this.dailyBudget})` };
+      return {
+        allowed: false,
+        reason: `日预算已达上限 (${this.dailyUsed.toFixed(4)}/${this.dailyBudget})`
+      };
     }
     if (this.monthlyUsed >= this.monthlyBudget) {
       await this.trip('budget.monthly', this.monthlyBudget, this.monthlyUsed, task);
-      return { allowed: false, reason: `月预算已达上限 (${this.monthlyUsed.toFixed(4)}/${this.monthlyBudget})` };
+      return {
+        allowed: false,
+        reason: `月预算已达上限 (${this.monthlyUsed.toFixed(4)}/${this.monthlyBudget})`
+      };
     }
     return { allowed: true };
   }
@@ -78,7 +84,7 @@ class BudgetManager {
       '预算消耗记录'
     );
     // 异步持久化到数据库（不阻塞调用方）
-    this.persistUsage(cost).catch(err => {
+    this.persistUsage(cost).catch((err) => {
       logger.error({ err }, '持久化预算使用记录失败');
     });
   }

@@ -1,8 +1,4 @@
 import matter from 'gray-matter';
-import { unified } from 'unified';
-import remarkParse from 'remark-parse';
-import remarkFrontmatter from 'remark-frontmatter';
-import logger from '../i18n/logger';
 
 export interface ParsedPage {
   slug: string;
@@ -47,17 +43,6 @@ export interface ParsedEvidence {
   text: string;
 }
 
-const SECTION_NAMES = [
-  'State',
-  'Assessment',
-  'Open Threads',
-  'Relations',
-  'Timeline',
-  'Version History',
-  'Semantic Rings Archive',
-  'Evidence'
-];
-
 export class CompiledTruthParser {
   async parse(filePath: string, rawContent: string): Promise<ParsedPage> {
     const { data, content } = matter(rawContent);
@@ -69,11 +54,11 @@ export class CompiledTruthParser {
     const type = data.type || 'concept';
     const contexts = Array.isArray(data.contexts) ? data.contexts : [];
 
-    const relations = this.parseRelations(sections['Relations'] || '');
-    const timeline = this.parseTimeline(sections['Timeline'] || '');
+    const relations = this.parseRelations(sections.Relations || '');
+    const timeline = this.parseTimeline(sections.Timeline || '');
     const versionHistory = this.parseVersionHistory(sections['Version History'] || '');
     const openThreads = this.parseOpenThreads(sections['Open Threads'] || '');
-    const evidence = this.parseEvidence(sections['Evidence'] || '');
+    const evidence = this.parseEvidence(sections.Evidence || '');
     const semanticRings = this.parseSemanticRings(sections['Semantic Rings Archive'] || '');
 
     return {
@@ -88,8 +73,8 @@ export class CompiledTruthParser {
         frontmatter: data,
         sections
       },
-      state: sections['State'] || '',
-      assessment: sections['Assessment'] || '',
+      state: sections.State || '',
+      assessment: sections.Assessment || '',
       openThreads,
       relations,
       timeline,
@@ -135,7 +120,7 @@ export class CompiledTruthParser {
 
   private parseRelations(text: string): ParsedRelation[] {
     const relations: ParsedRelation[] = [];
-    const lines = text.split('\n').filter(l => l.trim().startsWith('-'));
+    const lines = text.split('\n').filter((l) => l.trim().startsWith('-'));
 
     for (const line of lines) {
       const match = line.match(/-\s*\[\[([^\]]+)\]\]\s*[·•-]\s*(.+)/);
@@ -152,7 +137,7 @@ export class CompiledTruthParser {
 
   private parseTimeline(text: string): ParsedTimelineEntry[] {
     const entries: ParsedTimelineEntry[] = [];
-    const lines = text.split('\n').filter(l => l.trim().startsWith('-'));
+    const lines = text.split('\n').filter((l) => l.trim().startsWith('-'));
 
     for (const line of lines) {
       const match = line.match(/-\s*([\d-]+)\s*[·•-]\s*([^·•-]+)[·•-]\s*(.+)/);
@@ -170,10 +155,10 @@ export class CompiledTruthParser {
 
   private parseVersionHistory(text: string): ParsedVersionEntry[] {
     const entries: ParsedVersionEntry[] = [];
-    const lines = text.split('\n').filter(l => l.trim().startsWith('-'));
+    const lines = text.split('\n').filter((l) => l.trim().startsWith('-'));
 
     for (const line of lines) {
-      const match = line.match(/-\s*([^\s]+)\s*[·•-]\s*([\d-]+)\s*[·•-]\s*(.+)/);
+      const match = line.match(/-\s*(\S+)\s*[·•-]\s*([\d-]+)\s*[·•-]\s*(.+)/);
       if (match) {
         entries.push({
           version: match[1].trim(),
@@ -188,7 +173,7 @@ export class CompiledTruthParser {
 
   private parseOpenThreads(text: string): string[] {
     const threads: string[] = [];
-    const lines = text.split('\n').filter(l => l.trim().startsWith('-'));
+    const lines = text.split('\n').filter((l) => l.trim().startsWith('-'));
 
     for (const line of lines) {
       const match = line.match(/-\s*\[.\]\s*(.+)/);
@@ -202,7 +187,7 @@ export class CompiledTruthParser {
 
   private parseEvidence(text: string): ParsedEvidence[] {
     const evidence: ParsedEvidence[] = [];
-    const lines = text.split('\n').filter(l => l.trim().startsWith('[^'));
+    const lines = text.split('\n').filter((l) => l.trim().startsWith('[^'));
 
     for (const line of lines) {
       const match = line.match(/\[([^\]]+)\]:\s*(.+)/);
@@ -221,7 +206,7 @@ export class CompiledTruthParser {
 
   private parseSemanticRings(text: string): string[] {
     const rings: string[] = [];
-    const lines = text.split('\n').filter(l => l.trim().startsWith('-'));
+    const lines = text.split('\n').filter((l) => l.trim().startsWith('-'));
 
     for (const line of lines) {
       rings.push(line.replace(/^-\s*/, '').trim());
@@ -234,7 +219,7 @@ export class CompiledTruthParser {
     return name
       .toLowerCase()
       .replace(/\s+/g, '-')
-      .replace(/[^\w\u4e00-\u9fa5-]/g, '');
+      .replace(/[^\w\u4E00-\u9FA5-]/g, '');
   }
 }
 

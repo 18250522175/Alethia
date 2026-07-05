@@ -1,5 +1,5 @@
-import { getPool } from './pool';
 import logger from '../i18n/logger';
+import { getPool } from './pool';
 
 export interface DimensionResult {
   migrated: boolean;
@@ -29,7 +29,7 @@ async function detectCurrentDimension(): Promise<number> {
     throw new Error(`无法解析 embedding 列类型: ${dataType}`);
   }
 
-  return parseInt(match[1], 10);
+  return Number.parseInt(match[1], 10);
 }
 
 /**

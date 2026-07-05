@@ -1,6 +1,6 @@
+import MarkdownIt from 'markdown-it';
 import { getPool } from '../db/pool';
 import logger from '../i18n/logger';
-import MarkdownIt from 'markdown-it';
 
 export interface StaticSiteOptions {
   outputPath?: string;
@@ -468,7 +468,7 @@ body {
 function buildSidebarList(pages: PageRow[], activeSlug?: string): string {
   return pages
     .sort((a, b) => a.title.localeCompare(b.title, 'zh-CN'))
-    .map(p => {
+    .map((p) => {
       const isActive = activeSlug === p.slug;
       return `<li class="page-item ${isActive ? 'active' : ''}">
         <a href="../wiki/${escapeHtml(p.slug)}.html">${escapeHtml(p.title)}</a>
@@ -480,9 +480,10 @@ function buildSidebarList(pages: PageRow[], activeSlug?: string): string {
 function renderWikiPage(page: PageRow, allPages: PageRow[]): string {
   const sidebarHtml = buildSidebarList(allPages, page.slug);
   const contentHtml = md.render(page.content_md || page.raw_md);
-  const contextsHtml = (page.contexts && page.contexts.length > 0)
-    ? page.contexts.map(c => `<span class="context-tag">${escapeHtml(c)}</span>`).join('')
-    : '<span style="color: var(--text-muted);">无</span>';
+  const contextsHtml =
+    page.contexts && page.contexts.length > 0
+      ? page.contexts.map((c) => `<span class="context-tag">${escapeHtml(c)}</span>`).join('')
+      : '<span style="color: var(--text-muted);">无</span>';
 
   const metaHtml = `
     <div class="page-meta">
@@ -511,16 +512,19 @@ function renderIndexPage(allPages: PageRow[], linkCount: number): string {
     .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
     .slice(0, 10);
 
-  const recentHtml = recentPages.map(p => `
+  const recentHtml = recentPages
+    .map(
+      (p) => `
     <li class="recent-item">
       <a class="recent-title" href="wiki/${escapeHtml(p.slug)}.html">${escapeHtml(p.title)}</a>
       <span class="recent-date">${new Date(p.updated_at).toLocaleDateString('zh-CN')}</span>
     </li>
-  `).join('');
+  `
+    )
+    .join('');
 
-  const lastUpdated = recentPages.length > 0
-    ? new Date(recentPages[0].updated_at).toLocaleString('zh-CN')
-    : 'N/A';
+  const lastUpdated =
+    recentPages.length > 0 ? new Date(recentPages[0].updated_at).toLocaleString('zh-CN') : 'N/A';
 
   const body = `
     <h1>Alethia 知识库</h1>
@@ -553,12 +557,14 @@ function renderIndexPage(allPages: PageRow[], linkCount: number): string {
 function renderSearchPage(allPages: PageRow[]): string {
   const sidebarHtml = buildSidebarList(allPages, '__search__');
 
-  const pageListJson = JSON.stringify(allPages.map(p => ({
-    slug: p.slug,
-    title: p.title,
-    type: p.type,
-    updated_at: p.updated_at
-  })));
+  const pageListJson = JSON.stringify(
+    allPages.map((p) => ({
+      slug: p.slug,
+      title: p.title,
+      type: p.type,
+      updated_at: p.updated_at
+    }))
+  );
 
   const body = `
     <h1>搜索</h1>
@@ -625,7 +631,7 @@ if (qParam) {
 </script>
 `;
 
-  return layout.replace('</body>', searchScript + '</body>');
+  return layout.replace('</body>', `${searchScript}</body>`);
 }
 
 function renderAboutPage(allPages: PageRow[], linkCount: number): string {
@@ -673,7 +679,7 @@ async function copyDirRecursive(src: string, dest: string): Promise<number> {
   if (!(await srcDir.exists())) return 0;
 
   const entries = [];
-  for await (const entry of (globalThis as any).Bun.glob(src + '/**/*')) {
+  for await (const entry of (globalThis as any).Bun.glob(`${src}/**/*`)) {
     entries.push(entry);
   }
 
@@ -683,14 +689,17 @@ async function copyDirRecursive(src: string, dest: string): Promise<number> {
     if (!stat) continue;
 
     const relativePath = entry.slice(src.length + 1);
-    const destPath = dest + '/' + relativePath;
+    const destPath = `${dest}/${relativePath}`;
 
-    if ((f as any).type === 'application/x-directory' || (relativePath.includes('/') && !(await f.text().catch(() => null)))) {
+    if (
+      (f as any).type === 'application/x-directory' ||
+      (relativePath.includes('/') && !(await f.text().catch(() => null)))
+    ) {
       continue;
     }
 
     const destDir = destPath.substring(0, destPath.lastIndexOf('/'));
-    await Bun.write(destDir + '/.keep', '');
+    await Bun.write(`${destDir}/.keep`, '');
     await Bun.write(destPath, f);
     count++;
   }
@@ -699,13 +708,13 @@ async function copyDirRecursive(src: string, dest: string): Promise<number> {
 }
 
 async function generateGraphJson(pages: PageRow[], links: LinkRow[]): Promise<any> {
-  const nodes = pages.map(p => ({
+  const nodes = pages.map((p) => ({
     id: p.slug,
     label: p.title,
     type: p.type
   }));
 
-  const edges = links.map(l => ({
+  const edges = links.map((l) => ({
     source: l.source_slug,
     target: l.target_slug,
     relation: l.relation
@@ -717,7 +726,7 @@ async function generateGraphJson(pages: PageRow[], links: LinkRow[]): Promise<an
 async function countFiles(dir: string): Promise<number> {
   let count = 0;
   try {
-    for await (const _ of (globalThis as any).Bun.glob(dir + '/**/*')) {
+    for await (const _ of (globalThis as any).Bun.glob(`${dir}/**/*`)) {
       count++;
     }
   } catch {
@@ -726,16 +735,14 @@ async function countFiles(dir: string): Promise<number> {
   return count;
 }
 
-export async function generateStaticSite(options: StaticSiteOptions = {}): Promise<StaticSiteResult> {
+export async function generateStaticSite(
+  options: StaticSiteOptions = {}
+): Promise<StaticSiteResult> {
   const startTime = Date.now();
-  const {
-    outputPath,
-    includeMedia = false,
-    includeGraph = false
-  } = options;
+  const { outputPath, includeMedia = false, includeGraph = false } = options;
 
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const baseOutputDir = outputPath || (process.cwd() + '/exports');
+  const baseOutputDir = outputPath || `${process.cwd()}/exports`;
   const outputDir = `${baseOutputDir}/${timestamp}`;
 
   logger.info({ outputDir, includeMedia, includeGraph }, '开始生成静态站点');
@@ -748,7 +755,9 @@ export async function generateStaticSite(options: StaticSiteOptions = {}): Promi
     const pool = getPool();
 
     const [pagesResult, linksResult] = await Promise.all([
-      pool.query('SELECT slug, type, content_md, raw_md, contexts, updated_at FROM pages ORDER BY slug'),
+      pool.query(
+        'SELECT slug, type, content_md, raw_md, contexts, updated_at FROM pages ORDER BY slug'
+      ),
       pool.query('SELECT source_slug, target_slug, relation FROM links')
     ]);
 
@@ -786,7 +795,7 @@ export async function generateStaticSite(options: StaticSiteOptions = {}): Promi
     pagesGenerated += 3;
 
     if (includeMedia) {
-      const mediaSrc = process.cwd() + '/library/objects';
+      const mediaSrc = `${process.cwd()}/library/objects`;
       const mediaDest = `${outputDir}/media/objects`;
       mediaCopied = await copyDirRecursive(mediaSrc, mediaDest);
       logger.info({ mediaCopied }, '媒体文件拷贝完成');

@@ -1,25 +1,25 @@
-import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
-import { useTranslation } from 'react-i18next';
-import { useQuery } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
-import cytoscape, { Core, ElementDefinition, NodeSingular } from 'cytoscape';
+import type { Core, ElementDefinition } from 'cytoscape';
 import {
-  MagnifyingGlass,
-  Plus,
-  Minus,
   ArrowsOutSimple,
-  Graph as GraphIcon,
-  Spinner,
-  Ghost,
-  Warning,
+  ArrowSquareOut,
   Clock,
   Download,
-  ShareNetwork,
-  X,
+  Ghost,
+  Graph as GraphIcon,
   Info,
-  ArrowSquareOut,
-  DotsThreeVertical
+  MagnifyingGlass,
+  Minus,
+  Plus,
+  ShareNetwork,
+  Spinner,
+  Warning,
+  X
 } from '@phosphor-icons/react';
+import { useQuery } from '@tanstack/react-query';
+import cytoscape from 'cytoscape';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import api from '../lib/api';
 
 const LAYOUTS = [
@@ -92,7 +92,7 @@ export default function GraphFullPage() {
     if (!cyRef.current || graphQuery.isLoading || !graphQuery.data) return;
 
     const elements: ElementDefinition[] = [
-      ...(graphQuery.data.nodes || []).map(n => ({
+      ...(graphQuery.data.nodes || []).map((n) => ({
         data: {
           id: String(n.id ?? n.slug),
           label: n.title || n.slug,
@@ -123,34 +123,34 @@ export default function GraphFullPage() {
           selector: 'node',
           style: {
             'background-color': '#6366f1',
-            'label': 'data(label)',
-            'color': '#475569',
+            label: 'data(label)',
+            color: '#475569',
             'font-size': '10px',
             'text-valign': 'bottom',
             'text-halign': 'center',
             'text-margin-y': 4,
-            'width': 24,
-            'height': 24,
+            width: 24,
+            height: 24,
             'transition-property': 'background-color, width, height, border-width',
             'transition-duration': 0.2
           }
         },
         {
           selector: 'node[type="file"]',
-          style: { 'background-color': '#06b6d4', 'shape': 'diamond' }
+          style: { 'background-color': '#06b6d4', shape: 'diamond' }
         },
         {
           selector: 'node[type="person"]',
-          style: { 'background-color': '#f97316', 'shape': 'rectangle' }
+          style: { 'background-color': '#f97316', shape: 'rectangle' }
         },
         {
           selector: 'node[type="portal"]',
-          style: { 'background-color': '#a855f7', 'shape': 'round-rectangle' }
+          style: { 'background-color': '#a855f7', shape: 'round-rectangle' }
         },
         {
           selector: 'edge',
           style: {
-            'width': 1,
+            width: 1,
             'line-color': '#cbd5e1',
             'target-arrow-color': '#cbd5e1',
             'target-arrow-shape': 'triangle',
@@ -176,7 +176,7 @@ export default function GraphFullPage() {
         {
           selector: '.dimmed',
           style: {
-            'opacity': 0.2
+            opacity: 0.2
           }
         }
       ],
@@ -220,7 +220,7 @@ export default function GraphFullPage() {
 
     cy.on('tap', (evt) => {
       if (evt.target === cy) {
-        setContextMenu(prev => ({ ...prev, visible: false }));
+        setContextMenu((prev) => ({ ...prev, visible: false }));
         setSelectedNode(null);
       }
     });
@@ -249,7 +249,7 @@ export default function GraphFullPage() {
 
   useEffect(() => {
     const handleClickOutside = () => {
-      setContextMenu(prev => ({ ...prev, visible: false }));
+      setContextMenu((prev) => ({ ...prev, visible: false }));
     };
     if (contextMenu.visible) {
       document.addEventListener('click', handleClickOutside);
@@ -261,9 +261,9 @@ export default function GraphFullPage() {
     if (!cyInstanceRef.current || !search.trim()) return;
     const cy = cyInstanceRef.current;
     cy.elements().removeClass('highlighted dimmed');
-    const matches = cy.nodes().filter(n =>
-      (n.data('label') as string)?.toLowerCase().includes(search.toLowerCase())
-    );
+    const matches = cy
+      .nodes()
+      .filter((n) => (n.data('label') as string)?.toLowerCase().includes(search.toLowerCase()));
     if (matches.length > 0) {
       matches.addClass('highlighted');
       cy.nodes().not(matches).addClass('dimmed');
@@ -329,14 +329,14 @@ export default function GraphFullPage() {
           <input
             type="text"
             value={search}
-            onChange={e => setSearch(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleSearch()}
+            onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
             placeholder={t('graph.searchNode')}
             className="border-0 bg-transparent px-1 py-1.5 text-sm focus:outline-none dark:text-slate-100"
           />
         </div>
         <div className="flex gap-1 rounded-lg border border-slate-200 bg-white p-1 dark:border-slate-700 dark:bg-slate-800">
-          {LAYOUTS.map(l => (
+          {LAYOUTS.map((l) => (
             <button
               key={l.id}
               onClick={() => setLayout(l.id)}
@@ -352,7 +352,7 @@ export default function GraphFullPage() {
         </div>
         <select
           value={filterType}
-          onChange={e => setFilterType(e.target.value)}
+          onChange={(e) => setFilterType(e.target.value)}
           className="input text-xs"
         >
           <option value="all">全部类型</option>
@@ -378,10 +378,7 @@ export default function GraphFullPage() {
           聚类
         </button>
 
-        <button
-          onClick={handleExportImage}
-          className="btn btn-secondary gap-1.5 text-xs"
-        >
+        <button onClick={handleExportImage} className="btn btn-secondary gap-1.5 text-xs">
           <Download size={14} />
           导出图片
         </button>
@@ -402,7 +399,7 @@ export default function GraphFullPage() {
         <div className="mb-3 flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-800">
           <Clock size={16} className="text-slate-400" />
           <div className="flex gap-1">
-            {TIME_PERIODS.map(p => (
+            {TIME_PERIODS.map((p) => (
               <button
                 key={p.id}
                 onClick={() => setTimePeriod(p.id)}
@@ -425,9 +422,7 @@ export default function GraphFullPage() {
               className="w-full accent-primary-500"
             />
           </div>
-          <span className="text-xs text-slate-500 dark:text-slate-400">
-            2024-01 ~ 2024-12
-          </span>
+          <span className="text-xs text-slate-500 dark:text-slate-400">2024-01 ~ 2024-12</span>
         </div>
       )}
 
@@ -482,7 +477,7 @@ export default function GraphFullPage() {
               聚类
             </div>
             <div className="space-y-1">
-              {clusters.map(cluster => (
+              {clusters.map((cluster) => (
                 <button
                   key={cluster.id}
                   onClick={() => handleClusterHighlight(cluster.type)}
@@ -492,10 +487,15 @@ export default function GraphFullPage() {
                     className="h-3 w-3 rounded-full"
                     style={{
                       backgroundColor:
-                        cluster.type === 'concept' ? '#6366f1' :
-                        cluster.type === 'file' ? '#06b6d4' :
-                        cluster.type === 'person' ? '#f97316' :
-                        cluster.type === 'portal' ? '#a855f7' : '#64748b'
+                        cluster.type === 'concept'
+                          ? '#6366f1'
+                          : cluster.type === 'file'
+                            ? '#06b6d4'
+                            : cluster.type === 'person'
+                              ? '#f97316'
+                              : cluster.type === 'portal'
+                                ? '#a855f7'
+                                : '#64748b'
                     }}
                   />
                   {cluster.label}
@@ -506,7 +506,9 @@ export default function GraphFullPage() {
         )}
 
         <div className="absolute bottom-3 left-3 rounded-lg border border-slate-200 bg-white/95 p-3 text-xs shadow-sm dark:border-slate-700 dark:bg-slate-800/95">
-          <div className="mb-1 font-semibold text-slate-700 dark:text-slate-200">{t('graph.legend')}</div>
+          <div className="mb-1 font-semibold text-slate-700 dark:text-slate-200">
+            {t('graph.legend')}
+          </div>
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               <span className="h-3 w-3 rounded-full bg-indigo-500"></span>
@@ -540,7 +542,7 @@ export default function GraphFullPage() {
             <button
               onClick={() => {
                 navigate(`/wiki/${contextMenu.nodeData.slug || contextMenu.nodeId}`);
-                setContextMenu(prev => ({ ...prev, visible: false }));
+                setContextMenu((prev) => ({ ...prev, visible: false }));
               }}
               className="flex w-full items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700"
             >
@@ -550,7 +552,7 @@ export default function GraphFullPage() {
             <button
               onClick={() => {
                 setSelectedNode({ id: contextMenu.nodeId, data: contextMenu.nodeData });
-                setContextMenu(prev => ({ ...prev, visible: false }));
+                setContextMenu((prev) => ({ ...prev, visible: false }));
               }}
               className="flex w-full items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700"
             >
@@ -570,7 +572,7 @@ export default function GraphFullPage() {
                     cy.zoom(2);
                   }
                 }
-                setContextMenu(prev => ({ ...prev, visible: false }));
+                setContextMenu((prev) => ({ ...prev, visible: false }));
               }}
               className="flex w-full items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700"
             >
@@ -588,10 +590,15 @@ export default function GraphFullPage() {
                   className="h-4 w-4 rounded-full"
                   style={{
                     backgroundColor:
-                      selectedNode.data.type === 'concept' ? '#6366f1' :
-                      selectedNode.data.type === 'file' ? '#06b6d4' :
-                      selectedNode.data.type === 'person' ? '#f97316' :
-                      selectedNode.data.type === 'portal' ? '#a855f7' : '#64748b'
+                      selectedNode.data.type === 'concept'
+                        ? '#6366f1'
+                        : selectedNode.data.type === 'file'
+                          ? '#06b6d4'
+                          : selectedNode.data.type === 'person'
+                            ? '#f97316'
+                            : selectedNode.data.type === 'portal'
+                              ? '#a855f7'
+                              : '#64748b'
                   }}
                 />
                 <span className="font-semibold text-slate-900 dark:text-white">

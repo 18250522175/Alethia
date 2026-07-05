@@ -1,20 +1,21 @@
-import { createContext, useContext, useState, useCallback, ReactNode, useRef, useEffect } from 'react';
+import type { ReactNode } from 'react';
+import {
+  ArrowRight,
+  Bell,
+  Check,
+  CheckCircle,
+  FileText,
+  Info,
+  ShieldCheck,
+  Warning,
+  X
+} from '@phosphor-icons/react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  Bell,
-  CheckCircle,
-  Warning,
-  FileText,
-  ShieldCheck,
-  Info,
-  X,
-  Check,
-  ArrowRight,
-} from '@phosphor-icons/react';
-import { formatRelativeTime } from '../lib/format';
 import api from '../lib/api';
+import { formatRelativeTime } from '../lib/format';
 
 export type NotificationType = 'review' | 'system' | 'extraction' | 'anomaly';
 
@@ -71,33 +72,32 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const notifications = [...localNotifications, ...serverNotifications];
   const unreadCount = notifications.filter((n) => !n.read).length;
 
-  const addNotification = useCallback(
-    (notification: Omit<Notification, 'id' | 'ts' | 'read'>) => {
-      const newNotification: Notification = {
-        ...notification,
-        id: generateId(),
-        ts: new Date().toISOString(),
-        read: false,
-      };
-      setLocalNotifications((prev) => [newNotification, ...prev]);
-    },
-    []
-  );
+  const addNotification = useCallback((notification: Omit<Notification, 'id' | 'ts' | 'read'>) => {
+    const newNotification: Notification = {
+      ...notification,
+      id: generateId(),
+      ts: new Date().toISOString(),
+      read: false
+    };
+    setLocalNotifications((prev) => [newNotification, ...prev]);
+  }, []);
 
-  const markAsRead = useCallback((id: string) => {
-    // 乐观更新本地状态
-    setLocalNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, read: true } : n))
-    );
-    // 同步到后端，失败时刷新以恢复一致状态
-    api.markNotificationRead(id).catch(() => {
-      void queryClient.invalidateQueries({ queryKey: ['notifications'] });
-    });
-  }, [queryClient]);
+  const markAsRead = useCallback(
+    (id: string) => {
+      // 乐观更新本地状态
+      setLocalNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
+      // 同步到后端，失败时刷新以恢复一致状态
+      api.markNotificationRead(id).catch(() => {
+        void queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      });
+    },
+    [queryClient]
+  );
 
   const markAllAsRead = useCallback(() => {
     setLocalNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-    api.markAllNotificationsRead()
+    api
+      .markAllNotificationsRead()
       .then(() => {
         void queryClient.invalidateQueries({ queryKey: ['notifications'] });
       })
@@ -112,7 +112,15 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
   return (
     <NotificationContext.Provider
-      value={{ notifications, unreadCount, addNotification, markAsRead, markAllAsRead, clearAll, refetch }}
+      value={{
+        notifications,
+        unreadCount,
+        addNotification,
+        markAsRead,
+        markAllAsRead,
+        clearAll,
+        refetch
+      }}
     >
       {children}
     </NotificationContext.Provider>
@@ -161,7 +169,6 @@ interface NotificationCenterProps {
 type TabType = 'all' | NotificationType;
 
 export function NotificationCenter({ isOpen, onClose }: NotificationCenterProps) {
-  const { t } = useTranslation();
   const navigate = useNavigate();
   const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotification();
   const [activeTab, setActiveTab] = useState<TabType>('all');
@@ -180,9 +187,7 @@ export function NotificationCenter({ isOpen, onClose }: NotificationCenterProps)
   }, [isOpen, onClose]);
 
   const filteredNotifications =
-    activeTab === 'all'
-      ? notifications
-      : notifications.filter((n) => n.type === activeTab);
+    activeTab === 'all' ? notifications : notifications.filter((n) => n.type === activeTab);
 
   const { t: tNotif } = useTranslation();
   const tabs: { key: TabType; label: string }[] = [
@@ -190,7 +195,7 @@ export function NotificationCenter({ isOpen, onClose }: NotificationCenterProps)
     { key: 'review', label: tNotif('notification.filterReview', '审核') },
     { key: 'system', label: tNotif('notification.filterSystem', '系统') },
     { key: 'extraction', label: tNotif('notification.filterExtraction', '补提取') },
-    { key: 'anomaly', label: tNotif('notification.filterAnomaly', '异常') },
+    { key: 'anomaly', label: tNotif('notification.filterAnomaly', '异常') }
   ];
 
   const handleNotificationClick = (id: string) => {
@@ -214,9 +219,7 @@ export function NotificationCenter({ isOpen, onClose }: NotificationCenterProps)
               {tNotif('notification.title', '通知中心')}
             </span>
             {unreadCount > 0 && (
-              <span className="badge badge-red">
-                {unreadCount > 99 ? '99+' : unreadCount}
-              </span>
+              <span className="badge badge-red">{unreadCount > 99 ? '99+' : unreadCount}</span>
             )}
           </div>
           <button
@@ -325,7 +328,11 @@ export function NotificationCenter({ isOpen, onClose }: NotificationCenterProps)
             {tNotif('notification.markAllRead', '全部标为已读')}
           </button>
           <button
-            onClick={(e) => { e.stopPropagation(); onClose(); navigate('/notifications'); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onClose();
+              navigate('/notifications');
+            }}
             className="flex items-center gap-1.5 text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 font-medium"
           >
             {tNotif('notification.viewAll', '查看全部')}

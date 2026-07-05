@@ -1,6 +1,6 @@
+import type { QueryResultItem } from '@shared/index';
 import { loadEnv } from '../config/loader';
 import logger from '../i18n/logger';
-import type { QueryResultItem } from '@shared/index';
 
 const ZEROENTROPY_API_URL = 'https://api.zeroentropy.com/v1/rerank';
 const RERANK_MODEL = 'rerank-2';
@@ -14,16 +14,13 @@ export function isRerankerEnabled(): boolean {
   return env.RERANKER_ENABLED && !!env.ZERANK_API_KEY;
 }
 
-export async function rerank(
-  items: QueryResultItem[],
-  query: string
-): Promise<QueryResultItem[]> {
+export async function rerank(items: QueryResultItem[], query: string): Promise<QueryResultItem[]> {
   if (!isRerankerEnabled() || items.length === 0) {
     return items;
   }
 
   const env = loadEnv();
-  const documents = items.map(item => `${item.title}\n${item.snippet}`.trim());
+  const documents = items.map((item) => `${item.title}\n${item.snippet}`.trim());
 
   try {
     const response = await fetch(ZEROENTROPY_API_URL, {
@@ -55,10 +52,10 @@ export async function rerank(
     }
 
     const reranked = data.results
-      .map(r => ({ item: items[r.index], score: r.relevance_score }))
-      .filter(x => !!x.item)
+      .map((r) => ({ item: items[r.index], score: r.relevance_score }))
+      .filter((x) => !!x.item)
       .sort((a, b) => b.score - a.score)
-      .map(x => ({ ...x.item, score: x.score }));
+      .map((x) => ({ ...x.item, score: x.score }));
 
     logger.info(
       { count: reranked.length, topScore: reranked[0]?.score },

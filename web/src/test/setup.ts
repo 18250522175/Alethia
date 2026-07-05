@@ -1,6 +1,6 @@
-import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/react';
 import { afterEach, vi } from 'vitest';
+import '@testing-library/jest-dom/vitest';
 
 // 每个测试后自动清理 DOM
 afterEach(() => {
@@ -17,7 +17,7 @@ if (!window.matchMedia) {
     removeListener: vi.fn(),
     addEventListener: vi.fn(),
     removeEventListener: vi.fn(),
-    dispatchEvent: vi.fn(),
+    dispatchEvent: vi.fn()
   }));
 }
 
@@ -36,7 +36,7 @@ if (!window.IntersectionObserver) {
   Object.defineProperty(window, 'IntersectionObserver', {
     writable: true,
     configurable: true,
-    value: MockIntersectionObserver,
+    value: MockIntersectionObserver
   });
 }
 
@@ -51,7 +51,7 @@ if (!window.ResizeObserver) {
   Object.defineProperty(window, 'ResizeObserver', {
     writable: true,
     configurable: true,
-    value: MockResizeObserver,
+    value: MockResizeObserver
   });
 }
 
@@ -63,6 +63,6 @@ if (!crypto.randomUUID) {
   Object.defineProperty(crypto, 'randomUUID', {
     writable: true,
     configurable: true,
-    value: vi.fn().mockReturnValue('test-uuid-' + Math.random().toString(36).slice(2, 11)),
+    value: vi.fn().mockReturnValue(`test-uuid-${Math.random().toString(36).slice(2, 11)}`)
   });
 }

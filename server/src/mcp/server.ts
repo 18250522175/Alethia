@@ -15,17 +15,17 @@
  *   - ping
  */
 
+import * as path from 'node:path';
 import { Hono } from 'hono';
 import { bearerAuth } from '../auth/bearer';
 import { brainAPI } from '../brainapi';
-import { llmRouter } from '../llm/router';
-import { ingestFile } from '../ingest/pipeline';
-import { learnRule } from '../retrieval/entity';
 import { defaultSettings } from '../config/defaults';
 import { loadEnv } from '../config/loader';
 import { getPool } from '../db/pool';
 import logger from '../i18n/logger';
-import * as path from 'path';
+import { ingestFile } from '../ingest/pipeline';
+import { llmRouter } from '../llm/router';
+import { learnRule } from '../retrieval/entity';
 
 const PROTOCOL_VERSION = '2024-11-05';
 const SERVER_NAME = 'alethia-mcp';
@@ -143,7 +143,10 @@ const TOOLS: ToolEntry[] = [
         type: 'object',
         properties: {
           query: { type: 'string', description: '检索关键词或语句' },
-          intent: { type: 'string', description: '查询意图（factual / topic / cross_domain / file_search / ai_qa）' },
+          intent: {
+            type: 'string',
+            description: '查询意图（factual / topic / cross_domain / file_search / ai_qa）'
+          },
           tier: { type: 'string', description: '检索层级（T0 / T1 / T2）' },
           contexts: { type: 'array', items: { type: 'string' }, description: '上下文 slug 列表' },
           topK: { type: 'number', description: '返回结果数（默认 10）' },
@@ -190,7 +193,8 @@ const TOOLS: ToolEntry[] = [
   {
     definition: {
       name: 'narrate',
-      description: '叙述实体：以单轮问答方式给出实体/主题的定义、状态与关键信息（askQuestion 简化版）',
+      description:
+        '叙述实体：以单轮问答方式给出实体/主题的定义、状态与关键信息（askQuestion 简化版）',
       inputSchema: {
         type: 'object',
         properties: {
@@ -673,7 +677,10 @@ const TOOLS: ToolEntry[] = [
       inputSchema: {
         type: 'object',
         properties: {
-          adapterId: { type: 'string', description: '适配器 ID（如 bailian / zhipu / deepseek 等）' }
+          adapterId: {
+            type: 'string',
+            description: '适配器 ID（如 bailian / zhipu / deepseek 等）'
+          }
         },
         required: ['adapterId']
       }
@@ -703,9 +710,8 @@ const TOOLS: ToolEntry[] = [
       try {
         const pool = getPool();
         const result = await pool.query('SELECT value FROM settings WHERE key = $1', ['global']);
-        const settings = result.rows.length > 0
-          ? JSON.parse(result.rows[0].value)
-          : defaultSettings;
+        const settings =
+          result.rows.length > 0 ? JSON.parse(result.rows[0].value) : defaultSettings;
         return jsonTextResult({ settings });
       } catch (err) {
         logger.warn({ err }, 'MCP 获取设置失败，返回默认值');
@@ -732,8 +738,19 @@ const TOOLS: ToolEntry[] = [
       }
 
       // 基本结构校验：确保 settings 包含必要的顶层键
-      const requiredKeys = ['appearance', 'general', 'language', 'budget', 'security', 'privacy', 'tasks', 'paths', 'integration', 'experimental'];
-      const missingKeys = requiredKeys.filter(k => !(k in settings));
+      const requiredKeys = [
+        'appearance',
+        'general',
+        'language',
+        'budget',
+        'security',
+        'privacy',
+        'tasks',
+        'paths',
+        'integration',
+        'experimental'
+      ];
+      const missingKeys = requiredKeys.filter((k) => !(k in settings));
       if (missingKeys.length > 0) {
         return errorResult(`settings 缺少必要字段: ${missingKeys.join(', ')}`);
       }
@@ -774,10 +791,9 @@ const TOOLS: ToolEntry[] = [
           [args.slug, limit]
         );
       } else {
-        result = await pool.query(
-          'SELECT * FROM knowledge_versions ORDER BY ts DESC LIMIT $1',
-          [limit]
-        );
+        result = await pool.query('SELECT * FROM knowledge_versions ORDER BY ts DESC LIMIT $1', [
+          limit
+        ]);
       }
       return jsonTextResult({ items: result.rows, total: result.rows.length });
     }
@@ -827,7 +843,10 @@ const TOOLS: ToolEntry[] = [
       const libraryPath = env.LIBRARY_PATH || '/data/library';
       const resolvedPath = path.resolve(filePath);
       const resolvedLibrary = path.resolve(libraryPath);
-      if (!resolvedPath.startsWith(resolvedLibrary + path.sep) && resolvedPath !== resolvedLibrary) {
+      if (
+        !resolvedPath.startsWith(resolvedLibrary + path.sep) &&
+        resolvedPath !== resolvedLibrary
+      ) {
         return errorResult(`路径遍历被拒绝: ${filePath}。仅允许 ${libraryPath} 目录下的文件。`);
       }
 
@@ -951,10 +970,7 @@ export class McpServer {
     };
   }
 
-  private async handleToolsCall(
-    id: string | number | null,
-    params: any
-  ): Promise<JSONRPCResponse> {
+  private async handleToolsCall(id: string | number | null, params: any): Promise<JSONRPCResponse> {
     const name = params?.name;
     const args = params?.arguments || {};
 
@@ -1009,7 +1025,7 @@ async function processStdioLine(server: McpServer, line: string): Promise<void> 
       id: null,
       error: { code: PARSE_ERROR, message }
     };
-    process.stdout.write(JSON.stringify(response) + '\n');
+    process.stdout.write(`${JSON.stringify(response)}\n`);
     return;
   }
 
@@ -1019,7 +1035,7 @@ async function processStdioLine(server: McpServer, line: string): Promise<void> 
   }
 
   const response = await server.handleRequest(request);
-  process.stdout.write(JSON.stringify(response) + '\n');
+  process.stdout.write(`${JSON.stringify(response)}\n`);
 }
 
 async function startStdio(): Promise<void> {

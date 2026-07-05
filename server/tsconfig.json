@@ -2,10 +2,10 @@
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
     "types": ["bun-types"],
-    "outDir": "./dist",
-    "noEmit": false,
     "declaration": false,
     "declarationMap": false,
+    "noEmit": false,
+    "outDir": "./dist",
     "skipLibCheck": true
   },
   "include": ["src/**/*", "scripts/**/*", "skills/**/*"]

@@ -1,7 +1,7 @@
 import { getPool } from '../db/pool';
 import logger from '../i18n/logger';
 
-const WIKILINK_REGEX = /\[\[([^\[\]]+)\]\]/g;
+const WIKILINK_REGEX = /\[\[([^[\]]+)\]\]/g;
 // 英文显式命名实体（连续大写开头词），例如 "Apple Inc"、"Barack Obama"
 const EXPLICIT_ENTITY_REGEX = /[A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)*/g;
 
@@ -43,9 +43,7 @@ export async function applyUserRules(entities: string[]): Promise<string[]> {
 
   try {
     const pool = getPool();
-    const result = await pool.query<UserRuleRow>(
-      'SELECT pattern, mapping FROM user_rules'
-    );
+    const result = await pool.query<UserRuleRow>('SELECT pattern, mapping FROM user_rules');
     const rules = result.rows;
 
     if (rules.length === 0) return entities;
@@ -56,7 +54,7 @@ export async function applyUserRules(entities: string[]): Promise<string[]> {
     }
 
     const matchedPatterns = new Set<string>();
-    const mapped = entities.map(entity => {
+    const mapped = entities.map((entity) => {
       const rule = lowerPatternIndex.get(entity.toLowerCase());
       if (rule) {
         matchedPatterns.add(rule.pattern);
@@ -70,11 +68,8 @@ export async function applyUserRules(entities: string[]): Promise<string[]> {
       const patterns = Array.from(matchedPatterns);
       const placeholders = patterns.map((_, i) => `$${i + 1}`).join(',');
       pool
-        .query(
-          `UPDATE user_rules SET hits = hits + 1 WHERE pattern IN (${placeholders})`,
-          patterns
-        )
-        .catch(err => logger.warn({ err }, '更新 user_rules hits 失败'));
+        .query(`UPDATE user_rules SET hits = hits + 1 WHERE pattern IN (${placeholders})`, patterns)
+        .catch((err) => logger.warn({ err }, '更新 user_rules hits 失败'));
     }
 
     return Array.from(new Set(mapped));
@@ -98,10 +93,10 @@ export async function learnRule(pattern: string, mapping: string): Promise<void>
     );
 
     if (updateResult.rows.length === 0) {
-      await pool.query(
-        'INSERT INTO user_rules (pattern, mapping) VALUES ($1, $2)',
-        [pattern, mapping]
-      );
+      await pool.query('INSERT INTO user_rules (pattern, mapping) VALUES ($1, $2)', [
+        pattern,
+        mapping
+      ]);
       logger.info({ pattern, mapping }, '已学习新规则');
     } else {
       logger.info({ pattern, mapping }, '已更新规则映射');

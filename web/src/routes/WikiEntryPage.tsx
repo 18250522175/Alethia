@@ -1,32 +1,31 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { useParams, Link as RouterLink, useNavigate } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
   ArrowRight,
   ArrowsLeftRight,
-  PencilSimple,
-  X,
+  ChatCircleDots,
+  Clock,
+  Code,
   Columns,
   Eye,
-  Code,
-  FloppyDisk,
-  Spinner,
-  Warning,
   FileText,
-  Hash,
-  Tag,
-  Clock,
+  FloppyDisk,
   GitBranch,
-  Brain,
-  ChatCircleDots
+  Hash,
+  PencilSimple,
+  Spinner,
+  Tag,
+  Warning,
+  X
 } from '@phosphor-icons/react';
-import api from '../lib/api';
-import MarkdownRenderer from '../components/MarkdownRenderer';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
 import EvidencePopover from '../blocks/EvidencePopover';
-import MiniKnowledgeGraph from '../components/MiniKnowledgeGraph';
 import EntryTimeline from '../components/EntryTimeline';
+import MarkdownRenderer from '../components/MarkdownRenderer';
+import MiniKnowledgeGraph from '../components/MiniKnowledgeGraph';
+import api from '../lib/api';
 
 type ViewMode = 'split' | 'preview' | 'source';
 
@@ -92,13 +91,15 @@ export default function WikiEntryPage() {
   }, [page?.rawMd, page?.hash]);
 
   const activeEvidence = useMemo(
-    () => evidenceSpans.find(e => e.span_id === activeEvidenceId) ?? null,
+    () => evidenceSpans.find((e) => e.span_id === activeEvidenceId) ?? null,
     [evidenceSpans, activeEvidenceId]
   );
 
   const handleEvidenceClick = (spanId: string) => {
-    setActiveEvidenceId(prev => (prev === spanId ? null : spanId));
+    setActiveEvidenceId((prev) => (prev === spanId ? null : spanId));
   };
+
+  const isDirty = page ? draft !== page.rawMd : false;
 
   const handleStartEdit = () => {
     // ensure the source pane is visible when entering edit mode
@@ -115,8 +116,6 @@ export default function WikiEntryPage() {
     if (!isDirty) return;
     saveMutation.mutate(draft);
   };
-
-  const isDirty = page ? draft !== page.rawMd : false;
 
   if (pageQuery.isLoading) {
     return (
@@ -174,7 +173,7 @@ export default function WikiEntryPage() {
               </h1>
               {page.contexts.length > 0 && (
                 <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
-                  {page.contexts.map(ctx => (
+                  {page.contexts.map((ctx) => (
                     <span key={ctx} className="badge badge-blue">
                       <Tag size={10} className="mr-1" />
                       {ctx}
@@ -207,7 +206,7 @@ export default function WikiEntryPage() {
       {/* action bar */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="inline-flex rounded-lg border border-slate-200 bg-slate-100 p-1 dark:border-slate-700 dark:bg-slate-800">
-          {viewModes.map(mode => {
+          {viewModes.map((mode) => {
             const Icon = mode.icon;
             const active = viewMode === mode.id;
             return (
@@ -333,9 +332,7 @@ export default function WikiEntryPage() {
             <div className="mb-3 flex items-center justify-between gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
               <span className="inline-flex items-center gap-1.5">
                 <Code size={12} />
-                {isEditing
-                  ? t('wiki.editSource', '编辑源码')
-                  : t('wiki.source', '源码')}
+                {isEditing ? t('wiki.editSource', '编辑源码') : t('wiki.source', '源码')}
               </span>
               {isEditing && isDirty && (
                 <span className="inline-flex items-center gap-1 text-yellow-500">
@@ -347,7 +344,7 @@ export default function WikiEntryPage() {
             {isEditing ? (
               <textarea
                 value={draft}
-                onChange={e => setDraft(e.target.value)}
+                onChange={(e) => setDraft(e.target.value)}
                 spellCheck={false}
                 className="input h-[60vh] resize-none font-mono text-sm leading-6"
               />
@@ -371,7 +368,7 @@ export default function WikiEntryPage() {
             <LinkList
               title={t('wiki.incomingLinks', '入链')}
               icon={<ArrowLeft size={12} />}
-              items={incomingLinks.map(link => ({
+              items={incomingLinks.map((link) => ({
                 id: link.id,
                 slug: link.sourceSlug,
                 relation: link.relation
@@ -381,7 +378,7 @@ export default function WikiEntryPage() {
             <LinkList
               title={t('wiki.outgoingLinks', '出链')}
               icon={<ArrowRight size={12} />}
-              items={outgoingLinks.map(link => ({
+              items={outgoingLinks.map((link) => ({
                 id: link.id,
                 slug: link.targetSlug,
                 relation: link.relation
@@ -395,8 +392,16 @@ export default function WikiEntryPage() {
           currentSlug={slug}
           currentTitle={page.title}
           relatedEntities={[
-            ...incomingLinks.map(l => ({ slug: l.sourceSlug, title: l.sourceSlug, relation: l.relation })),
-            ...outgoingLinks.map(l => ({ slug: l.targetSlug, title: l.targetSlug, relation: l.relation }))
+            ...incomingLinks.map((l) => ({
+              slug: l.sourceSlug,
+              title: l.sourceSlug,
+              relation: l.relation
+            })),
+            ...outgoingLinks.map((l) => ({
+              slug: l.targetSlug,
+              title: l.targetSlug,
+              relation: l.relation
+            }))
           ].slice(0, 8)}
         />
       </div>
@@ -463,7 +468,7 @@ function LinkList({
         <p className="text-sm text-slate-400 dark:text-slate-500">{emptyText}</p>
       ) : (
         <ul className="space-y-1">
-          {items.map(link => (
+          {items.map((link) => (
             <li key={link.id}>
               <RouterLink
                 to={`/wiki/${link.slug}`}

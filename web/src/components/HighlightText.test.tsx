@@ -1,8 +1,8 @@
-import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { describe, expect, it } from 'vitest';
 import HighlightText from './HighlightText';
 
-describe('HighlightText', () => {
+describe('highlightText', () => {
   it('renders plain text when no keyword provided', () => {
     render(<HighlightText text="hello world" keyword="" />);
     expect(screen.getByText('hello world')).toBeInTheDocument();
@@ -16,18 +16,14 @@ describe('HighlightText', () => {
   });
 
   it('renders single highlight match', () => {
-    const { container } = render(
-      <HighlightText text="hello world" keyword="world" />
-    );
+    const { container } = render(<HighlightText text="hello world" keyword="world" />);
     const marks = container.querySelectorAll('mark');
     expect(marks).toHaveLength(1);
     expect(marks[0].textContent).toBe('world');
   });
 
   it('renders multiple highlight matches', () => {
-    const { container } = render(
-      <HighlightText text="the cat and the dog" keyword="the" />
-    );
+    const { container } = render(<HighlightText text="the cat and the dog" keyword="the" />);
     const marks = container.querySelectorAll('mark');
     expect(marks).toHaveLength(2);
     expect(marks[0].textContent).toBe('the');
@@ -35,18 +31,14 @@ describe('HighlightText', () => {
   });
 
   it('matches case-insensitively but preserves original case', () => {
-    const { container } = render(
-      <HighlightText text="Hello World" keyword="hello" />
-    );
+    const { container } = render(<HighlightText text="Hello World" keyword="hello" />);
     const marks = container.querySelectorAll('mark');
     expect(marks).toHaveLength(1);
     expect(marks[0].textContent).toBe('Hello');
   });
 
   it('preserves surrounding non-matching text', () => {
-    const { container } = render(
-      <HighlightText text="prefix match suffix" keyword="match" />
-    );
+    const { container } = render(<HighlightText text="prefix match suffix" keyword="match" />);
     const span = container.querySelector('span');
     expect(span?.textContent).toBe('prefix match suffix');
     const marks = container.querySelectorAll('mark');
@@ -60,28 +52,20 @@ describe('HighlightText', () => {
   });
 
   it('handles keyword not found in text', () => {
-    const { container } = render(
-      <HighlightText text="hello world" keyword="missing" />
-    );
+    const { container } = render(<HighlightText text="hello world" keyword="missing" />);
     expect(container.querySelectorAll('mark')).toHaveLength(0);
     expect(screen.getByText('hello world')).toBeInTheDocument();
   });
 
   it('handles keyword at start of text', () => {
-    const { container } = render(
-      <HighlightText text="hello world hello" keyword="hello" />
-    );
+    const { container } = render(<HighlightText text="hello world hello" keyword="hello" />);
     const marks = container.querySelectorAll('mark');
     expect(marks).toHaveLength(2);
   });
 
   it('applies custom highlightClassName', () => {
     const { container } = render(
-      <HighlightText
-        text="hello"
-        keyword="hello"
-        highlightClassName="custom-highlight"
-      />
+      <HighlightText text="hello" keyword="hello" highlightClassName="custom-highlight" />
     );
     const mark = container.querySelector('mark');
     expect(mark?.className).toContain('custom-highlight');

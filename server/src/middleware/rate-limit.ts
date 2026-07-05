@@ -1,4 +1,4 @@
-import { Context, Next } from 'hono';
+import type { Context, Next } from 'hono';
 import { getErrorMessage } from '../i18n/errors.zh-CN';
 import logger from '../i18n/logger';
 
@@ -30,9 +30,7 @@ export function rateLimiter(options: RateLimitOptions) {
   return async (c: Context, next: Next) => {
     const key = keyGenerator
       ? keyGenerator(c)
-      : c.req.header('x-forwarded-for') ||
-        c.req.header('x-real-ip') ||
-        'unknown';
+      : c.req.header('x-forwarded-for') || c.req.header('x-real-ip') || 'unknown';
 
     const now = Date.now();
     const entry = store[key];
@@ -46,12 +44,15 @@ export function rateLimiter(options: RateLimitOptions) {
 
     if (entry.count > max) {
       logger.warn({ key, count: entry.count }, '速率限制触发');
-      return c.json({
-        error: {
-          code: 'RATE_LIMITED',
-          message: getErrorMessage('RATE_LIMITED')
-        }
-      }, 429);
+      return c.json(
+        {
+          error: {
+            code: 'RATE_LIMITED',
+            message: getErrorMessage('RATE_LIMITED')
+          }
+        },
+        429
+      );
     }
 
     return next();

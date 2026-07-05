@@ -1,17 +1,17 @@
+import {
+  ArrowLeft,
+  ArrowRight,
+  BookOpen,
+  Brain,
+  GearSix,
+  Graph as GraphIcon,
+  ShieldCheck,
+  Sparkle,
+  X
+} from '@phosphor-icons/react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import {
-  BookOpen,
-  Brain,
-  Graph as GraphIcon,
-  ShieldCheck,
-  GearSix,
-  ArrowLeft,
-  ArrowRight,
-  Sparkle,
-  X,
-} from '@phosphor-icons/react';
 
 type Accent = 'primary' | 'knowledge' | 'parchment' | 'slate';
 
@@ -27,20 +27,20 @@ interface OnboardingStep {
 const ACCENTS: Record<Accent, { iconBg: string; iconText: string }> = {
   primary: {
     iconBg: 'bg-primary-100 dark:bg-primary-900/40',
-    iconText: 'text-primary-600 dark:text-primary-400',
+    iconText: 'text-primary-600 dark:text-primary-400'
   },
   knowledge: {
     iconBg: 'bg-knowledge-100 dark:bg-knowledge-900/40',
-    iconText: 'text-knowledge-600 dark:text-knowledge-400',
+    iconText: 'text-knowledge-600 dark:text-knowledge-400'
   },
   parchment: {
     iconBg: 'bg-parchment-100 dark:bg-parchment-900/40',
-    iconText: 'text-parchment-600 dark:text-parchment-400',
+    iconText: 'text-parchment-600 dark:text-parchment-400'
   },
   slate: {
     iconBg: 'bg-slate-100 dark:bg-slate-700/60',
-    iconText: 'text-slate-600 dark:text-slate-300',
-  },
+    iconText: 'text-slate-600 dark:text-slate-300'
+  }
 };
 
 const STEPS: OnboardingStep[] = [
@@ -51,7 +51,7 @@ const STEPS: OnboardingStep[] = [
     descKey: 'onboarding.welcomeDesc',
     descDefault:
       '一个由 AI 驱动的知识管理系统：自动从文档中提取知识、构建实体图谱，并通过对话问答帮助你探索与理解知识。',
-    accent: 'primary',
+    accent: 'primary'
   },
   {
     icon: Brain,
@@ -60,7 +60,7 @@ const STEPS: OnboardingStep[] = [
     descKey: 'onboarding.qaDesc',
     descDefault:
       '在问答面板向 AI 提问，每个答案都附带可追溯的来源证据，并支持最多 3 轮反思以提升准确性。',
-    accent: 'knowledge',
+    accent: 'knowledge'
   },
   {
     icon: GraphIcon,
@@ -69,7 +69,7 @@ const STEPS: OnboardingStep[] = [
     descKey: 'onboarding.graphDesc',
     descDefault:
       '以可视化图谱浏览实体之间的关系，节点大小反映关联强度，红色虚线标识需要清理的幽灵关系。',
-    accent: 'parchment',
+    accent: 'parchment'
   },
   {
     icon: ShieldCheck,
@@ -78,7 +78,7 @@ const STEPS: OnboardingStep[] = [
     descKey: 'onboarding.reviewDesc',
     descDefault:
       '人类掌权机制：所有 AI 自动提取的知识变更，都需经过你确认后才会写入知识库，确保内容始终可信。',
-    accent: 'slate',
+    accent: 'slate'
   },
   {
     icon: GearSix,
@@ -87,8 +87,8 @@ const STEPS: OnboardingStep[] = [
     descKey: 'onboarding.settingsDesc',
     descDefault:
       '在设置中配置大模型适配器、调整预算上限、外观主题与语言，让知识库完全贴合你的工作方式。',
-    accent: 'primary',
-  },
+    accent: 'primary'
+  }
 ];
 
 const STORAGE_KEY = 'onboarding_completed';

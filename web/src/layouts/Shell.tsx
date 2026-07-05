@@ -1,9 +1,9 @@
-import { Outlet } from 'react-router-dom';
-import TopBar from './TopBar';
-import Sidebar from './Sidebar';
-import StatusBar from './StatusBar';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Outlet } from 'react-router-dom';
+import Sidebar from './Sidebar';
+import StatusBar from './StatusBar';
+import TopBar from './TopBar';
 
 export default function Shell() {
   const [sidebarOpen, setSidebarOpen] = useState(true);

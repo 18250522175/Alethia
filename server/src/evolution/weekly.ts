@@ -1,7 +1,7 @@
-import { getPool } from '../db/pool';
-import { llmRouter } from '../llm/router';
 import { brainAPI } from '../brainapi';
+import { getPool } from '../db/pool';
 import logger from '../i18n/logger';
+import { llmRouter } from '../llm/router';
 
 export interface WeeklyReport {
   weekStart: string;
@@ -36,54 +36,47 @@ export async function generateWeeklyReport(): Promise<WeeklyReport> {
   weekEnd.setHours(23, 59, 59, 999);
 
   const pool = getPool();
-  const [
-    pageResult,
-    relationResult,
-    diffResult,
-    convResult,
-    tokenResult,
-    anomalyResult,
-    changeLogResult
-  ] = await Promise.all([
-    pool.query(
-      `SELECT 
+  const [pageResult, relationResult, diffResult, convResult, tokenResult, anomalyResult] =
+    await Promise.all([
+      pool.query(
+        `SELECT 
          SUM(CASE WHEN op = 'create' THEN 1 ELSE 0 END) as created,
          SUM(CASE WHEN op = 'update' THEN 1 ELSE 0 END) as updated,
          SUM(CASE WHEN op = 'delete' THEN 1 ELSE 0 END) as deleted
        FROM auto_change_log
        WHERE target_type = 'page' AND ts >= $1 AND ts <= $2`,
-      [weekStart.toISOString(), weekEnd.toISOString()]
-    ),
-    pool.query(
-      `SELECT COUNT(*) as count FROM links WHERE created_at >= $1 AND created_at <= $2`,
-      [weekStart.toISOString(), weekEnd.toISOString()]
-    ),
-    pool.query(
-      `SELECT 
+        [weekStart.toISOString(), weekEnd.toISOString()]
+      ),
+      pool.query(
+        `SELECT COUNT(*) as count FROM links WHERE created_at >= $1 AND created_at <= $2`,
+        [weekStart.toISOString(), weekEnd.toISOString()]
+      ),
+      pool.query(
+        `SELECT 
          SUM(CASE WHEN resolved = false THEN 1 ELSE 0 END) as pending,
          SUM(CASE WHEN resolved = true AND approved = true THEN 1 ELSE 0 END) as approved,
          SUM(CASE WHEN resolved = true AND approved = false THEN 1 ELSE 0 END) as rejected
        FROM pending_diffs
        WHERE created_at >= $1 AND created_at <= $2`,
-      [weekStart.toISOString(), weekEnd.toISOString()]
-    ),
-    pool.query(
-      `SELECT COUNT(DISTINCT conversation_id) as count FROM conversation_logs WHERE ts >= $1 AND ts <= $2`,
-      [weekStart.toISOString(), weekEnd.toISOString()]
-    ),
-    pool.query(
-      `SELECT COALESCE(SUM(tokens_used), 0) as total_tokens, COALESCE(SUM(estimated_cost), 0) as total_cost FROM conversation_logs WHERE ts >= $1 AND ts <= $2`,
-      [weekStart.toISOString(), weekEnd.toISOString()]
-    ),
-    pool.query(
-      `SELECT COUNT(*) as count FROM eval_anomaly_flags WHERE ts >= $1 AND ts <= $2`,
-      [weekStart.toISOString(), weekEnd.toISOString()]
-    ),
-    pool.query(
-      `SELECT op, target, ts, payload FROM auto_change_log WHERE ts >= $1 AND ts <= $2 ORDER BY ts DESC LIMIT 20`,
-      [weekStart.toISOString(), weekEnd.toISOString()]
-    )
-  ]);
+        [weekStart.toISOString(), weekEnd.toISOString()]
+      ),
+      pool.query(
+        `SELECT COUNT(DISTINCT conversation_id) as count FROM conversation_logs WHERE ts >= $1 AND ts <= $2`,
+        [weekStart.toISOString(), weekEnd.toISOString()]
+      ),
+      pool.query(
+        `SELECT COALESCE(SUM(tokens_used), 0) as total_tokens, COALESCE(SUM(estimated_cost), 0) as total_cost FROM conversation_logs WHERE ts >= $1 AND ts <= $2`,
+        [weekStart.toISOString(), weekEnd.toISOString()]
+      ),
+      pool.query(`SELECT COUNT(*) as count FROM eval_anomaly_flags WHERE ts >= $1 AND ts <= $2`, [
+        weekStart.toISOString(),
+        weekEnd.toISOString()
+      ]),
+      pool.query(
+        `SELECT op, target, ts, payload FROM auto_change_log WHERE ts >= $1 AND ts <= $2 ORDER BY ts DESC LIMIT 20`,
+        [weekStart.toISOString(), weekEnd.toISOString()]
+      )
+    ]);
 
   const pages = pageResult.rows[0] || { created: 0, updated: 0, deleted: 0 };
   const relations = relationResult.rows[0]?.count || 0;
@@ -93,46 +86,46 @@ export async function generateWeeklyReport(): Promise<WeeklyReport> {
   const anomalies = anomalyResult.rows[0]?.count || 0;
 
   const highlights: string[] = [];
-  if (parseInt(pages.created) > 0) {
+  if (Number.parseInt(pages.created) > 0) {
     highlights.push(`新增 ${pages.created} 个页面`);
   }
-  if (parseInt(pages.updated) > 0) {
+  if (Number.parseInt(pages.updated) > 0) {
     highlights.push(`更新 ${pages.updated} 个页面`);
   }
-  if (parseInt(relations) > 0) {
+  if (Number.parseInt(relations) > 0) {
     highlights.push(`建立 ${relations} 个新关系`);
   }
-  if (parseInt(diffs.approved) > 0) {
+  if (Number.parseInt(diffs.approved) > 0) {
     highlights.push(`审核通过 ${diffs.approved} 个变更`);
   }
-  if (parseInt(conversations) > 0) {
+  if (Number.parseInt(conversations) > 0) {
     highlights.push(`完成 ${conversations} 次对话`);
   }
 
   const suggestions: string[] = [];
-  if (parseInt(diffs.pending) > 5) {
+  if (Number.parseInt(diffs.pending) > 5) {
     suggestions.push(`有 ${diffs.pending} 个待审核变更，建议及时处理`);
   }
-  if (parseInt(anomalies) > 0) {
+  if (Number.parseInt(anomalies) > 0) {
     suggestions.push(`发现 ${anomalies} 个异常标记，建议检查系统健康`);
   }
-  if (parseInt(tokens.total_tokens) > 100000) {
+  if (Number.parseInt(tokens.total_tokens) > 100000) {
     suggestions.push(`本周 Token 消耗较高（${tokens.total_tokens}），建议关注预算`);
   }
 
   const metrics: WeeklyReport['metrics'] = {
-    newPages: parseInt(pages.created),
-    updatedPages: parseInt(pages.updated),
-    deletedPages: parseInt(pages.deleted),
-    newRelations: parseInt(relations),
-    pendingDiffs: parseInt(diffs.pending),
-    approvedDiffs: parseInt(diffs.approved),
-    rejectedDiffs: parseInt(diffs.rejected),
-    conversations: parseInt(conversations),
-    tokensUsed: parseInt(tokens.total_tokens),
-    estimatedCost: parseFloat(tokens.total_cost),
+    newPages: Number.parseInt(pages.created),
+    updatedPages: Number.parseInt(pages.updated),
+    deletedPages: Number.parseInt(pages.deleted),
+    newRelations: Number.parseInt(relations),
+    pendingDiffs: Number.parseInt(diffs.pending),
+    approvedDiffs: Number.parseInt(diffs.approved),
+    rejectedDiffs: Number.parseInt(diffs.rejected),
+    conversations: Number.parseInt(conversations),
+    tokensUsed: Number.parseInt(tokens.total_tokens),
+    estimatedCost: Number.parseFloat(tokens.total_cost),
     avgConfidence: 0.75,
-    anomalyCount: parseInt(anomalies)
+    anomalyCount: Number.parseInt(anomalies)
   };
 
   let summary = generateSummary(metrics, highlights);
@@ -140,7 +133,7 @@ export async function generateWeeklyReport(): Promise<WeeklyReport> {
   try {
     const adapter = llmRouter.getAdapter('moonshot');
     const statuses = llmRouter.getAdapterStatuses();
-    const moonshotStatus = statuses.find(s => s.id === 'moonshot');
+    const moonshotStatus = statuses.find((s) => s.id === 'moonshot');
     if (adapter && moonshotStatus?.apiKeyConfigured) {
       const prompt = `请根据以下知识库每周数据生成一份详细的周报总结（纯中文）：
 
@@ -198,12 +191,14 @@ function generateSummary(metrics: WeeklyReport['metrics'], highlights: string[])
   lines.push('## 知识库周报');
   lines.push('');
   lines.push('### 本周概况');
-  lines.push(`本周共新增 ${metrics.newPages} 个页面，更新 ${metrics.updatedPages} 个页面，建立 ${metrics.newRelations} 个关系。`);
+  lines.push(
+    `本周共新增 ${metrics.newPages} 个页面，更新 ${metrics.updatedPages} 个页面，建立 ${metrics.newRelations} 个关系。`
+  );
   lines.push(`完成 ${metrics.conversations} 次对话，审核处理 ${metrics.approvedDiffs} 个变更。`);
   lines.push('');
   if (highlights.length > 0) {
     lines.push('### 亮点回顾');
-    highlights.forEach(h => lines.push(`- ${h}`));
+    highlights.forEach((h) => lines.push(`- ${h}`));
     lines.push('');
   }
   lines.push('### 改进建议');
@@ -213,7 +208,10 @@ function generateSummary(metrics: WeeklyReport['metrics'], highlights: string[])
   return lines.join('\n');
 }
 
-export async function runWeeklySkillOptimization(): Promise<{ optimized: number; suggestions: string[] }> {
+export async function runWeeklySkillOptimization(): Promise<{
+  optimized: number;
+  suggestions: string[];
+}> {
   const pool = getPool();
   const suggestions: string[] = [];
   let optimized = 0;
@@ -251,17 +249,21 @@ function registerWeeklyCron(): void {
     const bunCron = (globalThis as any).Bun?.cron;
     if (typeof bunCron === 'function') {
       bunCron('0 3 * * 1', () => {
-        generateWeeklyReport().then((report) => {
-          logger.info({ report }, '每周简报已生成');
-        }).catch((err) => {
-          logger.error({ err }, '每周简报生成失败');
-        });
+        generateWeeklyReport()
+          .then((report) => {
+            logger.info({ report }, '每周简报已生成');
+          })
+          .catch((err) => {
+            logger.error({ err }, '每周简报生成失败');
+          });
 
-        runWeeklySkillOptimization().then((result) => {
-          logger.info({ result }, '每周技能优化已完成');
-        }).catch((err) => {
-          logger.error({ err }, '每周技能优化失败');
-        });
+        runWeeklySkillOptimization()
+          .then((result) => {
+            logger.info({ result }, '每周技能优化已完成');
+          })
+          .catch((err) => {
+            logger.error({ err }, '每周技能优化失败');
+          });
       });
       logger.info('每周简报定时任务已注册（每周一 03:00）');
       return;

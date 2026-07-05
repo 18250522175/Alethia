@@ -1,9 +1,9 @@
+import type { LLMMessage } from '@shared/index';
+import type { GradeResult } from './grader';
+import type { RetrievalResult } from './retriever';
+import logger from '../i18n/logger';
 import { llmRouter } from '../llm/router';
 import { loadPrompt } from './utils';
-import logger from '../i18n/logger';
-import type { LLMMessage, EvidenceSpan } from '@shared/index';
-import type { RetrievalResult } from './retriever';
-import type { GradeResult } from './grader';
 
 export interface GenerationResult {
   answer: string;
@@ -57,12 +57,15 @@ function buildGenerationContext(
     .map((item, i) => `### 知识片段 ${i + 1}: ${item.title}\n${item.snippet}`)
     .join('\n\n');
 
-  const evidenceText = result.evidence.length > 0
-    ? '\n\n## 可用证据片段\n' +
-      result.evidence.map(e =>
-        `- [${e.span_id}] 来源: ${e.original_location}\n  文本: "${e.span_text}"\n  语言: ${e.lang}`
-      ).join('\n')
-    : '\n\n## 可用证据片段\n（无可用证据，请基于知识片段回答）';
+  const evidenceText =
+    result.evidence.length > 0
+      ? `\n\n## 可用证据片段\n${result.evidence
+          .map(
+            (e) =>
+              `- [${e.span_id}] 来源: ${e.original_location}\n  文本: "${e.span_text}"\n  语言: ${e.lang}`
+          )
+          .join('\n')}`
+      : '\n\n## 可用证据片段\n（无可用证据，请基于知识片段回答）';
 
   const gradeText = `\n\n## 检索质量评估\n- 事实准确度: ${grade.factual_accuracy}\n- 覆盖完整度: ${grade.coverage_completeness}\n- 评估说明: ${grade.reasoning}`;
 
@@ -76,7 +79,7 @@ function buildFallbackAnswer(question: string, result: RetrievalResult): string 
 
   const topResults = result.items.slice(0, 3);
   const summary = topResults
-    .map(item => `**${item.title}**\n${item.snippet.substring(0, 150)}...`)
+    .map((item) => `**${item.title}**\n${item.snippet.substring(0, 150)}...`)
     .join('\n\n');
 
   return `关于「${question}」，在知识库中找到了以下相关内容：\n\n${summary}\n\n*注意：当前 AI 生成服务不可用，以上为检索结果摘要。*`;

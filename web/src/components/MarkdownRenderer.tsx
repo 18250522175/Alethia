@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useRef } from 'react';
-import MarkdownIt from 'markdown-it';
+import type { EvidenceSpan } from '@shared/evidence';
+import { CaretRight } from '@phosphor-icons/react';
 import matter from 'gray-matter';
 import hljs from 'highlight.js/lib/common';
+import MarkdownIt from 'markdown-it';
+import { useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { CaretRight } from '@phosphor-icons/react';
-import type { EvidenceSpan } from '@shared/evidence';
 
 interface MarkdownRendererProps {
   content: string;
@@ -21,9 +21,7 @@ function shortenId(id: string): string {
 
 /** Remove footnote definitions like `[^span_id]: text` (handled separately as evidence markers). */
 function stripFootnoteDefs(text: string): string {
-  return text
-    .replace(/^[ \t]*\[\^[^\]\s]+\]:.*$/gm, '')
-    .replace(/\n{3,}/g, '\n\n');
+  return text.replace(/^[ \t]*\[\^[^\]\s]+\]:.*$/gm, '').replace(/\n{3,}/g, '\n\n');
 }
 
 const COLLAPSIBLE_PATTERNS = [
@@ -36,7 +34,7 @@ const COLLAPSIBLE_PATTERNS = [
 
 function isCollapsibleHeading(heading: string): boolean {
   const h = heading.trim();
-  return COLLAPSIBLE_PATTERNS.some(p => p.test(h));
+  return COLLAPSIBLE_PATTERNS.some((p) => p.test(h));
 }
 
 interface Section {
@@ -57,14 +55,14 @@ function splitSections(text: string): Section[] {
   let inFence = false;
 
   const flush = () => {
-    if (heading || body.some(l => l.trim())) {
+    if (heading || body.some((l) => l.trim())) {
       sections.push({ heading, level, headingLine, body: body.join('\n') });
     }
   };
 
   for (const line of lines) {
     if (/^\s*(```|~~~)/.test(line)) inFence = !inFence;
-    const m = !inFence ? line.match(/^(#{1,6})\s+(.+?)\s*#*\s*$/) : null;
+    const m = !inFence ? line.match(/^(#{1,6})\s+(.+?)\s*(?:#+\s*)?$/) : null;
     if (m) {
       flush();
       heading = m[2];
@@ -112,7 +110,11 @@ md.inline.ruler.before('link', 'evidence_span', (state, silent) => {
     return false;
   }
   let end = start + 2;
-  while (end < state.posMax && src.charCodeAt(end) !== 0x5d /* ] */ && src.charCodeAt(end) !== 0x0a /* \n */) {
+  while (
+    end < state.posMax &&
+    src.charCodeAt(end) !== 0x5d &&
+    /* ] */ src.charCodeAt(end) !== 0x0a /* \n */
+  ) {
     end++;
   }
   if (end >= state.posMax || src.charCodeAt(end) !== 0x5d) return false;
@@ -155,14 +157,18 @@ md.renderer.rules.link_open = (tokens, idx, options, env, self) => {
   }
   env._mediaStack = env._mediaStack || [];
   env._mediaStack.push(false);
-  return origLinkOpen ? origLinkOpen(tokens, idx, options, env, self) : self.renderToken(tokens, idx, options);
+  return origLinkOpen
+    ? origLinkOpen(tokens, idx, options, env, self)
+    : self.renderToken(tokens, idx, options);
 };
 
 md.renderer.rules.link_close = (tokens, idx, options, env, self) => {
   const stack: boolean[] = (env._mediaStack = env._mediaStack || []);
   const isMedia = stack.length > 0 ? !!stack.pop() : false;
   if (isMedia) return '</sup>';
-  return origLinkClose ? origLinkClose(tokens, idx, options, env, self) : self.renderToken(tokens, idx, options);
+  return origLinkClose
+    ? origLinkClose(tokens, idx, options, env, self)
+    : self.renderToken(tokens, idx, options);
 };
 
 /* ----------------------------- prose styles ----------------------------- */
@@ -261,7 +267,7 @@ export default function MarkdownRenderer({
   const env = useMemo(() => {
     const evidenceIds = new Set<string>();
     const evidenceMap = new Map<string, Partial<EvidenceSpan>>();
-    (evidenceSpans || []).forEach(s => {
+    (evidenceSpans || []).forEach((s) => {
       if (s.span_id) {
         evidenceIds.add(s.span_id);
         evidenceMap.set(s.span_id, s);
@@ -270,7 +276,10 @@ export default function MarkdownRenderer({
     return { evidenceIds, evidenceMap };
   }, [evidenceSpans]);
 
-  const { frontmatter, renderedSections } = useMemo<{ frontmatter: Record<string, unknown>; renderedSections: RenderedSection[] }>(() => {
+  const { frontmatter, renderedSections } = useMemo<{
+    frontmatter: Record<string, unknown>;
+    renderedSections: RenderedSection[];
+  }>(() => {
     let data: Record<string, unknown> = {};
     let body = content;
     try {
@@ -283,7 +292,7 @@ export default function MarkdownRenderer({
     }
     const stripped = stripFootnoteDefs(body);
     const sections = splitSections(stripped);
-    const rendered = sections.map(s => {
+    const rendered = sections.map((s) => {
       const fullMd = s.headingLine ? `${s.headingLine}\n${s.body}` : s.body;
       return {
         heading: s.heading,
@@ -331,8 +340,12 @@ export default function MarkdownRenderer({
         <dl className="card mb-5 grid animate-fade-in grid-cols-1 gap-x-6 gap-y-2 p-4 text-sm sm:grid-cols-2">
           {frontmatterEntries.map(([k, v]) => (
             <div key={k} className="flex items-start gap-2">
-              <dt className="min-w-[5rem] font-mono text-xs text-slate-500 dark:text-slate-400">{k}</dt>
-              <dd className="flex-1 break-words text-slate-800 dark:text-slate-200">{renderFrontmatterValue(v)}</dd>
+              <dt className="min-w-[5rem] font-mono text-xs text-slate-500 dark:text-slate-400">
+                {k}
+              </dt>
+              <dd className="flex-1 break-words text-slate-800 dark:text-slate-200">
+                {renderFrontmatterValue(v)}
+              </dd>
             </div>
           ))}
         </dl>
@@ -355,7 +368,10 @@ export default function MarkdownRenderer({
                   />
                   <span>{s.heading}</span>
                 </summary>
-                <div className={`${PROSE_CLASS} px-4 pb-4 pt-1`} dangerouslySetInnerHTML={{ __html: s.bodyHtml }} />
+                <div
+                  className={`${PROSE_CLASS} px-4 pb-4 pt-1`}
+                  dangerouslySetInnerHTML={{ __html: s.bodyHtml }}
+                />
               </details>
             ) : (
               <div key={i} className={PROSE_CLASS} dangerouslySetInnerHTML={{ __html: s.html }} />

@@ -1,8 +1,22 @@
-import { House, Graph, CheckCircle, ChatsCircle, Gauge, Clock, ClockCounterClockwise, Gear, BookOpen, Brain, Bell, User, CaretDown, CaretRight, Ghost } from '@phosphor-icons/react';
-import { NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
-import { useState } from 'react';
 import type { ComponentType } from 'react';
+import {
+  BookOpen,
+  Brain,
+  CaretDown,
+  CaretRight,
+  ChatsCircle,
+  CheckCircle,
+  Clock,
+  ClockCounterClockwise,
+  Gauge,
+  Gear,
+  Ghost,
+  Graph,
+  House
+} from '@phosphor-icons/react';
+import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useNotification } from '../contexts/NotificationContext';
 import api from '../lib/api';
 
@@ -50,9 +64,7 @@ function NavItemWithTooltip({
         <Icon size={20} className="flex-shrink-0" />
         <span className="flex-1 truncate">{item.label}</span>
         {item.badge && (
-          <span className={`badge badge-${item.badgeColor || 'blue'}`}>
-            {item.badge}
-          </span>
+          <span className={`badge badge-${item.badgeColor || 'blue'}`}>{item.badge}</span>
         )}
       </NavLink>
     );
@@ -92,7 +104,7 @@ function WikiNavGroup({ open }: { open: boolean }) {
     { path: '/wiki/portal-product', label: t('sidebar.portalProduct', '产品门户') },
     { path: '/wiki/portal-engineering', label: t('sidebar.portalEngineering', '工程门户') },
     { path: '/wiki/portal-research', label: t('sidebar.portalResearch', '研究门户') },
-    { path: '/wiki/portal-operations', label: t('sidebar.portalOperations', '运营门户') },
+    { path: '/wiki/portal-operations', label: t('sidebar.portalOperations', '运营门户') }
   ];
 
   const isWikiActive = location.pathname.startsWith('/wiki');
@@ -110,15 +122,11 @@ function WikiNavGroup({ open }: { open: boolean }) {
         >
           <BookOpen size={20} className="flex-shrink-0" />
           <span className="flex-1 truncate text-left">{t('nav.wiki', '百科')}</span>
-          {expanded ? (
-            <CaretDown size={16} />
-          ) : (
-            <CaretRight size={16} />
-          )}
+          {expanded ? <CaretDown size={16} /> : <CaretRight size={16} />}
         </button>
         {expanded && (
           <div className="ml-5 space-y-1 border-l border-slate-200 dark:border-slate-700 pl-2">
-            {portals.map(portal => (
+            {portals.map((portal) => (
               <NavLink
                 key={portal.path}
                 to={portal.path}
@@ -167,12 +175,18 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
   const navigate = useNavigate();
   const { notifications } = useNotification();
 
-  const reviewCount = notifications.filter(n => n.type === 'review' && !n.read).length;
+  const reviewCount = notifications.filter((n) => n.type === 'review' && !n.read).length;
 
   const navItems: NavItem[] = [
     { path: '/', icon: House, label: t('nav.home') },
     { path: '/graph', icon: Graph, label: t('nav.graph') },
-    { path: '/review', icon: CheckCircle, label: t('nav.review'), badge: reviewCount > 0 ? String(reviewCount) : undefined, badgeColor: 'yellow' },
+    {
+      path: '/review',
+      icon: CheckCircle,
+      label: t('nav.review'),
+      badge: reviewCount > 0 ? String(reviewCount) : undefined,
+      badgeColor: 'yellow'
+    },
     { path: '/qa', icon: ChatsCircle, label: t('nav.qa') },
     { path: '/dashboard', icon: Gauge, label: t('nav.dashboard') },
     { path: '/timeline', icon: Clock, label: t('nav.timeline') },
@@ -204,31 +218,19 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
     >
       <nav className="flex-1 space-y-1 px-2 py-4">
         {navItems.slice(0, 1).map((item) => {
-          const isActive = location.pathname === item.path ||
+          const isActive =
+            location.pathname === item.path ||
             (item.path !== '/' && location.pathname.startsWith(item.path));
-          return (
-            <NavItemWithTooltip
-              key={item.path}
-              item={item}
-              open={open}
-              isActive={isActive}
-            />
-          );
+          return <NavItemWithTooltip key={item.path} item={item} open={open} isActive={isActive} />;
         })}
 
         <WikiNavGroup open={open} />
 
         {navItems.slice(1).map((item) => {
-          const isActive = location.pathname === item.path ||
+          const isActive =
+            location.pathname === item.path ||
             (item.path !== '/' && location.pathname.startsWith(item.path));
-          return (
-            <NavItemWithTooltip
-              key={item.path}
-              item={item}
-              open={open}
-              isActive={isActive}
-            />
-          );
+          return <NavItemWithTooltip key={item.path} item={item} open={open} isActive={isActive} />;
         })}
 
         {ghostCount > 0 && (
@@ -237,10 +239,16 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
               className={`flex items-center gap-2 rounded-lg bg-red-50 px-2 py-1.5 text-xs text-red-600 dark:bg-red-900/20 dark:text-red-400 ${
                 open ? '' : 'justify-center w-8'
               }`}
-              title={t('sidebar.ghostRelationsTitle', '{{count}} 条幽灵关系待处理', { count: ghostCount })}
+              title={t('sidebar.ghostRelationsTitle', '{{count}} 条幽灵关系待处理', {
+                count: ghostCount
+              })}
             >
               <Ghost size={14} />
-              {open && <span>{t('sidebar.ghostRelations', '{{count}} 幽灵关系', { count: ghostCount })}</span>}
+              {open && (
+                <span>
+                  {t('sidebar.ghostRelations', '{{count}} 幽灵关系', { count: ghostCount })}
+                </span>
+              )}
             </div>
           </div>
         )}

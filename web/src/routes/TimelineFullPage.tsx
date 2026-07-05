@@ -1,25 +1,25 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { useInfiniteQuery } from '@tanstack/react-query';
-import { Link as RouterLink } from 'react-router-dom';
 import {
+  Archive,
+  ArrowClockwise,
+  ArrowRight,
+  ChatsCircle,
   Clock,
+  Empty,
+  FilePlus,
   Funnel,
+  GitMerge,
+  MagnifyingGlass,
+  Pencil,
   Spinner,
   Warning,
-  Empty,
-  ArrowClockwise,
-  FilePlus,
-  Pencil,
-  GitMerge,
-  Archive,
-  ChatsCircle,
-  ArrowRight,
-  MagnifyingGlass,
   X
 } from '@phosphor-icons/react';
+import { useInfiniteQuery } from '@tanstack/react-query';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Link as RouterLink } from 'react-router-dom';
 import api from '../lib/api';
-import { formatRelativeTime, formatDateTime } from '../lib/format';
+import { formatDateTime, formatRelativeTime } from '../lib/format';
 
 interface TimelineItem {
   id: number;
@@ -32,16 +32,6 @@ interface TimelineItem {
 }
 
 const PAGE_SIZE = 20;
-
-const RANGE_IDS = ['all', 'day', 'week', 'month'] as const;
-
-const TYPE_META: Record<string, { badge: string; label: string; Icon: typeof FilePlus }> = {
-  create: { badge: 'badge-green', label: '创建', Icon: FilePlus },
-  update: { badge: 'badge-yellow', label: '更新', Icon: Pencil },
-  merge: { badge: 'badge-blue', label: '合并', Icon: GitMerge },
-  archive: { badge: 'badge-red', label: '归档', Icon: Archive },
-  qa: { badge: 'badge-blue', label: '问答', Icon: ChatsCircle }
-};
 
 function isWithinRange(ts: string, range: string): boolean {
   if (range === 'all') return true;
@@ -85,11 +75,11 @@ export default function TimelineFullPage() {
   });
 
   const allItems = useMemo<TimelineItem[]>(() => {
-    return timelineQuery.data?.pages?.flatMap(p => p.items ?? []) ?? [];
+    return timelineQuery.data?.pages?.flatMap((p) => p.items ?? []) ?? [];
   }, [timelineQuery.data]);
 
   const items = useMemo<TimelineItem[]>(() => {
-    return allItems.filter(item => isWithinRange(item.ts, range));
+    return allItems.filter((item) => isWithinRange(item.ts, range));
   }, [allItems, range]);
 
   const total = timelineQuery.data?.pages?.[0]?.total ?? 0;
@@ -97,7 +87,7 @@ export default function TimelineFullPage() {
   const uniqueSlugs = useMemo(() => {
     const seen = new Set<string>();
     const out: string[] = [];
-    for (const item of timelineQuery.data?.pages?.flatMap(p => p.items ?? []) ?? []) {
+    for (const item of timelineQuery.data?.pages?.flatMap((p) => p.items ?? []) ?? []) {
       if (item.slug && !seen.has(item.slug)) {
         seen.add(item.slug);
         out.push(item.slug);
@@ -111,7 +101,7 @@ export default function TimelineFullPage() {
     const node = sentinelRef.current;
     if (!node || !hasMore) return;
     const observer = new IntersectionObserver(
-      entries => {
+      (entries) => {
         if (entries[0].isIntersecting) {
           void timelineQuery.fetchNextPage();
         }
@@ -169,13 +159,13 @@ export default function TimelineFullPage() {
             type="text"
             list="timeline-slug-options"
             value={slugInput}
-            onChange={e => setSlugInput(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleApplySlug()}
+            onChange={(e) => setSlugInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleApplySlug()}
             placeholder={t('timeline.slugPlaceholder', '按实体 slug 过滤...')}
             className="w-48 border-0 bg-transparent px-1 py-1.5 text-sm focus:outline-none dark:text-slate-100"
           />
           <datalist id="timeline-slug-options">
-            {uniqueSlugs.map(s => (
+            {uniqueSlugs.map((s) => (
               <option key={s} value={s} />
             ))}
           </datalist>
@@ -195,10 +185,10 @@ export default function TimelineFullPage() {
         <div className="ml-auto flex items-center gap-2">
           <select
             value={range}
-            onChange={e => setRange(e.target.value)}
+            onChange={(e) => setRange(e.target.value)}
             className="input w-auto text-sm"
           >
-            {RANGES.map(r => (
+            {RANGES.map((r) => (
               <option key={r.id} value={r.id}>
                 {r.label}
               </option>
@@ -235,26 +225,41 @@ export default function TimelineFullPage() {
       ) : isError ? (
         <div className="card flex flex-col items-center justify-center py-16 text-center">
           <Warning size={40} className="mb-2 text-red-400" />
-          <p className="text-slate-600 dark:text-slate-300">{t('timeline.errorTitle', '时间线加载失败')}</p>
-          <p className="mt-1 text-xs text-slate-400">{t('timeline.errorHint', '请检查后端 /api/timeline 路由是否已实现')}</p>
+          <p className="text-slate-600 dark:text-slate-300">
+            {t('timeline.errorTitle', '时间线加载失败')}
+          </p>
+          <p className="mt-1 text-xs text-slate-400">
+            {t('timeline.errorHint', '请检查后端 /api/timeline 路由是否已实现')}
+          </p>
         </div>
       ) : items.length === 0 ? (
         <div className="card flex flex-col items-center justify-center py-16 text-center">
           <Empty size={48} className="mb-3 text-slate-300 dark:text-slate-600" />
-          <p className="text-slate-500 dark:text-slate-400">{t('timeline.emptyTitle', '暂无时间线事件')}</p>
+          <p className="text-slate-500 dark:text-slate-400">
+            {t('timeline.emptyTitle', '暂无时间线事件')}
+          </p>
           <p className="mt-1 text-xs text-slate-400">
             {slug
-              ? t('timeline.emptySlugHint', '该实体当前没有可显示的事件，尝试更换 slug 或清除筛选。')
-              : t('timeline.emptyHint', '当 AI 创建、更新、合并、归档条目或回答问题时，事件会按时间倒序出现在这里。')}
+              ? t(
+                  'timeline.emptySlugHint',
+                  '该实体当前没有可显示的事件，尝试更换 slug 或清除筛选。'
+                )
+              : t(
+                  'timeline.emptyHint',
+                  '当 AI 创建、更新、合并、归档条目或回答问题时，事件会按时间倒序出现在这里。'
+                )}
           </p>
         </div>
       ) : (
         <div className="space-y-3">
           <div className="text-xs text-slate-500 dark:text-slate-400">
-            {t('timeline.eventSummary', '共 {{total}} 条事件 · 当前显示 {{shown}} 条', { total, shown: items.length })}
+            {t('timeline.eventSummary', '共 {{total}} 条事件 · 当前显示 {{shown}} 条', {
+              total,
+              shown: items.length
+            })}
           </div>
           <ol className="relative space-y-3 before:absolute before:left-3 before:top-2 before:bottom-2 before:w-px before:bg-slate-200 dark:before:bg-slate-700">
-            {items.map(item => (
+            {items.map((item) => (
               <TimelineCard key={item.id} item={item} />
             ))}
           </ol>
@@ -303,12 +308,12 @@ function TimelineCard({ item }: { item: TimelineItem }) {
           item.type === 'create'
             ? 'bg-green-500'
             : item.type === 'update'
-            ? 'bg-yellow-500'
-            : item.type === 'merge'
-            ? 'bg-blue-500'
-            : item.type === 'archive'
-            ? 'bg-red-500'
-            : 'bg-primary-500'
+              ? 'bg-yellow-500'
+              : item.type === 'merge'
+                ? 'bg-blue-500'
+                : item.type === 'archive'
+                  ? 'bg-red-500'
+                  : 'bg-primary-500'
         }`}
       />
       <article className="card p-4">
@@ -327,28 +332,29 @@ function TimelineCard({ item }: { item: TimelineItem }) {
               <ArrowRight size={11} />
             </RouterLink>
           </div>
-          <div className="text-xs text-slate-500 dark:text-slate-400" title={formatDateTime(item.ts)}>
+          <div
+            className="text-xs text-slate-500 dark:text-slate-400"
+            title={formatDateTime(item.ts)}
+          >
             <span className="font-medium">{formatRelativeTime(item.ts)}</span>
-            <span className="ml-2 text-slate-400">· {formatDateTime(item.ts)}</span>
+            <span className="ml-2 text-slate-400">·{formatDateTime(item.ts)}</span>
           </div>
         </div>
 
         {item.title && (
-          <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">
-            {item.title}
-          </h3>
+          <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">{item.title}</h3>
         )}
 
         {item.description && (
-          <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-            {item.description}
-          </p>
+          <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{item.description}</p>
         )}
 
         {relatedSlugs.length > 0 && (
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            <span className="text-xs text-slate-500 dark:text-slate-400">{t('timeline.related', '关联：')}</span>
-            {relatedSlugs.map(s => (
+            <span className="text-xs text-slate-500 dark:text-slate-400">
+              {t('timeline.related', '关联：')}
+            </span>
+            {relatedSlugs.map((s) => (
               <RouterLink
                 key={s}
                 to={`/wiki/${s}`}
@@ -418,9 +424,7 @@ function extractRelatedSlugs(item: TimelineItem): string[] {
   return Array.from(slugs).slice(0, 8);
 }
 
-function extractQaTurns(
-  item: TimelineItem
-): Array<{ question: string; answer?: string }> {
+function extractQaTurns(item: TimelineItem): Array<{ question: string; answer?: string }> {
   if (item.type !== 'qa') return [];
   const p = item.payload || {};
   const turns: Array<{ question: string; answer?: string }> = [];

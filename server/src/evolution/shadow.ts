@@ -1,8 +1,8 @@
-import { randomUUID } from 'crypto';
-import { getPool } from '../db/pool';
-import { llmRouter } from '../llm/router';
-import logger from '../i18n/logger';
 import type { LLMMessage } from '@shared/index';
+import { randomUUID } from 'node:crypto';
+import { getPool } from '../db/pool';
+import logger from '../i18n/logger';
+import { llmRouter } from '../llm/router';
 
 export interface ShadowEvalResult {
   passed: boolean;
@@ -186,7 +186,9 @@ function jaccardSimilarity(a: string, b: string): number {
   if (ta.size === 0 || tb.size === 0) return 0;
 
   let intersection = 0;
-  for (const t of ta) if (tb.has(t)) intersection++;
+  for (const t of ta) {
+    if (tb.has(t)) intersection++;
+  }
   const union = ta.size + tb.size - intersection;
   return union > 0 ? intersection / union : 0;
 }
@@ -260,10 +262,9 @@ async function persistAnomaly(
 
 async function loadBaselineAccuracy(pool: ReturnType<typeof getPool>): Promise<number | null> {
   try {
-    const result = await pool.query(
-      `SELECT value FROM settings WHERE key = $1`,
-      [BASELINE_SETTINGS_KEY]
-    );
+    const result = await pool.query(`SELECT value FROM settings WHERE key = $1`, [
+      BASELINE_SETTINGS_KEY
+    ]);
     if (result.rows.length === 0) return null;
     const value = result.rows[0].value;
     const num = typeof value === 'number' ? value : value?.accuracy;

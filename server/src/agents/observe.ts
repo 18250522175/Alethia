@@ -1,8 +1,8 @@
-import { llmRouter } from '../llm/router';
+import type { LLMMessage } from '@shared/index';
+import { randomUUID } from 'node:crypto';
 import { getPool } from '../db/pool';
 import logger from '../i18n/logger';
-import type { LLMMessage } from '@shared/index';
-import { randomUUID } from 'crypto';
+import { llmRouter } from '../llm/router';
 
 const DEFAULT_OBSERVE_THRESHOLD = 3;
 
@@ -73,13 +73,16 @@ export async function extractFacts(fileHash: string): Promise<{ diffsCreated: nu
     return { diffsCreated: 0 };
   }
 
-  const context = spans.map(s =>
-    `### span_id=${s.span_id} | slug=${s.slug} | lang=${s.lang}\n${s.span_text}`
-  ).join('\n\n');
+  const context = spans
+    .map((s) => `### span_id=${s.span_id} | slug=${s.slug} | lang=${s.lang}\n${s.span_text}`)
+    .join('\n\n');
 
   const llmMessages: LLMMessage[] = [
     { role: 'system', content: FACT_EXTRACT_SYSTEM_PROMPT },
-    { role: 'user', content: `## 文件 hash: ${fileHash}\n\n## 证据片段 (${spans.length} 条)\n${context}` }
+    {
+      role: 'user',
+      content: `## 文件 hash: ${fileHash}\n\n## 证据片段 (${spans.length} 条)\n${context}`
+    }
   ];
 
   let diffCandidates: any[] = [];
@@ -174,10 +177,9 @@ async function persistPendingDiffs(fileHash: string, candidates: any[]): Promise
       evidenceSpanId: c.evidenceSpanId ?? ''
     };
     const confidence = Number(c.confidence) || 0;
-    const impact = (c.impact === 'high' || c.impact === 'medium' || c.impact === 'low')
-      ? c.impact : 'low';
-    const tier = (c.tier === 'green' || c.tier === 'yellow' || c.tier === 'red')
-      ? c.tier : 'yellow';
+    const impact =
+      c.impact === 'high' || c.impact === 'medium' || c.impact === 'low' ? c.impact : 'low';
+    const tier = c.tier === 'green' || c.tier === 'yellow' || c.tier === 'red' ? c.tier : 'yellow';
 
     try {
       await pool.query(
@@ -198,13 +200,13 @@ function deriveSlugFromSpans(fileHash: string): string {
   return `observed:${fileHash.slice(0, 12)}`;
 }
 
-async function markFileStatus(fileHash: string, status: 'partially_extracted' | 'fully_extracted'): Promise<void> {
+async function markFileStatus(
+  fileHash: string,
+  status: 'partially_extracted' | 'fully_extracted'
+): Promise<void> {
   try {
     const pool = getPool();
-    await pool.query(
-      `UPDATE library_files SET status = $1 WHERE hash = $2`,
-      [status, fileHash]
-    );
+    await pool.query(`UPDATE library_files SET status = $1 WHERE hash = $2`, [status, fileHash]);
   } catch (err) {
     logger.warn({ err, fileHash, status }, '更新 library_files 状态失败');
   }

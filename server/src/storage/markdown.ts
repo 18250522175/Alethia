@@ -1,8 +1,15 @@
-import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, statSync, unlinkSync } from 'fs';
-import { join, relative, extname } from 'path';
-import { createHash } from 'crypto';
+import { createHash } from 'node:crypto';
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+  unlinkSync,
+  writeFileSync
+} from 'node:fs';
+import { extname, join, relative } from 'node:path';
 import logger from '../i18n/logger';
-import { loadEnv } from '../config/loader';
 
 export class MarkdownStorage {
   private rootPath: string;
@@ -13,7 +20,6 @@ export class MarkdownStorage {
   private libraryPath: string;
 
   constructor() {
-    const env = loadEnv();
     this.rootPath = process.cwd();
     this.wikiPath = join(this.rootPath, 'wiki');
     this.rawPath = join(this.rootPath, 'raw');
@@ -25,7 +31,13 @@ export class MarkdownStorage {
   }
 
   private ensureDirs(): void {
-    const dirs = [this.wikiPath, this.rawPath, this.summariesPath, this.changelogPath, this.libraryPath];
+    const dirs = [
+      this.wikiPath,
+      this.rawPath,
+      this.summariesPath,
+      this.changelogPath,
+      this.libraryPath
+    ];
     for (const dir of dirs) {
       if (!existsSync(dir)) {
         mkdirSync(dir, { recursive: true });
@@ -67,7 +79,7 @@ export class MarkdownStorage {
   }
 
   atomicWrite(filePath: string, content: string): void {
-    const backupPath = filePath + '.bak';
+    const backupPath = `${filePath}.bak`;
     if (existsSync(filePath)) {
       writeFileSync(backupPath, readFileSync(filePath));
     }

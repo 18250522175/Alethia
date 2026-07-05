@@ -1,7 +1,7 @@
-import { execSync } from 'child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'fs';
-import { tmpdir } from 'os';
-import { join } from 'path';
+import { execSync } from 'node:child_process';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import logger from '../i18n/logger';
 
 export interface AudioSegment {
@@ -58,16 +58,13 @@ export async function transcribeAudio(filePath: string): Promise<TranscribeResul
   const tmpDir = mkdtempSync(join(tmpdir(), 'alethia-whisper-'));
   try {
     const baseName = join(tmpDir, 'out');
-    execSync(
-      `"${whisperBin}" "${filePath}" --output_format json -of "${baseName}"`,
-      {
-        encoding: 'utf-8',
-        maxBuffer: 100 * 1024 * 1024,
-        stdio: ['ignore', 'pipe', 'pipe']
-      }
-    );
+    execSync(`"${whisperBin}" "${filePath}" --output_format json -of "${baseName}"`, {
+      encoding: 'utf-8',
+      maxBuffer: 100 * 1024 * 1024,
+      stdio: ['ignore', 'pipe', 'pipe']
+    });
 
-    const outputFile = baseName + '.json';
+    const outputFile = `${baseName}.json`;
     if (!existsSync(outputFile)) {
       throw new Error('whisper 未生成 JSON 输出文件');
     }
@@ -79,9 +76,7 @@ export async function transcribeAudio(filePath: string): Promise<TranscribeResul
       text: String(s.text || '').trim()
     }));
 
-    const text = segments
-      .map(s => `[${formatTimecode(s.start)}] ${s.text}`)
-      .join('\n');
+    const text = segments.map((s) => `[${formatTimecode(s.start)}] ${s.text}`).join('\n');
 
     return { text, segments, warnings };
   } catch (err) {
@@ -99,5 +94,5 @@ function formatTimecode(seconds: number): string {
   const h = Math.floor(total / 3600);
   const m = Math.floor((total % 3600) / 60);
   const s = total % 60;
-  return [h, m, s].map(n => String(n).padStart(2, '0')).join(':');
+  return [h, m, s].map((n) => String(n).padStart(2, '0')).join(':');
 }

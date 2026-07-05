@@ -1,24 +1,24 @@
-import { useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  ClockCounterClockwise,
-  ArrowCounterClockwise,
-  Copy,
-  Check,
-  Warning,
-  Spinner,
-  Empty,
-  CaretDown,
-  CaretUp,
   Archive,
   ArrowClockwise,
+  ArrowCounterClockwise,
+  CaretDown,
+  CaretUp,
+  Check,
+  ClockCounterClockwise,
+  Copy,
+  Empty,
   FilePlus,
+  FileX,
   Pencil,
-  FileX
+  Spinner,
+  Warning
 } from '@phosphor-icons/react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import api from '../lib/api';
-import { formatRelativeTime, formatDateTime } from '../lib/format';
+import { formatDateTime, formatRelativeTime } from '../lib/format';
 
 interface ChangeLogBatch {
   batchId: string;
@@ -67,7 +67,7 @@ export default function ChangelogPage() {
   };
 
   const toggleTargets = (batchId: string) => {
-    setExpandedTargets(prev => {
+    setExpandedTargets((prev) => {
       const next = new Set(prev);
       if (next.has(batchId)) {
         next.delete(batchId);
@@ -82,8 +82,8 @@ export default function ChangelogPage() {
   const isLoading = changelogQuery.isLoading;
   const isError = changelogQuery.isError;
 
-  const activeBatches = batches.filter(b => !b.batchId.startsWith('archive-'));
-  const archiveBatches = batches.filter(b => b.batchId.startsWith('archive-'));
+  const activeBatches = batches.filter((b) => !b.batchId.startsWith('archive-'));
+  const archiveBatches = batches.filter((b) => b.batchId.startsWith('archive-'));
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -100,11 +100,13 @@ export default function ChangelogPage() {
         <div className="flex items-center gap-2">
           <select
             value={opFilter}
-            onChange={e => setOpFilter(e.target.value)}
+            onChange={(e) => setOpFilter(e.target.value)}
             className="input w-auto"
           >
-            {OP_FILTERS.map(f => (
-              <option key={f.id} value={f.id}>{f.label}</option>
+            {OP_FILTERS.map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.label}
+              </option>
             ))}
           </select>
           <button
@@ -148,7 +150,7 @@ export default function ChangelogPage() {
                 近期变更 ({activeBatches.length})
               </h2>
               <div className="space-y-3">
-                {activeBatches.map(batch => (
+                {activeBatches.map((batch) => (
                   <BatchCard
                     key={batch.batchId}
                     batch={batch}
@@ -157,7 +159,9 @@ export default function ChangelogPage() {
                     onCopy={() => handleCopy(batch.batchId)}
                     onToggle={() => toggleTargets(batch.batchId)}
                     onRollback={() => rollbackMutation.mutate(batch.batchId)}
-                    rollingBack={rollbackMutation.isPending && rollbackMutation.variables === batch.batchId}
+                    rollingBack={
+                      rollbackMutation.isPending && rollbackMutation.variables === batch.batchId
+                    }
                   />
                 ))}
               </div>
@@ -178,7 +182,7 @@ export default function ChangelogPage() {
               </button>
               {archiveExpanded && (
                 <div className="space-y-3 animate-fade-in">
-                  {archiveBatches.map(batch => (
+                  {archiveBatches.map((batch) => (
                     <BatchCard
                       key={batch.batchId}
                       batch={batch}
@@ -228,7 +232,6 @@ function BatchCard({
   rollingBack,
   archived
 }: BatchCardProps) {
-  const { t } = useTranslation();
   const createCount = batch.opCounts.create || 0;
   const updateCount = batch.opCounts.update || 0;
   const deleteCount = batch.opCounts.delete || 0;
@@ -257,7 +260,10 @@ function BatchCard({
             </button>
           </span>
         </div>
-        <div className="text-xs text-slate-500 dark:text-slate-400" title={formatDateTime(batch.ts)}>
+        <div
+          className="text-xs text-slate-500 dark:text-slate-400"
+          title={formatDateTime(batch.ts)}
+        >
           {formatRelativeTime(batch.ts)}
         </div>
       </div>
@@ -318,15 +324,9 @@ function BatchCard({
       </div>
 
       <div className="mt-3 flex items-center justify-between">
-        <div className="text-xs text-slate-400">
-          {formatDateTime(batch.ts)}
-        </div>
+        <div className="text-xs text-slate-400">{formatDateTime(batch.ts)}</div>
         {onRollback && !archived && (
-          <button
-            onClick={onRollback}
-            disabled={rollingBack}
-            className="btn btn-danger text-sm"
-          >
+          <button onClick={onRollback} disabled={rollingBack} className="btn btn-danger text-sm">
             <ArrowCounterClockwise size={14} className="mr-1" />
             {rollingBack ? '回滚中...' : '回滚此批次'}
           </button>

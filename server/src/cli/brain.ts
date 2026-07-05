@@ -1,20 +1,15 @@
+import type { EvidenceSpan, ExtractReport, HealthDashboard, RebuildReport } from '@shared/index';
 import { brainAPI } from '../brainapi';
 import logger from '../i18n/logger';
-import type {
-  EvidenceSpan,
-  HealthDashboard,
-  RebuildReport,
-  ExtractReport
-} from '@shared/index';
 
 // ANSI 颜色码
 const ANSI = {
-  green: '\x1b[32m',
-  red: '\x1b[31m',
-  yellow: '\x1b[33m',
-  cyan: '\x1b[36m',
-  dim: '\x1b[2m',
-  reset: '\x1b[0m'
+  green: '\x1B[32m',
+  red: '\x1B[31m',
+  yellow: '\x1B[33m',
+  cyan: '\x1B[36m',
+  dim: '\x1B[2m',
+  reset: '\x1B[0m'
 } as const;
 
 function printSuccess(msg: string): void {
@@ -79,7 +74,8 @@ function formatEvidenceList(sources: EvidenceSpan[]): string {
 
 function formatDashboard(d: HealthDashboard): string {
   const pct = (n: number) => `${(n * 100).toFixed(1)}%`;
-  const backlog = (label: string, color: string, n: number) => `${color}${label}${ANSI.reset}: ${n}`;
+  const backlog = (label: string, color: string, n: number) =>
+    `${color}${label}${ANSI.reset}: ${n}`;
   const dailyOver = d.budget.daily.exceeded ? ` ${ANSI.red}[超限]${ANSI.reset}` : '';
   const monthlyOver = d.budget.monthly.exceeded ? ` ${ANSI.red}[超限]${ANSI.reset}` : '';
   return [
@@ -127,7 +123,9 @@ async function cmdAsk(args: string[]): Promise<void> {
       `Tokens: ${result.tokensUsed}  估算成本: $${result.estimatedCost.toFixed(4)}${ANSI.reset}`
   );
   if (result.relatedEntities.length > 0) {
-    printInfo(`${ANSI.dim}相关实体: ${result.relatedEntities.map((e) => e.title).join(', ')}${ANSI.reset}`);
+    printInfo(
+      `${ANSI.dim}相关实体: ${result.relatedEntities.map((e) => e.title).join(', ')}${ANSI.reset}`
+    );
   }
 }
 
@@ -140,7 +138,9 @@ async function cmdRebuildStruct(): Promise<void> {
 
 async function cmdExtractPending(): Promise<void> {
   const report: ExtractReport = await brainAPI.extractPending();
-  printSuccess(`提取完成: 处理 ${report.processed} 个文件, 创建 ${report.pendingDiffsCreated} 个待审核变更`);
+  printSuccess(
+    `提取完成: 处理 ${report.processed} 个文件, 创建 ${report.pendingDiffsCreated} 个待审核变更`
+  );
   if (report.errors.length > 0) {
     printError(`发生 ${report.errors.length} 个错误:`);
     for (const e of report.errors) {

@@ -1,6 +1,6 @@
+import { defaultSettings } from '../src/config/defaults';
 import { getPool } from '../src/db/pool';
 import logger from '../src/i18n/logger';
-import { defaultSettings } from '../src/config/defaults';
 
 async function seedSettings(client: any): Promise<void> {
   const result = await client.query('SELECT COUNT(*) as count FROM settings');

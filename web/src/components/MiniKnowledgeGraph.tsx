@@ -1,8 +1,9 @@
+import type { Core, ElementDefinition } from 'cytoscape';
+import { Graph as GraphIcon, Warning } from '@phosphor-icons/react';
+import cytoscape from 'cytoscape';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import cytoscape, { Core, ElementDefinition } from 'cytoscape';
-import { Graph as GraphIcon, Spinner, Warning } from '@phosphor-icons/react';
 
 interface MiniKnowledgeGraphProps {
   currentSlug: string;
@@ -31,7 +32,7 @@ export default function MiniKnowledgeGraph({
           type: 'current'
         }
       },
-      ...relatedEntities.map(entity => ({
+      ...relatedEntities.map((entity) => ({
         data: {
           id: entity.slug,
           label: entity.title,
@@ -60,14 +61,14 @@ export default function MiniKnowledgeGraph({
           selector: 'node',
           style: {
             'background-color': '#6366f1',
-            'label': 'data(label)',
-            'color': '#475569',
+            label: 'data(label)',
+            color: '#475569',
             'font-size': '10px',
             'text-valign': 'bottom',
             'text-halign': 'center',
             'text-margin-y': 4,
-            'width': 20,
-            'height': 20
+            width: 20,
+            height: 20
           }
         },
         {
@@ -76,20 +77,20 @@ export default function MiniKnowledgeGraph({
             'background-color': '#f59e0b',
             'border-width': 3,
             'border-color': '#d97706',
-            'width': 28,
-            'height': 28,
+            width: 28,
+            height: 28,
             'font-weight': 'bold'
           }
         },
         {
           selector: 'edge',
           style: {
-            'width': 1,
+            width: 1,
             'line-color': '#cbd5e1',
             'target-arrow-color': '#cbd5e1',
             'target-arrow-shape': 'triangle',
             'curve-style': 'bezier',
-            'label': 'data(relation)',
+            label: 'data(relation)',
             'font-size': '8px',
             'text-rotation': 'autorotate',
             'text-margin-y': -6
@@ -101,10 +102,12 @@ export default function MiniKnowledgeGraph({
         animate: true,
         animationDuration: 300,
         padding: 20,
-        concentric: function(node: any) {
+        concentric(node: any) {
           return node.data('type') === 'current' ? 2 : 1;
         },
-        levelWidth: function() { return 1; }
+        levelWidth() {
+          return 1;
+        }
       } as any
     });
 
@@ -119,22 +122,28 @@ export default function MiniKnowledgeGraph({
     });
 
     cy.on('tap', 'edge', (evt) => {
-      evt.target.animate({
-        style: {
-          'line-color': '#f59e0b',
-          'width': 3
+      evt.target.animate(
+        {
+          style: {
+            'line-color': '#f59e0b',
+            width: 3
+          }
+        },
+        {
+          duration: 200,
+          complete() {
+            evt.target.animate(
+              {
+                style: {
+                  'line-color': '#cbd5e1',
+                  width: 1
+                }
+              },
+              { duration: 200 }
+            );
+          }
         }
-      }, {
-        duration: 200,
-        complete: function() {
-          evt.target.animate({
-            style: {
-              'line-color': '#cbd5e1',
-              'width': 1
-            }
-          }, { duration: 200 });
-        }
-      });
+      );
     });
 
     return () => {

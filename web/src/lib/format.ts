@@ -3,12 +3,12 @@ export function formatFileSize(bytes: number): string {
   const k = 1024;
   const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
+  return `${Number.parseFloat((bytes / k ** i).toFixed(2))} ${sizes[i]}`;
 }
 
 export function formatDateTime(ts: string | number | Date): string {
   const date = typeof ts === 'string' || typeof ts === 'number' ? new Date(ts) : ts;
-  if (isNaN(date.getTime())) return '—';
+  if (Number.isNaN(date.getTime())) return '—';
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
   const d = String(date.getDate()).padStart(2, '0');
@@ -19,7 +19,7 @@ export function formatDateTime(ts: string | number | Date): string {
 
 export function formatRelativeTime(ts: string | number | Date): string {
   const date = typeof ts === 'string' || typeof ts === 'number' ? new Date(ts) : ts;
-  if (isNaN(date.getTime())) return '—';
+  if (Number.isNaN(date.getTime())) return '—';
   const diff = Date.now() - date.getTime();
   const secs = Math.floor(diff / 1000);
   if (secs < 60) return '刚刚';
@@ -39,7 +39,7 @@ export function formatRelativeTime(ts: string | number | Date): string {
 
 export function formatRelativeTimeShort(ts: string | number | Date): string {
   const date = typeof ts === 'string' || typeof ts === 'number' ? new Date(ts) : ts;
-  if (isNaN(date.getTime())) return '—';
+  if (Number.isNaN(date.getTime())) return '—';
   const diff = Date.now() - date.getTime();
   const secs = Math.floor(diff / 1000);
   if (secs < 60) return '刚刚';
@@ -87,12 +87,12 @@ export function formatDuration(ms: number): string {
 export function truncateText(text: string, maxLen: number = 100): string {
   if (!text) return '';
   if (text.length <= maxLen) return text;
-  return text.slice(0, maxLen) + '…';
+  return `${text.slice(0, maxLen)}…`;
 }
 
 export function slugToTitle(slug: string): string {
   return slug
     .replace(/[-_]/g, ' ')
-    .replace(/\b\w/g, c => c.toUpperCase())
+    .replace(/\b\w/g, (c) => c.toUpperCase())
     .trim();
 }

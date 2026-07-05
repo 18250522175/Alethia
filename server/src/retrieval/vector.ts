@@ -1,6 +1,6 @@
 import { getPool } from '../db/pool';
-import { getEmbedding } from '../llm/embed';
 import logger from '../i18n/logger';
+import { getEmbedding } from '../llm/embed';
 
 export interface VectorSearchResult {
   page_id: number;
@@ -33,7 +33,7 @@ export async function vectorSearch(query: string, k: number = 10): Promise<Vecto
       page_id: row.page_id,
       slug: row.slug,
       title: row.title,
-      score: parseFloat(row.score)
+      score: Number.parseFloat(row.score)
     }));
   } catch (err) {
     logger.error({ err, query: query.slice(0, 100) }, '向量检索失败，可能是向量数据库未就绪');

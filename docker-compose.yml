@@ -17,9 +17,9 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - '5432:5432'
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U alethia -d alethia"]
+      test: [CMD-SHELL, pg_isready -U alethia -d alethia]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -47,14 +47,14 @@ services:
     environment:
       NODE_ENV: production
       DATABASE_URL: postgres://${POSTGRES_USER:-alethia}:${POSTGRES_PASSWORD:-alethia}@postgres:5432/${POSTGRES_DB:-alethia}
-      BRAIN_PORT: "3000"
+      BRAIN_PORT: '3000'
       TZ: Asia/Shanghai
     # 日志轮转：避免日志文件无限增长撑满磁盘
     logging:
       driver: local
       options:
-        max-size: "10m"
-        max-file: "3"
+        max-size: 10m
+        max-file: '3'
     volumes:
       - wiki_data:/app/wiki
       - library_data:/app/server/data/library
@@ -62,11 +62,11 @@ services:
       - raw_data:/app/server/data/raw
       - summaries_data:/app/server/data/summaries
     ports:
-      - "3000:3000"
+      - '3000:3000'
     networks:
       - alethia-net
     healthcheck:
-      test: ["CMD-SHELL", "curl -fs http://localhost:3000/health || exit 1"]
+      test: [CMD-SHELL, 'curl -fs http://localhost:3000/health || exit 1']
       interval: 30s
       timeout: 5s
       retries: 3
@@ -83,18 +83,18 @@ services:
       server:
         condition: service_healthy
     ports:
-      - "80:80"
+      - '80:80'
       # 如需 HTTPS，请使用反向代理（如 Traefik/Caddy）或在此处挂载证书
     # 日志轮转：避免日志文件无限增长撑满磁盘
     logging:
       driver: local
       options:
-        max-size: "10m"
-        max-file: "3"
+        max-size: 10m
+        max-file: '3'
     networks:
       - alethia-net
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O- http://localhost/ || exit 1"]
+      test: [CMD-SHELL, 'wget -q -O- http://localhost/ || exit 1']
       interval: 30s
       timeout: 5s
       retries: 3
@@ -113,11 +113,11 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER:-alethia}:${POSTGRES_PASSWORD:-alethia}@postgres:5432/${POSTGRES_DB:-alethia}
       LANGUAGE: zh-CN
       NODE_ENV: production
-    entrypoint: ["/bin/sh", "/app/init.sh"]
+    entrypoint: [/bin/sh, /app/init.sh]
     volumes:
       - ./init.sh:/app/init.sh:ro
       - wiki_data:/app/wiki
-    restart: "no"
+    restart: no
     networks:
       - alethia-net
 

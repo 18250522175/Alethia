@@ -1,36 +1,29 @@
-import { useState, useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
 import {
-  Palette,
-  Gauge,
-  Translate,
-  Wallet,
-  Shield,
-  Eye,
-  ClockCounterClockwise,
-  Folder,
-  PuzzlePiece,
-  Flask,
-  Check,
-  WifiHigh,
-  Database,
-  Brain,
-  ArrowDown,
-  ClipboardText,
-  SlidersHorizontal,
-  FloppyDisk,
   ArrowCounterClockwise,
-  Trash,
-  DotsThreeVertical,
-  Plug,
+  ArrowDown,
+  Brain,
+  Check,
   CheckCircle,
-  XCircle,
+  ClipboardText,
+  Database,
+  DotsThreeVertical,
+  FloppyDisk,
+  Folder,
+  Lightning,
+  Palette,
+  Plug,
+  SlidersHorizontal,
   Spinner,
-  Lightning
+  Translate,
+  Trash,
+  Wallet,
+  XCircle
 } from '@phosphor-icons/react';
-import { useSettings } from '../store/SettingsContext';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import api from '../lib/api';
+import { useSettings } from '../store/SettingsContext';
 import { useTheme } from '../store/ThemeContext';
 
 const sections = [
@@ -43,7 +36,7 @@ const sections = [
   { id: 'nli', icon: ClipboardText, label: 'NLI' },
   { id: 'data', icon: Folder, label: '数据' },
   { id: 'advanced', icon: SlidersHorizontal, label: '高级' },
-  { id: 'diagnostics', icon: Plug, label: '集成诊断' },
+  { id: 'diagnostics', icon: Plug, label: '集成诊断' }
 ];
 
 export default function SettingsPage() {
@@ -111,9 +104,7 @@ export default function SettingsPage() {
         <h1 className="text-2xl font-bold">{t('settings.title')}</h1>
         <div className="flex items-center gap-2">
           {isDirty && (
-            <span className="text-xs text-amber-600 dark:text-amber-400">
-              有未保存的更改
-            </span>
+            <span className="text-xs text-amber-600 dark:text-amber-400">有未保存的更改</span>
           )}
           {saveStatus === 'saved' && (
             <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
@@ -191,9 +182,7 @@ export default function SettingsPage() {
           {activeSection === 'advanced' && (
             <AdvancedSettings settings={localSettings} onChange={handleChange} />
           )}
-          {activeSection === 'diagnostics' && (
-            <DiagnosticsSettings />
-          )}
+          {activeSection === 'diagnostics' && <DiagnosticsSettings />}
         </div>
       </div>
     </div>
@@ -223,11 +212,13 @@ function AppearanceSettings({ settings, onChange }: SettingsSectionProps) {
         <div>
           <label className="mb-3 block text-sm font-medium">主题模式</label>
           <div className="flex gap-3">
-            {([
-              { id: 'system', label: '跟随系统' },
-              { id: 'light', label: '浅色' },
-              { id: 'dark', label: '深色' },
-            ] as const).map((t) => (
+            {(
+              [
+                { id: 'system', label: '跟随系统' },
+                { id: 'light', label: '浅色' },
+                { id: 'dark', label: '深色' }
+              ] as const
+            ).map((t) => (
               <button
                 key={t.id}
                 onClick={() => handleThemeChange(t.id)}
@@ -242,7 +233,7 @@ function AppearanceSettings({ settings, onChange }: SettingsSectionProps) {
           <label className="mb-2 block text-sm font-medium">字体大小</label>
           <select
             value={settings.appearance?.fontSize || 'medium'}
-            onChange={e => onChange('appearance.fontSize', e.target.value)}
+            onChange={(e) => onChange('appearance.fontSize', e.target.value)}
             className="input max-w-xs"
           >
             <option value="small">小</option>
@@ -262,11 +253,15 @@ function AppearanceSettings({ settings, onChange }: SettingsSectionProps) {
                     ? 'ring-2 ring-offset-2 ring-slate-400'
                     : ''
                 } ${
-                  color === 'blue' ? 'bg-blue-500' :
-                  color === 'purple' ? 'bg-purple-500' :
-                  color === 'green' ? 'bg-green-500' :
-                  color === 'orange' ? 'bg-orange-500' :
-                  'bg-pink-500'
+                  color === 'blue'
+                    ? 'bg-blue-500'
+                    : color === 'purple'
+                      ? 'bg-purple-500'
+                      : color === 'green'
+                        ? 'bg-green-500'
+                        : color === 'orange'
+                          ? 'bg-orange-500'
+                          : 'bg-pink-500'
                 }`}
               />
             ))}
@@ -276,7 +271,7 @@ function AppearanceSettings({ settings, onChange }: SettingsSectionProps) {
           <label className="mb-2 block text-sm font-medium">密度</label>
           <select
             value={settings.appearance?.density || 'comfortable'}
-            onChange={e => onChange('appearance.density', e.target.value)}
+            onChange={(e) => onChange('appearance.density', e.target.value)}
             className="input max-w-xs"
           >
             <option value="compact">紧凑</option>
@@ -309,7 +304,7 @@ function LanguageSettings({ settings, onChange }: SettingsSectionProps) {
           <div className="grid gap-3 sm:grid-cols-2">
             {[
               { code: 'zh-CN', label: '简体中文', flag: '🇨🇳' },
-              { code: 'en', label: 'English', flag: '🇺🇸' },
+              { code: 'en', label: 'English', flag: '🇺🇸' }
             ].map((lang) => (
               <button
                 key={lang.code}
@@ -333,7 +328,7 @@ function LanguageSettings({ settings, onChange }: SettingsSectionProps) {
           <label className="mb-2 block text-sm font-medium">知识库默认语言</label>
           <select
             value={settings.language?.defaultKnowledgeLang || 'zh-CN'}
-            onChange={e => onChange('language.defaultKnowledgeLang', e.target.value)}
+            onChange={(e) => onChange('language.defaultKnowledgeLang', e.target.value)}
             className="input max-w-xs"
           >
             <option value="zh-CN">简体中文</option>
@@ -345,7 +340,7 @@ function LanguageSettings({ settings, onChange }: SettingsSectionProps) {
           <input
             type="checkbox"
             checked={settings.language?.autoTranslateEvidence !== false}
-            onChange={e => onChange('language.autoTranslateEvidence', e.target.checked)}
+            onChange={(e) => onChange('language.autoTranslateEvidence', e.target.checked)}
             className="h-4 w-4 rounded"
           />
           <span className="text-sm">自动翻译证据片段</span>
@@ -356,22 +351,6 @@ function LanguageSettings({ settings, onChange }: SettingsSectionProps) {
 }
 
 function BudgetSettings({ settings, onChange }: SettingsSectionProps) {
-  const queryClient = useQueryClient();
-
-  const budgetQuery = useQuery({
-    queryKey: ['budget-remaining'],
-    queryFn: () => api.getBudgetRemaining(),
-    staleTime: 60_000,
-    enabled: false
-  });
-
-  const updateBudgetMutation = useMutation({
-    mutationFn: (amount: number) => api.updateDailyBudget(amount),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['budget-remaining'] });
-    }
-  });
-
   return (
     <div className="card p-6">
       <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold">
@@ -385,8 +364,8 @@ function BudgetSettings({ settings, onChange }: SettingsSectionProps) {
             <input
               type="number"
               value={settings.budget?.daily ?? 5}
-              onChange={e => {
-                const val = parseFloat(e.target.value);
+              onChange={(e) => {
+                const val = Number.parseFloat(e.target.value);
                 onChange('budget.daily', val);
               }}
               min={0}
@@ -399,7 +378,7 @@ function BudgetSettings({ settings, onChange }: SettingsSectionProps) {
             <input
               type="number"
               value={settings.budget?.monthly ?? 50}
-              onChange={e => onChange('budget.monthly', parseFloat(e.target.value))}
+              onChange={(e) => onChange('budget.monthly', Number.parseFloat(e.target.value))}
               min={0}
               step="1"
               className="input"
@@ -410,7 +389,7 @@ function BudgetSettings({ settings, onChange }: SettingsSectionProps) {
             <input
               type="number"
               value={settings.budget?.perQuery ?? 0.5}
-              onChange={e => onChange('budget.perQuery', parseFloat(e.target.value))}
+              onChange={(e) => onChange('budget.perQuery', Number.parseFloat(e.target.value))}
               min={0}
               step="0.01"
               className="input"
@@ -422,7 +401,7 @@ function BudgetSettings({ settings, onChange }: SettingsSectionProps) {
             <input
               type="checkbox"
               checked={settings.budget?.nightFuse !== false}
-              onChange={e => onChange('budget.nightFuse', e.target.checked)}
+              onChange={(e) => onChange('budget.nightFuse', e.target.checked)}
               className="h-4 w-4 rounded"
             />
             <span className="text-sm">启用夜间熔断（23:00-06:00 限制使用）</span>
@@ -431,7 +410,7 @@ function BudgetSettings({ settings, onChange }: SettingsSectionProps) {
             <input
               type="checkbox"
               checked={settings.budget?.alertEnabled !== false}
-              onChange={e => onChange('budget.alertEnabled', e.target.checked)}
+              onChange={(e) => onChange('budget.alertEnabled', e.target.checked)}
               className="h-4 w-4 rounded"
             />
             <span className="text-sm">预算告警</span>
@@ -443,7 +422,7 @@ function BudgetSettings({ settings, onChange }: SettingsSectionProps) {
               min={50}
               max={100}
               value={settings.budget?.alertThreshold ?? 80}
-              onChange={e => onChange('budget.alertThreshold', parseInt(e.target.value))}
+              onChange={(e) => onChange('budget.alertThreshold', Number.parseInt(e.target.value))}
               className="w-full max-w-xs"
             />
             <span className="ml-2 text-sm text-slate-500">
@@ -469,7 +448,7 @@ function ModelAllocationSettings({ settings, onChange }: SettingsSectionProps) {
     { id: 'extraction', label: '提取', description: '信息抽取、实体识别' },
     { id: 'reasoning', label: '推理', description: '复杂推理、多步反思' },
     { id: 'rewrite', label: '改写', description: '知识改写、内容优化' },
-    { id: 'draft', label: '草稿', description: '草稿生成、初始写作' },
+    { id: 'draft', label: '草稿', description: '草稿生成、初始写作' }
   ];
 
   const adapters = adaptersQuery.data?.adapters || [];
@@ -484,7 +463,7 @@ function ModelAllocationSettings({ settings, onChange }: SettingsSectionProps) {
         为不同任务类型分配最适合的模型。拖动调整优先级。
       </p>
       <div className="space-y-3">
-        {tasks.map(task => (
+        {tasks.map((task) => (
           <div
             key={task.id}
             className="flex items-center gap-4 rounded-lg border border-slate-200 p-4 dark:border-slate-700"
@@ -499,7 +478,7 @@ function ModelAllocationSettings({ settings, onChange }: SettingsSectionProps) {
             <div className="w-64">
               <select
                 value={settings.models?.[task.id] || ''}
-                onChange={e => onChange(`models.${task.id}`, e.target.value)}
+                onChange={(e) => onChange(`models.${task.id}`, e.target.value)}
                 className="input w-full text-sm"
               >
                 <option value="">自动选择</option>
@@ -529,7 +508,7 @@ function EmbeddingSettings({ settings, onChange }: SettingsSectionProps) {
           <label className="mb-2 block text-sm font-medium">嵌入模型</label>
           <select
             value={settings.embedding?.model || 'bge-m3'}
-            onChange={e => onChange('embedding.model', e.target.value)}
+            onChange={(e) => onChange('embedding.model', e.target.value)}
             className="input max-w-md"
           >
             <option value="bge-m3">BAAI/bge-m3（多语言）</option>
@@ -542,7 +521,7 @@ function EmbeddingSettings({ settings, onChange }: SettingsSectionProps) {
           <label className="mb-2 block text-sm font-medium">向量维度</label>
           <select
             value={settings.embedding?.dimensions || 1024}
-            onChange={e => onChange('embedding.dimensions', parseInt(e.target.value))}
+            onChange={(e) => onChange('embedding.dimensions', Number.parseInt(e.target.value))}
             className="input max-w-xs"
           >
             <option value={512}>512 维</option>
@@ -558,7 +537,7 @@ function EmbeddingSettings({ settings, onChange }: SettingsSectionProps) {
             min={3}
             max={50}
             value={settings.embedding?.topK ?? 10}
-            onChange={e => onChange('embedding.topK', parseInt(e.target.value))}
+            onChange={(e) => onChange('embedding.topK', Number.parseInt(e.target.value))}
             className="w-full max-w-xs"
           />
           <span className="ml-2 text-sm text-slate-500">
@@ -569,7 +548,7 @@ function EmbeddingSettings({ settings, onChange }: SettingsSectionProps) {
           <input
             type="checkbox"
             checked={settings.embedding?.hybridSearch !== false}
-            onChange={e => onChange('embedding.hybridSearch', e.target.checked)}
+            onChange={(e) => onChange('embedding.hybridSearch', e.target.checked)}
             className="h-4 w-4 rounded"
           />
           <span className="text-sm">启用混合检索（BM25 + 向量）</span>
@@ -591,7 +570,7 @@ function RerankingSettings({ settings, onChange }: SettingsSectionProps) {
           <input
             type="checkbox"
             checked={settings.reranking?.enabled !== false}
-            onChange={e => onChange('reranking.enabled', e.target.checked)}
+            onChange={(e) => onChange('reranking.enabled', e.target.checked)}
             className="h-4 w-4 rounded"
           />
           <span className="text-sm">启用重排序</span>
@@ -600,7 +579,7 @@ function RerankingSettings({ settings, onChange }: SettingsSectionProps) {
           <label className="mb-2 block text-sm font-medium">重排序模型</label>
           <select
             value={settings.reranking?.model || 'bge-reranker-v2-m3'}
-            onChange={e => onChange('reranking.model', e.target.value)}
+            onChange={(e) => onChange('reranking.model', e.target.value)}
             disabled={settings.reranking?.enabled === false}
             className="input max-w-md disabled:opacity-50"
           >
@@ -616,7 +595,7 @@ function RerankingSettings({ settings, onChange }: SettingsSectionProps) {
             min={1}
             max={20}
             value={settings.reranking?.topN ?? 5}
-            onChange={e => onChange('reranking.topN', parseInt(e.target.value))}
+            onChange={(e) => onChange('reranking.topN', Number.parseInt(e.target.value))}
             className="w-full max-w-xs"
             disabled={settings.reranking?.enabled === false}
           />
@@ -644,7 +623,7 @@ function NLISettings({ settings, onChange }: SettingsSectionProps) {
           <input
             type="checkbox"
             checked={settings.nli?.enabled !== false}
-            onChange={e => onChange('nli.enabled', e.target.checked)}
+            onChange={(e) => onChange('nli.enabled', e.target.checked)}
             className="h-4 w-4 rounded"
           />
           <span className="text-sm">启用 NLI 验证</span>
@@ -653,7 +632,7 @@ function NLISettings({ settings, onChange }: SettingsSectionProps) {
           <label className="mb-2 block text-sm font-medium">NLI 模型</label>
           <select
             value={settings.nli?.model || 'xiaobu-v2'}
-            onChange={e => onChange('nli.model', e.target.value)}
+            onChange={(e) => onChange('nli.model', e.target.value)}
             disabled={settings.nli?.enabled === false}
             className="input max-w-md disabled:opacity-50"
           >
@@ -669,7 +648,9 @@ function NLISettings({ settings, onChange }: SettingsSectionProps) {
             min={0}
             max={100}
             value={(settings.nli?.entailmentThreshold ?? 0.7) * 100}
-            onChange={e => onChange('nli.entailmentThreshold', parseInt(e.target.value) / 100)}
+            onChange={(e) =>
+              onChange('nli.entailmentThreshold', Number.parseInt(e.target.value) / 100)
+            }
             className="w-full max-w-xs"
             disabled={settings.nli?.enabled === false}
           />
@@ -681,7 +662,7 @@ function NLISettings({ settings, onChange }: SettingsSectionProps) {
           <label className="mb-2 block text-sm font-medium">多轮反思次数</label>
           <select
             value={settings.nli?.maxReflections ?? 3}
-            onChange={e => onChange('nli.maxReflections', parseInt(e.target.value))}
+            onChange={(e) => onChange('nli.maxReflections', Number.parseInt(e.target.value))}
             disabled={settings.nli?.enabled === false}
             className="input max-w-xs disabled:opacity-50"
           >
@@ -710,7 +691,7 @@ function DataSettings({ settings, onChange }: SettingsSectionProps) {
           <input
             type="text"
             value={settings.data?.libraryPath || './library'}
-            onChange={e => onChange('data.libraryPath', e.target.value)}
+            onChange={(e) => onChange('data.libraryPath', e.target.value)}
             className="input font-mono text-sm"
           />
         </div>
@@ -719,7 +700,7 @@ function DataSettings({ settings, onChange }: SettingsSectionProps) {
           <input
             type="text"
             value={settings.data?.observedPath || './observed'}
-            onChange={e => onChange('data.observedPath', e.target.value)}
+            onChange={(e) => onChange('data.observedPath', e.target.value)}
             className="input font-mono text-sm"
           />
         </div>
@@ -727,7 +708,7 @@ function DataSettings({ settings, onChange }: SettingsSectionProps) {
           <input
             type="checkbox"
             checked={settings.data?.autoObserve !== false}
-            onChange={e => onChange('data.autoObserve', e.target.checked)}
+            onChange={(e) => onChange('data.autoObserve', e.target.checked)}
             className="h-4 w-4 rounded"
           />
           <span className="text-sm">自动观察文件变化</span>
@@ -736,7 +717,7 @@ function DataSettings({ settings, onChange }: SettingsSectionProps) {
           <input
             type="checkbox"
             checked={settings.data?.versionControl !== false}
-            onChange={e => onChange('data.versionControl', e.target.checked)}
+            onChange={(e) => onChange('data.versionControl', e.target.checked)}
             className="h-4 w-4 rounded"
           />
           <span className="text-sm">启用版本控制（自动归档历史版本）</span>
@@ -745,7 +726,7 @@ function DataSettings({ settings, onChange }: SettingsSectionProps) {
           <label className="mb-2 block text-sm font-medium">版本保留数量</label>
           <select
             value={settings.data?.maxVersions ?? 50}
-            onChange={e => onChange('data.maxVersions', parseInt(e.target.value))}
+            onChange={(e) => onChange('data.maxVersions', Number.parseInt(e.target.value))}
             className="input max-w-xs"
           >
             <option value={10}>10 个版本</option>
@@ -785,7 +766,7 @@ function AdvancedSettings({ settings, onChange }: SettingsSectionProps) {
           <input
             type="checkbox"
             checked={settings.advanced?.shadowEval !== false}
-            onChange={e => onChange('advanced.shadowEval', e.target.checked)}
+            onChange={(e) => onChange('advanced.shadowEval', e.target.checked)}
             className="h-4 w-4 rounded"
           />
           <span className="text-sm">启用影子评测（后台自动评估输出质量）</span>
@@ -794,7 +775,7 @@ function AdvancedSettings({ settings, onChange }: SettingsSectionProps) {
           <input
             type="checkbox"
             checked={settings.advanced?.semanticRings !== false}
-            onChange={e => onChange('advanced.semanticRings', e.target.checked)}
+            onChange={(e) => onChange('advanced.semanticRings', e.target.checked)}
             className="h-4 w-4 rounded"
           />
           <span className="text-sm">启用语义年轮</span>
@@ -803,7 +784,7 @@ function AdvancedSettings({ settings, onChange }: SettingsSectionProps) {
           <label className="mb-2 block text-sm font-medium">日志级别</label>
           <select
             value={settings.advanced?.logLevel || 'info'}
-            onChange={e => onChange('advanced.logLevel', e.target.value)}
+            onChange={(e) => onChange('advanced.logLevel', e.target.value)}
             className="input max-w-xs"
           >
             <option value="debug">Debug（详细）</option>
@@ -817,7 +798,7 @@ function AdvancedSettings({ settings, onChange }: SettingsSectionProps) {
           <input
             type="number"
             value={settings.advanced?.timeout ?? 60}
-            onChange={e => onChange('advanced.timeout', parseInt(e.target.value))}
+            onChange={(e) => onChange('advanced.timeout', Number.parseInt(e.target.value))}
             min={10}
             className="input max-w-xs"
           />
@@ -827,7 +808,7 @@ function AdvancedSettings({ settings, onChange }: SettingsSectionProps) {
           <input
             type="number"
             value={settings.advanced?.concurrency ?? 3}
-            onChange={e => onChange('advanced.concurrency', parseInt(e.target.value))}
+            onChange={(e) => onChange('advanced.concurrency', Number.parseInt(e.target.value))}
             min={1}
             max={20}
             className="input max-w-xs"
@@ -886,7 +867,7 @@ function DiagnosticsSettings() {
         </div>
       ) : (
         <div className="space-y-3">
-          {adapters.map(adapter => (
+          {adapters.map((adapter) => (
             <AdapterDiagnosticRow key={adapter.id} adapter={adapter} />
           ))}
         </div>
@@ -918,14 +899,24 @@ function AdapterDiagnosticRow({ adapter }: { adapter: LlmAdapterInfo }) {
           </span>
           <span
             className={`badge ${adapter.enabled ? 'badge-green' : 'badge-red'}`}
-            title={adapter.enabled ? t('diagnostics.enabled', '已启用') : t('diagnostics.disabled', '未启用')}
+            title={
+              adapter.enabled
+                ? t('diagnostics.enabled', '已启用')
+                : t('diagnostics.disabled', '未启用')
+            }
           >
-            {adapter.enabled ? t('diagnostics.enabled', '已启用') : t('diagnostics.disabled', '未启用')}
+            {adapter.enabled
+              ? t('diagnostics.enabled', '已启用')
+              : t('diagnostics.disabled', '未启用')}
           </span>
           {adapter.apiKeyConfigured !== undefined && (
             <span
               className={`badge ${adapter.apiKeyConfigured ? 'badge-green' : 'badge-red'}`}
-              title={adapter.apiKeyConfigured ? t('diagnostics.apiKeyConfigured') : t('diagnostics.apiKeyMissing')}
+              title={
+                adapter.apiKeyConfigured
+                  ? t('diagnostics.apiKeyConfigured')
+                  : t('diagnostics.apiKeyMissing')
+              }
             >
               {adapter.apiKeyConfigured
                 ? t('diagnostics.apiKeyConfigured')
@@ -963,7 +954,9 @@ function AdapterDiagnosticRow({ adapter }: { adapter: LlmAdapterInfo }) {
         {result && result.ok && (
           <p className="flex items-center gap-1.5 text-xs font-medium text-green-600 dark:text-green-400">
             <CheckCircle size={14} />
-            {t('diagnostics.success', '连接成功')} · {t('diagnostics.latency', '延迟')}：{result.latencyMs}ms
+            {t('diagnostics.success', '连接成功')} ·{t('diagnostics.latency', '延迟')}：
+            {result.latencyMs}
+            ms
           </p>
         )}
         {((result && !result.ok) || isError) && (

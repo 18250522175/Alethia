@@ -1,21 +1,19 @@
-import { useTranslation } from 'react-i18next';
-import { useAuth } from '../store/AuthContext';
-import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
-import api from '../lib/api';
-import { formatRelativeTime } from '../lib/format';
 import {
   BookOpen,
-  Graph,
   ChatsCircle,
-  Gauge,
-  Shuffle,
-  Question,
   Clock,
+  Gauge,
+  Graph,
   Lightbulb,
-  MagnifyingGlass
+  MagnifyingGlass,
+  Shuffle
 } from '@phosphor-icons/react';
+import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
+import api from '../lib/api';
+import { formatRelativeTime } from '../lib/format';
 
 const PORTAL_COLORS = [
   'bg-blue-500',
@@ -74,13 +72,15 @@ export default function WikiHomePage() {
       tool: '工具与技术栈',
       other: '其他条目'
     };
-    return Array.from(typeMap.entries()).slice(0, 6).map(([type, count], i) => ({
-      id: type,
-      name: typeDescriptions[type] ? t(`home.portalType.${type}`) : type,
-      description: typeDescriptions[type] || `${type} 类型条目`,
-      count,
-      color: PORTAL_COLORS[i % PORTAL_COLORS.length]
-    }));
+    return Array.from(typeMap.entries())
+      .slice(0, 6)
+      .map(([type, count], i) => ({
+        id: type,
+        name: typeDescriptions[type] ? t(`home.portalType.${type}`) : type,
+        description: typeDescriptions[type] || `${type} 类型条目`,
+        count,
+        color: PORTAL_COLORS[i % PORTAL_COLORS.length]
+      }));
   })();
 
   const handleSearch = (e: React.FormEvent) => {
@@ -104,8 +104,16 @@ export default function WikiHomePage() {
 
   const getActivityIcon = (type: string) => {
     const tLower = type?.toLowerCase() || '';
-    if (tLower.includes('qa') || tLower.includes('question') || tLower.includes('问答')) return ChatsCircle;
-    if (tLower.includes('page') || tLower.includes('edit') || tLower.includes('update') || tLower.includes('编辑')) return BookOpen;
+    if (tLower.includes('qa') || tLower.includes('question') || tLower.includes('问答'))
+      return ChatsCircle;
+    if (
+      tLower.includes('page') ||
+      tLower.includes('edit') ||
+      tLower.includes('update') ||
+      tLower.includes('编辑')
+    ) {
+      return BookOpen;
+    }
     return Lightbulb;
   };
 
@@ -127,7 +135,8 @@ export default function WikiHomePage() {
     <div className="space-y-6 animate-fade-in">
       <section className="rounded-2xl bg-gradient-to-r from-primary-600 to-knowledge-600 p-8 text-white">
         <h1 className="text-2xl font-bold">
-          {getGreeting()}！欢迎回到你的知识库
+          {getGreeting()}
+          ！欢迎回到你的知识库
         </h1>
         <p className="mt-2 text-primary-100">
           {featured.length > 0
@@ -136,7 +145,10 @@ export default function WikiHomePage() {
         </p>
         <form onSubmit={handleSearch} className="mt-6 flex gap-3">
           <div className="relative flex-1 max-w-md">
-            <MagnifyingGlass size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60" />
+            <MagnifyingGlass
+              size={18}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60"
+            />
             <input
               type="text"
               value={searchQuery}
@@ -168,8 +180,11 @@ export default function WikiHomePage() {
             </h2>
             {featuredQuery.isLoading ? (
               <div className="grid gap-4 sm:grid-cols-2">
-                {[0, 1, 2, 3].map(i => (
-                  <div key={i} className="h-24 animate-pulse rounded-xl bg-slate-200 dark:bg-slate-700"></div>
+                {[0, 1, 2, 3].map((i) => (
+                  <div
+                    key={i}
+                    className="h-24 animate-pulse rounded-xl bg-slate-200 dark:bg-slate-700"
+                  ></div>
                 ))}
               </div>
             ) : featured.length > 0 ? (
@@ -186,15 +201,16 @@ export default function WikiHomePage() {
                     </p>
                     <div className="mt-3 flex items-center gap-2 text-xs text-slate-400">
                       <span className="badge badge-blue">概念</span>
-                      <span>相关度 {(item.score * 100).toFixed(0)}%</span>
+                      <span>
+                        相关度
+                        {(item.score * 100).toFixed(0)}%
+                      </span>
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-center text-sm text-slate-500 dark:text-slate-400">
-                暂无精选条目
-              </p>
+              <p className="text-center text-sm text-slate-500 dark:text-slate-400">暂无精选条目</p>
             )}
           </section>
 
@@ -205,8 +221,11 @@ export default function WikiHomePage() {
             </h2>
             {graphQuery.isLoading ? (
               <div className="grid gap-4 sm:grid-cols-3">
-                {[0, 1, 2].map(i => (
-                  <div key={i} className="h-28 animate-pulse rounded-xl bg-slate-200 dark:bg-slate-700"></div>
+                {[0, 1, 2].map((i) => (
+                  <div
+                    key={i}
+                    className="h-28 animate-pulse rounded-xl bg-slate-200 dark:bg-slate-700"
+                  ></div>
                 ))}
               </div>
             ) : portals.length > 0 ? (
@@ -229,9 +248,7 @@ export default function WikiHomePage() {
                 ))}
               </div>
             ) : (
-              <p className="text-center text-sm text-slate-500 dark:text-slate-400">
-                暂无知识门户
-              </p>
+              <p className="text-center text-sm text-slate-500 dark:text-slate-400">暂无知识门户</p>
             )}
           </section>
         </div>
@@ -244,7 +261,7 @@ export default function WikiHomePage() {
             </h2>
             {timelineQuery.isLoading ? (
               <div className="space-y-3">
-                {[0, 1, 2, 3].map(i => (
+                {[0, 1, 2, 3].map((i) => (
                   <div key={i} className="flex items-start gap-3">
                     <div className="h-8 w-8 flex-shrink-0 animate-pulse rounded-full bg-slate-200 dark:bg-slate-700"></div>
                     <div className="flex-1 space-y-2">
@@ -272,7 +289,7 @@ export default function WikiHomePage() {
                           {activity.title || activity.description || activity.type}
                         </p>
                         <p className="text-xs text-slate-500 dark:text-slate-400">
-                          {activity.type} · {activity.ts ? formatRelativeTime(activity.ts) : ''}
+                          {activity.type} ·{activity.ts ? formatRelativeTime(activity.ts) : ''}
                         </p>
                       </div>
                     </div>
@@ -280,9 +297,7 @@ export default function WikiHomePage() {
                 })}
               </div>
             ) : (
-              <p className="text-center text-sm text-slate-500 dark:text-slate-400">
-                暂无动态
-              </p>
+              <p className="text-center text-sm text-slate-500 dark:text-slate-400">暂无动态</p>
             )}
           </section>
 
@@ -296,11 +311,17 @@ export default function WikiHomePage() {
                 <Shuffle size={18} className="mr-2" />
                 {t('home.randomWalk')}
               </button>
-              <button onClick={() => navigate('/dashboard')} className="btn btn-secondary w-full justify-start">
+              <button
+                onClick={() => navigate('/dashboard')}
+                className="btn btn-secondary w-full justify-start"
+              >
                 <Gauge size={18} className="mr-2" />
                 {t('home.knowledgeGaps')}
               </button>
-              <button onClick={() => navigate('/qa')} className="btn btn-secondary w-full justify-start">
+              <button
+                onClick={() => navigate('/qa')}
+                className="btn btn-secondary w-full justify-start"
+              >
                 <ChatsCircle size={18} className="mr-2" />
                 {t('home.todayQA')}
               </button>

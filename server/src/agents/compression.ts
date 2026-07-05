@@ -1,7 +1,7 @@
-import { llmRouter } from '../llm/router';
+import type { ConversationMessage, LLMMessage } from '@shared/index';
 import { getPool } from '../db/pool';
 import logger from '../i18n/logger';
-import type { LLMMessage, ConversationMessage } from '@shared/index';
+import { llmRouter } from '../llm/router';
 
 const DEFAULT_COMPRESSION_THRESHOLD = 5;
 
@@ -32,9 +32,7 @@ export async function compressHistory(messages: ConversationMessage[]): Promise<
     return ta - tb;
   });
 
-  const transcript = ordered
-    .map(m => `${m.role}: ${m.content}`)
-    .join('\n');
+  const transcript = ordered.map((m) => `${m.role}: ${m.content}`).join('\n');
 
   const llmMessages: LLMMessage[] = [
     { role: 'system', content: COMPRESSION_SYSTEM_PROMPT },
@@ -50,11 +48,14 @@ export async function compressHistory(messages: ConversationMessage[]): Promise<
     });
 
     const summary = response.content.trim();
-    logger.info({
-      originalCount: ordered.length,
-      summaryLength: summary.length,
-      tokensUsed: response.tokensUsed.total
-    }, '对话历史压缩完成');
+    logger.info(
+      {
+        originalCount: ordered.length,
+        summaryLength: summary.length,
+        tokensUsed: response.tokensUsed.total
+      },
+      '对话历史压缩完成'
+    );
 
     return injectIntoPlannerPrompt(summary);
   } catch (err) {
@@ -74,8 +75,8 @@ function injectIntoPlannerPrompt(summary: string): string {
 }
 
 function buildTruncatedSummary(messages: ConversationMessage[]): string {
-  const userTurns = messages.filter(m => m.role === 'user');
-  const assistantTurns = messages.filter(m => m.role === 'assistant');
+  const userTurns = messages.filter((m) => m.role === 'user');
+  const assistantTurns = messages.filter((m) => m.role === 'assistant');
 
   const lastUser = userTurns[userTurns.length - 1];
   const lastAssistant = assistantTurns[assistantTurns.length - 1];
@@ -94,10 +95,12 @@ function buildTruncatedSummary(messages: ConversationMessage[]): string {
 
 function truncate(text: string, max: number): string {
   if (text.length <= max) return text;
-  return text.slice(0, max) + '...';
+  return `${text.slice(0, max)}...`;
 }
 
-export async function loadConversationMessages(conversationId: string): Promise<ConversationMessage[]> {
+export async function loadConversationMessages(
+  conversationId: string
+): Promise<ConversationMessage[]> {
   try {
     const pool = getPool();
     const result = await pool.query(

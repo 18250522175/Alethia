@@ -1,6 +1,6 @@
-import { useTranslation } from 'react-i18next';
-import { CheckCircle, XCircle, Ghost, Warning, Info } from '@phosphor-icons/react';
 import type { PendingDiff } from '@shared/diff';
+import { CheckCircle, Ghost, Info, Warning, XCircle } from '@phosphor-icons/react';
+import { useTranslation } from 'react-i18next';
 
 export const TIERS = [
   { id: 'green', label: '🟢 低风险', desc: '可直接应用', color: 'badge-green' },
@@ -24,7 +24,7 @@ export default function DiffCard({
   rejecting = false
 }: DiffCardProps) {
   const { t } = useTranslation();
-  const tierMeta = TIERS.find(tier => tier.id === diff.tier) || TIERS[0];
+  const tierMeta = TIERS.find((tier) => tier.id === diff.tier) || TIERS[0];
   const impactMeta =
     diff.impact === 'high'
       ? { icon: Warning, color: 'text-red-500', label: '高影响' }
@@ -46,10 +46,12 @@ export default function DiffCard({
             </span>
           )}
           <span className="text-xs text-slate-500 dark:text-slate-400">
-            实体：<span className="font-mono text-primary-600 dark:text-primary-400">{diff.slug}</span>
+            实体：
+            <span className="font-mono text-primary-600 dark:text-primary-400">{diff.slug}</span>
           </span>
           <span className="text-xs text-slate-500 dark:text-slate-400">
-            类型：{diff.type}
+            类型：
+            {diff.type}
           </span>
         </div>
         <div className={`flex items-center gap-1 text-xs font-medium ${impactMeta.color}`}>
@@ -60,26 +62,31 @@ export default function DiffCard({
 
       <div className="rounded-lg bg-slate-50 p-3 dark:bg-slate-700/50">
         <div className="mb-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
-          变更字段：<code className="font-mono">{diff.payload?.field || '-'}</code>
+          变更字段：
+          <code className="font-mono">{diff.payload?.field || '-'}</code>
         </div>
         {diff.payload?.oldValue !== undefined && (
           <div className="mb-2 text-sm">
-            <span className="text-red-600 dark:text-red-400">- {diff.payload.oldValue}</span>
+            <span className="text-red-600 dark:text-red-400">-{diff.payload.oldValue}</span>
           </div>
         )}
         <div className="text-sm">
-          <span className="text-green-600 dark:text-green-400">+ {diff.payload?.newValue || '-'}</span>
+          <span className="text-green-600 dark:text-green-400">
+            +{diff.payload?.newValue || '-'}
+          </span>
         </div>
         {diff.payload?.context && (
           <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-            上下文：{diff.payload.context}
+            上下文：
+            {diff.payload.context}
           </div>
         )}
       </div>
 
       <div className="mt-3 flex items-center justify-between">
         <div className="text-xs text-slate-400">
-          置信度：{Math.round((diff.confidence || 0) * 100)}% · 创建于{' '}
+          置信度：
+          {Math.round((diff.confidence || 0) * 100)}% · 创建于{' '}
           {new Date(diff.createdAt).toLocaleString('zh-CN')}
         </div>
         <div className="flex gap-2">

@@ -1,6 +1,7 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { Settings } from '@shared/settings';
+import type { ReactNode } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { createContext, useContext } from 'react';
 import api from '../lib/api';
 
 interface SettingsContextType {
@@ -40,13 +41,15 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <SettingsContext.Provider value={{
-      settings: data,
-      isLoading,
-      error: error as Error | null,
-      updateSettings,
-      refetch
-    }}>
+    <SettingsContext.Provider
+      value={{
+        settings: data,
+        isLoading,
+        error: error as Error | null,
+        updateSettings,
+        refetch
+      }}
+    >
       {children}
     </SettingsContext.Provider>
   );

@@ -1,12 +1,18 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import DiffCompare from './DiffCompare';
 
 // Mock react-i18next 的 useTranslation
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (_key: string, fallbackOrOpts?: string | Record<string, unknown>) => {
       if (typeof fallbackOrOpts === 'string') return fallbackOrOpts;
-      if (fallbackOrOpts && typeof fallbackOrOpts === 'object' && 'defaultValue' in fallbackOrOpts) {
+      if (
+        fallbackOrOpts &&
+        typeof fallbackOrOpts === 'object' &&
+        'defaultValue' in fallbackOrOpts
+      ) {
         let s = fallbackOrOpts.defaultValue as string;
         for (const [k, v] of Object.entries(fallbackOrOpts)) {
           if (k === 'defaultValue') continue;
@@ -15,20 +21,18 @@ vi.mock('react-i18next', () => ({
         return s;
       }
       return _key;
-    },
-  }),
+    }
+  })
 }));
-
-import DiffCompare from './DiffCompare';
 
 beforeEach(() => {
   // mock clipboard
   Object.assign(navigator, {
-    clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
+    clipboard: { writeText: vi.fn().mockResolvedValue(undefined) }
   });
 });
 
-describe('DiffCompare', () => {
+describe('diffCompare', () => {
   it('renders empty state when both values empty', () => {
     render(<DiffCompare oldValue="" newValue="" />);
     expect(screen.getByText('无内容可对比')).toBeInTheDocument();
@@ -78,17 +82,13 @@ describe('DiffCompare', () => {
   });
 
   it('renders title when provided', () => {
-    render(
-      <DiffCompare oldValue="a" newValue="b" title="变更对比" language="md" />
-    );
+    render(<DiffCompare oldValue="a" newValue="b" title="变更对比" language="md" />);
     expect(screen.getByText('变更对比')).toBeInTheDocument();
     expect(screen.getByText('md')).toBeInTheDocument();
   });
 
   it('collapses and expands on toggle click', () => {
-    const { container } = render(
-      <DiffCompare oldValue="old" newValue="new" defaultCollapsed={false} />
-    );
+    render(<DiffCompare oldValue="old" newValue="new" defaultCollapsed={false} />);
     const toggleBtn = screen.getByRole('button', { name: '折叠' });
     fireEvent.click(toggleBtn);
     // 折叠后显示摘要提示
@@ -100,20 +100,28 @@ describe('DiffCompare', () => {
   });
 
   it('shows truncation warning when content exceeds MAX_LCS_LINES', () => {
-    const big = Array(1001).fill('line').map((l, i) => `${l}${i}`).join('\n');
-    const bigger = Array(1001).fill('changed').map((l, i) => `${l}${i}`).join('\n');
+    const big = Array.from({ length: 1001 })
+      .fill('line')
+      .map((l, i) => `${l}${i}`)
+      .join('\n');
+    const bigger = Array.from({ length: 1001 })
+      .fill('changed')
+      .map((l, i) => `${l}${i}`)
+      .join('\n');
     render(<DiffCompare oldValue={big} newValue={bigger} />);
-    expect(
-      screen.getByText(/已使用简化对比模式/)
-    ).toBeInTheDocument();
+    expect(screen.getByText(/已使用简化对比模式/)).toBeInTheDocument();
   });
 
   it('falls back to simple compare when content is large and produces rows', () => {
-    const big = Array(1001).fill('a').map((_, i) => `line${i}`).join('\n');
-    const bigger = Array(1001).fill('a').map((_, i) => `modified${i}`).join('\n');
-    const { container } = render(
-      <DiffCompare oldValue={big} newValue={bigger} />
-    );
+    const big = Array.from({ length: 1001 })
+      .fill('a')
+      .map((_, i) => `line${i}`)
+      .join('\n');
+    const bigger = Array.from({ length: 1001 })
+      .fill('a')
+      .map((_, i) => `modified${i}`)
+      .join('\n');
+    const { container } = render(<DiffCompare oldValue={big} newValue={bigger} />);
     // 至少应渲染若干行
     const rows = container.querySelectorAll('[class*="grid-cols-2"]');
     expect(rows.length).toBeGreaterThan(10);

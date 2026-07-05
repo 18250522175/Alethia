@@ -1,4 +1,4 @@
-import { Graph, ArrowRight } from '@phosphor-icons/react';
+import { ArrowRight, Graph } from '@phosphor-icons/react';
 
 interface GraphNodeCardProps {
   node: {
@@ -34,9 +34,7 @@ export default function GraphNodeCard({ node, onNavigate }: GraphNodeCardProps) 
             <div className="font-mono text-xs text-slate-400">{node.id}</div>
           </div>
         </div>
-        {clickable && (
-          <ArrowRight size={16} className="mt-1 shrink-0 text-slate-400" />
-        )}
+        {clickable && <ArrowRight size={16} className="mt-1 shrink-0 text-slate-400" />}
       </div>
 
       <div className="mt-3 flex items-center gap-2">

@@ -1,8 +1,8 @@
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
-import { join } from 'path';
-import { createHash } from 'crypto';
-import { storage } from './markdown';
+import { createHash } from 'node:crypto';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import logger from '../i18n/logger';
+import { storage } from './markdown';
 
 export interface FileDelta {
   path: string;
@@ -90,9 +90,6 @@ export class ManifestTracker {
     const result: string[] = [];
 
     const walk = (current: string) => {
-      const { readdirSync, statSync, existsSync } = require('fs');
-      const { join } = require('path');
-
       if (!existsSync(current)) return;
 
       const entries = readdirSync(current, { withFileTypes: true });

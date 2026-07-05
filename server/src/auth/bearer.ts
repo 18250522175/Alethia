@@ -1,16 +1,13 @@
-import { Context, Next } from 'hono';
-import { loadEnv, isDevelopment, isProduction } from '../config/loader';
-import logger from '../i18n/logger';
+import type { Context, Next } from 'hono';
+import { isProduction, loadEnv } from '../config/loader';
 import { getErrorMessage } from '../i18n/errors.zh-CN';
+import logger from '../i18n/logger';
 
-const PUBLIC_PATHS = [
-  '/health',
-  '/api/auth/login',
-];
+const PUBLIC_PATHS = ['/health', '/api/auth/login'];
 
 function isPublicPath(path: string, method: string): boolean {
   if (method === 'OPTIONS') return true;
-  return PUBLIC_PATHS.some(p => path === p || path.startsWith(p + '/'));
+  return PUBLIC_PATHS.some((p) => path === p || path.startsWith(`${p}/`));
 }
 
 function extractBearerToken(authHeader: string | null): string | null {
@@ -31,19 +28,21 @@ export async function bearerAuth(c: Context, next: Next) {
   const token = extractBearerToken(authHeader);
   const env = loadEnv();
 
-  const validKeys = env.BRAIN_API_KEY
-    .split(',')
-    .map(k => k.trim())
-    .filter(k => k.length > 0);
+  const validKeys = env.BRAIN_API_KEY.split(',')
+    .map((k) => k.trim())
+    .filter((k) => k.length > 0);
 
   if (!token || !validKeys.includes(token)) {
     logger.warn({ path, method }, '认证失败：缺失或无效的 API 密钥');
-    return c.json({
-      error: {
-        code: 'UNAUTHORIZED',
-        message: getErrorMessage('UNAUTHORIZED')
-      }
-    }, 401);
+    return c.json(
+      {
+        error: {
+          code: 'UNAUTHORIZED',
+          message: getErrorMessage('UNAUTHORIZED')
+        }
+      },
+      401
+    );
   }
 
   await next();

@@ -1,8 +1,8 @@
+import type { LLMMessage } from '@shared/index';
+import type { RetrievalResult } from './retriever';
+import logger from '../i18n/logger';
 import { llmRouter } from '../llm/router';
 import { loadPrompt, parseJSONResponse } from './utils';
-import logger from '../i18n/logger';
-import type { LLMMessage, QueryResultItem, EvidenceSpan } from '@shared/index';
-import type { RetrievalResult } from './retriever';
 
 export interface GradeResult {
   factual_accuracy: number;
@@ -50,14 +50,19 @@ export async function grade(
 }
 
 function buildContext(question: string, result: RetrievalResult): string {
-  const itemsText = result.items.map((item, i) =>
-    `### 结果 ${i + 1}: ${item.title}\nslug: ${item.slug}\n摘要: ${item.snippet}\n分数: ${item.score}`
-  ).join('\n\n');
+  const itemsText = result.items
+    .map(
+      (item, i) =>
+        `### 结果 ${i + 1}: ${item.title}\nslug: ${item.slug}\n摘要: ${item.snippet}\n分数: ${item.score}`
+    )
+    .join('\n\n');
 
-  const evidenceText = result.evidence.length > 0
-    ? `\n\n## 证据片段 (${result.evidence.length} 条)\n` +
-      result.evidence.map(e => `- [${e.span_id}] ${e.span_text.substring(0, 80)}...`).join('\n')
-    : '\n\n## 证据片段\n无可用证据';
+  const evidenceText =
+    result.evidence.length > 0
+      ? `\n\n## 证据片段 (${result.evidence.length} 条)\n${result.evidence
+          .map((e) => `- [${e.span_id}] ${e.span_text.substring(0, 80)}...`)
+          .join('\n')}`
+      : '\n\n## 证据片段\n无可用证据';
 
   return `## 用户问题\n${question}\n\n## 检索结果 (${result.items.length} 条)\n${itemsText}${evidenceText}`;
 }

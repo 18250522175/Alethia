@@ -1,5 +1,5 @@
+import { Clock, GitBranch, PencilSimple, Plus, Trash } from '@phosphor-icons/react';
 import { useTranslation } from 'react-i18next';
-import { Clock, PencilSimple, Plus, Trash, GitBranch } from '@phosphor-icons/react';
 
 interface TimelineEvent {
   id: string;
@@ -84,11 +84,8 @@ export default function EntryTimeline({ events, onEventClick }: EntryTimelinePro
         <div className="absolute left-3 top-0 h-full w-px bg-slate-200 dark:bg-slate-700" />
 
         <ul className="space-y-3">
-          {events.map((event, index) => (
-            <li
-              key={event.id}
-              className="relative pl-8"
-            >
+          {events.map((event, _index) => (
+            <li key={event.id} className="relative pl-8">
               <div
                 className={`absolute left-0 top-0.5 flex h-6 w-6 items-center justify-center rounded-full text-white ring-2 ring-white dark:ring-slate-800 ${getTypeColor(event.type)}`}
               >
@@ -113,12 +110,8 @@ export default function EntryTimeline({ events, onEventClick }: EntryTimelinePro
                   </p>
                 )}
                 <div className="mt-1 flex items-center gap-2 text-xs text-slate-400">
-                  {event.version && (
-                    <span className="font-mono">v{event.version}</span>
-                  )}
-                  {event.author && (
-                    <span>· {event.author}</span>
-                  )}
+                  {event.version && <span className="font-mono">v{event.version}</span>}
+                  {event.author && <span>·{event.author}</span>}
                 </div>
               </button>
             </li>

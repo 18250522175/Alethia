@@ -1,10 +1,10 @@
-import { storage } from './markdown';
-import { parser, type ParsedPage } from './parser';
-import { syncSummaries } from './summary';
+import { createHash, randomUUID } from 'node:crypto';
 import { getPool } from '../db/pool';
 import logger from '../i18n/logger';
-import { createHash, randomUUID } from 'crypto';
 import { llmRouter } from '../llm/router';
+import { storage } from './markdown';
+import { type ParsedPage, parser } from './parser';
+import { syncSummaries } from './summary';
 
 const EXTRACTABLE_MIME_PREFIXES = ['text/', 'application/json', 'application/xml'];
 const LIBRARY_EXTRACTION_PROMPT = `请从以下文本中提取知识实体和关系，输出 JSON 格式：
@@ -23,7 +23,13 @@ const LIBRARY_EXTRACTION_PROMPT = `请从以下文本中提取知识实体和关
 `;
 
 export class SyncEngine {
-  async syncAll(): Promise<{ pages: number; links: number; timeline: number; versions: number; clusters: number }> {
+  async syncAll(): Promise<{
+    pages: number;
+    links: number;
+    timeline: number;
+    versions: number;
+    clusters: number;
+  }> {
     const wikiFiles = storage.listWikiFiles();
     let pageCount = 0;
     let linkCount = 0;
@@ -54,19 +60,28 @@ export class SyncEngine {
         }
       }
 
-      logger.info(`同步完成: ${pageCount} 页, ${linkCount} 链接, ${timelineCount} 时间线, ${versionCount} 版本`);
+      logger.info(
+        `同步完成: ${pageCount} 页, ${linkCount} 链接, ${timelineCount} 时间线, ${versionCount} 版本`
+      );
     } finally {
       client.release();
     }
 
     const summaryResult = await syncSummaries();
-    return { pages: pageCount, links: linkCount, timeline: timelineCount, versions: versionCount, clusters: summaryResult.clusters };
+    return {
+      pages: pageCount,
+      links: linkCount,
+      timeline: timelineCount,
+      versions: versionCount,
+      clusters: summaryResult.clusters
+    };
   }
 
   private async syncPage(client: any, parsed: ParsedPage): Promise<void> {
     const hash = createHash('sha256').update(parsed.rawMd).digest('hex');
 
-    await client.query(`
+    await client.query(
+      `
       INSERT INTO pages (slug, path, type, contexts, raw_md, parsed_json, content_md, hash, updated_at)
       VALUES ($1, $2, $3, $4::text[], $5, $6::jsonb, $7, $8, NOW())
       ON CONFLICT (slug) DO UPDATE SET
@@ -78,28 +93,33 @@ export class SyncEngine {
         content_md = EXCLUDED.content_md,
         hash = EXCLUDED.hash,
         updated_at = NOW()
-    `, [
-      parsed.slug,
-      parsed.path,
-      parsed.type,
-      parsed.contexts,
-      parsed.rawMd,
-      JSON.stringify(parsed.parsedJson),
-      parsed.contentMd,
-      hash
-    ]);
+    `,
+      [
+        parsed.slug,
+        parsed.path,
+        parsed.type,
+        parsed.contexts,
+        parsed.rawMd,
+        JSON.stringify(parsed.parsedJson),
+        parsed.contentMd,
+        hash
+      ]
+    );
 
     const pageResult = await client.query('SELECT id FROM pages WHERE slug = $1', [parsed.slug]);
     const pageId = pageResult.rows[0].id;
 
     const sourceText = `${parsed.title}\n${parsed.state}\n${parsed.assessment}\n${parsed.contentMd}`;
-    await client.query(`
+    await client.query(
+      `
       INSERT INTO page_fts (page_id, tsv, source_text)
       VALUES ($1, to_tsvector('simple', $2), $2)
       ON CONFLICT (page_id) DO UPDATE SET
         tsv = to_tsvector('simple', EXCLUDED.source_text),
         source_text = EXCLUDED.source_text
-    `, [pageId, sourceText]);
+    `,
+      [pageId, sourceText]
+    );
 
     logger.debug(`同步页面: ${parsed.slug}`);
   }
@@ -110,16 +130,13 @@ export class SyncEngine {
     await client.query('DELETE FROM links WHERE source_slug = $1', [parsed.slug]);
 
     for (const rel of parsed.relations) {
-      await client.query(`
+      await client.query(
+        `
         INSERT INTO links (source_slug, target_slug, relation, weight, orphaned, created_at)
         VALUES ($1, $2, $3, $4, $5, NOW())
-      `, [
-        parsed.slug,
-        rel.targetSlug,
-        rel.relation,
-        1.0,
-        true
-      ]);
+      `,
+        [parsed.slug, rel.targetSlug, rel.relation, 1.0, true]
+      );
     }
 
     return parsed.relations.length;
@@ -131,15 +148,13 @@ export class SyncEngine {
     await client.query('DELETE FROM timeline_entries WHERE slug = $1', [parsed.slug]);
 
     for (const entry of parsed.timeline) {
-      await client.query(`
+      await client.query(
+        `
         INSERT INTO timeline_entries (slug, type, payload, ts)
         VALUES ($1, $2, $3::jsonb, $4::timestamptz)
-      `, [
-        parsed.slug,
-        entry.type,
-        JSON.stringify({ description: entry.description }),
-        entry.date
-      ]);
+      `,
+        [parsed.slug, entry.type, JSON.stringify({ description: entry.description }), entry.date]
+      );
     }
 
     return parsed.timeline.length;
@@ -152,16 +167,14 @@ export class SyncEngine {
       const entry = parsed.versionHistory[i];
       const versionNum = parsed.versionHistory.length - i;
 
-      await client.query(`
+      await client.query(
+        `
         INSERT INTO knowledge_versions (slug, version, ts, change_summary, archived)
         VALUES ($1, $2, $3::timestamptz, $4, false)
         ON CONFLICT ON CONSTRAINT idx_knowledge_versions_unique DO NOTHING
-      `, [
-        parsed.slug,
-        versionNum,
-        entry.date,
-        entry.summary
-      ]);
+      `,
+        [parsed.slug, versionNum, entry.date, entry.summary]
+      );
     }
 
     return parsed.versionHistory.length;
@@ -216,11 +229,10 @@ export class SyncEngine {
 
         try {
           // 根据 MIME 类型判断是否可提取
-          if (!EXTRACTABLE_MIME_PREFIXES.some(prefix => mime.startsWith(prefix))) {
-            await client.query(
-              `UPDATE library_files SET status = 'unsupported' WHERE hash = $1`,
-              [hash]
-            );
+          if (!EXTRACTABLE_MIME_PREFIXES.some((prefix) => mime.startsWith(prefix))) {
+            await client.query(`UPDATE library_files SET status = 'unsupported' WHERE hash = $1`, [
+              hash
+            ]);
             logger.debug({ hash, mime }, '跳过不支持的 MIME 类型');
             continue;
           }
@@ -230,10 +242,7 @@ export class SyncEngine {
           const content = storage.readFile(filePath);
 
           if (!content || content.trim().length === 0) {
-            await client.query(
-              `UPDATE library_files SET status = 'error' WHERE hash = $1`,
-              [hash]
-            );
+            await client.query(`UPDATE library_files SET status = 'error' WHERE hash = $1`, [hash]);
             errors.push(`${original_name}: 文件内容为空`);
             continue;
           }
@@ -322,22 +331,21 @@ export class SyncEngine {
           }
 
           // 标记文件为已提取
-          await client.query(
-            `UPDATE library_files SET status = 'extracted' WHERE hash = $1`,
-            [hash]
-          );
+          await client.query(`UPDATE library_files SET status = 'extracted' WHERE hash = $1`, [
+            hash
+          ]);
           extracted++;
 
-          logger.debug({ hash, original_name, diffs: parsed.entities.length + parsed.relations.length }, '文件提取完成');
+          logger.debug(
+            { hash, original_name, diffs: parsed.entities.length + parsed.relations.length },
+            '文件提取完成'
+          );
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           logger.warn({ err, hash, original_name }, '文件提取失败');
 
           try {
-            await client.query(
-              `UPDATE library_files SET status = 'error' WHERE hash = $1`,
-              [hash]
-            );
+            await client.query(`UPDATE library_files SET status = 'error' WHERE hash = $1`, [hash]);
           } catch {
             // 状态更新失败不阻塞
           }
@@ -346,7 +354,10 @@ export class SyncEngine {
         }
       }
 
-      logger.info({ scanned, extracted, diffsCreated, errorCount: errors.length }, '新文件提取完成');
+      logger.info(
+        { scanned, extracted, diffsCreated, errorCount: errors.length },
+        '新文件提取完成'
+      );
       return { scanned, extracted, diffsCreated, errors };
     } finally {
       client.release();

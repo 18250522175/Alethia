@@ -31,19 +31,19 @@ services:
       - web
       - server
     ports:
-      - "80:80"     # HTTP -> Caddy 自动重定向到 HTTPS
-      - "443:443"   # HTTPS
-      - "443:443/udp" # HTTP/3 (QUIC)
+      - '80:80' # HTTP -> Caddy 自动重定向到 HTTPS
+      - '443:443' # HTTPS
+      - '443:443/udp' # HTTP/3 (QUIC)
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data     # Let's Encrypt 证书与状态持久化
+      - caddy_data:/data # Let's Encrypt 证书与状态持久化
       - caddy_config:/config # Caddy 运行配置持久化
     # 日志轮转：避免日志文件无限增长撑满磁盘
     logging:
       driver: local
       options:
-        max-size: "10m"
-        max-file: "3"
+        max-size: 10m
+        max-file: '3'
     networks:
       - alethia-net
 

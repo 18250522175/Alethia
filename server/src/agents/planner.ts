@@ -1,7 +1,7 @@
+import type { LLMMessage } from '@shared/index';
+import logger from '../i18n/logger';
 import { llmRouter } from '../llm/router';
 import { loadPrompt, parseJSONResponse } from './utils';
-import logger from '../i18n/logger';
-import type { LLMMessage } from '@shared/index';
 
 export interface RetrievalPlan {
   keywords: string[];
@@ -33,9 +33,9 @@ export async function plan(question: string): Promise<RetrievalPlan> {
 
 function fallbackPlan(question: string): RetrievalPlan {
   const keywords = question
-    .replace(/[？?。.!！，,、的什么是在是有哪些和与及]/g, ' ')
+    .replace(/[？?。.!！，,、的什么是在有哪些和与及]/g, ' ')
     .split(/\s+/)
-    .filter(k => k.length > 0)
+    .filter((k) => k.length > 0)
     .slice(0, 5);
 
   return {

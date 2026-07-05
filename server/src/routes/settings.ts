@@ -1,8 +1,8 @@
+import type { Settings } from '@shared/index';
 import { Hono } from 'hono';
 import { defaultSettings } from '../config/defaults';
 import { getErrorMessage } from '../i18n/errors.zh-CN';
 import logger from '../i18n/logger';
-import type { Settings } from '@shared/index';
 
 const app = new Hono();
 
@@ -33,23 +33,29 @@ app.put('/api/settings', async (c) => {
 
     const { getPool } = await import('../db/pool');
     const pool = getPool();
-    await pool.query(`
+    await pool.query(
+      `
       INSERT INTO settings (key, value, updated_at)
       VALUES ('global', $1::jsonb, NOW())
       ON CONFLICT (key) DO UPDATE SET
         value = EXCLUDED.value,
         updated_at = NOW()
-    `, [JSON.stringify(settings)]);
+    `,
+      [JSON.stringify(settings)]
+    );
 
     return c.json({ success: true, settings });
   } catch (err) {
     logger.error({ err }, '保存设置失败');
-    return c.json({
-      error: {
-        code: 'INTERNAL_ERROR',
-        message: getErrorMessage('INTERNAL_ERROR')
-      }
-    }, 500);
+    return c.json(
+      {
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: getErrorMessage('INTERNAL_ERROR')
+        }
+      },
+      500
+    );
   }
 });
 

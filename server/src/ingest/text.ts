@@ -16,10 +16,7 @@ export interface ParseTextResult {
  * - CSV → Markdown 表格
  * - JSON → 格式化代码块
  */
-export async function parseText(
-  content: string,
-  mime: string
-): Promise<ParseTextResult> {
+export async function parseText(content: string, mime: string): Promise<ParseTextResult> {
   const cleaned = cleanText(content);
   let text = cleaned;
   const sections: TextSection[] = [];
@@ -46,17 +43,17 @@ export async function parseText(
  * CSV 转 Markdown 表格（支持引号包裹的字段）。
  */
 function csvToMarkdownTable(csv: string): string {
-  const lines = csv.split(/\r?\n/).filter(l => l.trim().length > 0);
+  const lines = csv.split(/\r?\n/).filter((l) => l.trim().length > 0);
   if (lines.length === 0) return '';
 
-  const rows = lines.map(l => parseCsvLine(l));
+  const rows = lines.map((l) => parseCsvLine(l));
   const header = rows[0];
   const body = rows.slice(1);
 
   const md = [
     `| ${header.join(' | ')} |`,
     `| ${header.map(() => '---').join(' | ')} |`,
-    ...body.map(r => `| ${r.join(' | ')} |`)
+    ...body.map((r) => `| ${r.join(' | ')} |`)
   ];
 
   return md.join('\n');
@@ -99,9 +96,9 @@ function parseCsvLine(line: string): string[] {
 function jsonToCodeBlock(json: string): string {
   try {
     const obj = JSON.parse(json);
-    return '```json\n' + JSON.stringify(obj, null, 2) + '\n```';
+    return `\`\`\`json\n${JSON.stringify(obj, null, 2)}\n\`\`\``;
   } catch {
-    return '```json\n' + json + '\n```';
+    return `\`\`\`json\n${json}\n\`\`\``;
   }
 }
 

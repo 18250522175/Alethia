@@ -1,20 +1,13 @@
-import { readFile, stat } from 'fs/promises';
-import { basename, extname } from 'path';
+import { readFile, stat } from 'node:fs/promises';
+import { basename, extname } from 'node:path';
 import logger from '../i18n/logger';
-import { cleanText, computeFileHash, registerLibraryFile } from './clean';
-import {
-  parsePdf,
-  parseDocx,
-  parseXlsx,
-  parsePptx,
-  rowsToHtml,
-  formulaToLatex
-} from './document';
-import { processImage } from './image';
 import { transcribeAudio } from './audio';
-import { processVideo } from './video';
-import { fetchWebContent, extractHtmlContent } from './web';
+import { cleanText, computeFileHash, registerLibraryFile } from './clean';
+import { formulaToLatex, parseDocx, parsePdf, parsePptx, parseXlsx, rowsToHtml } from './document';
+import { processImage } from './image';
 import { parseText } from './text';
+import { processVideo } from './video';
+import { extractHtmlContent, fetchWebContent } from './web';
 
 export interface IngestResult {
   fileHash: string;
@@ -108,12 +101,9 @@ export async function ingestFile(filePath: string, mime?: string): Promise<Inges
     if (detectedMime === 'application/pdf') {
       const result = await parsePdf(buffer);
       text = result.text;
-      result.pages.forEach((p, i) =>
-        sections.push({ title: `第 ${i + 1} 页`, content: p })
-      );
+      result.pages.forEach((p, i) => sections.push({ title: `第 ${i + 1} 页`, content: p }));
     } else if (
-      detectedMime ===
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      detectedMime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
     ) {
       const result = await parseDocx(buffer);
       text = result.text;
@@ -123,26 +113,22 @@ export async function ingestFile(filePath: string, mime?: string): Promise<Inges
         evidence: [result.html]
       });
     } else if (
-      detectedMime ===
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      detectedMime === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     ) {
       const result = await parseXlsx(buffer);
       sections.push(
-        ...result.sheets.map(s => ({
+        ...result.sheets.map((s) => ({
           title: s.name,
           content: rowsToHtml(s.rows)
         }))
       );
-      text = sections.map(s => `### ${s.title}\n\n${s.content}`).join('\n\n');
+      text = sections.map((s) => `### ${s.title}\n\n${s.content}`).join('\n\n');
     } else if (
-      detectedMime ===
-      'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+      detectedMime === 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
     ) {
       const result = await parsePptx(buffer);
       text = result.text;
-      result.slides.forEach((s, i) =>
-        sections.push({ title: `第 ${i + 1} 页`, content: s })
-      );
+      result.slides.forEach((s, i) => sections.push({ title: `第 ${i + 1} 页`, content: s }));
     } else if (detectedMime.startsWith('image/')) {
       const result = await processImage(buffer, detectedMime);
       text = result.text;

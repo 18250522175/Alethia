@@ -1,9 +1,9 @@
-import { randomUUID } from 'crypto';
-import { join } from 'path';
-import { existsSync } from 'fs';
+import { randomUUID } from 'node:crypto';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { getPool } from '../db/pool';
-import { storage } from '../storage/markdown';
 import logger from '../i18n/logger';
+import { storage } from '../storage/markdown';
 
 interface OrphanLinkRow {
   id: number;
@@ -43,10 +43,7 @@ export async function ghostDetectAndMark(): Promise<{
       const diffCreated = await insertPendingDiff(pool, link);
       if (diffCreated) diffsCreated++;
 
-      logger.debug(
-        { source: link.source_slug, target: link.target_slug },
-        '幽灵链接处理完成'
-      );
+      logger.debug({ source: link.source_slug, target: link.target_slug }, '幽灵链接处理完成');
     } catch (err) {
       logger.warn(
         { err, source: link.source_slug, target: link.target_slug },
@@ -55,10 +52,7 @@ export async function ghostDetectAndMark(): Promise<{
     }
   }
 
-  logger.info(
-    { detected, diffsCreated, sourcesUpdated },
-    '幽灵链接检测与标记完成'
-  );
+  logger.info({ detected, diffsCreated, sourcesUpdated }, '幽灵链接检测与标记完成');
 
   return { detected, marked: detected, diffsCreated, sourcesUpdated };
 }
@@ -108,10 +102,7 @@ function findWikiFileForSlug(slug: string): string | null {
   return null;
 }
 
-async function appendOpenThreadToWiki(
-  sourceSlug: string,
-  targetSlug: string
-): Promise<boolean> {
+async function appendOpenThreadToWiki(sourceSlug: string, targetSlug: string): Promise<boolean> {
   const wikiFile = findWikiFileForSlug(sourceSlug);
   if (!wikiFile) {
     logger.debug({ slug: sourceSlug }, '未找到源 wiki 文件，跳过 Open Threads 追加');

@@ -1,10 +1,10 @@
-import type { EvidenceSpan } from '@shared/evidence';
-import type { Link } from '@shared/entities';
-import type { Settings } from '@shared/settings';
-import type { HealthDashboard } from '@shared/health';
-import type { PendingDiff, ApplyResult } from '@shared/diff';
-import type { QueryResult } from '@shared/query';
 import type { AskResponse, ConversationMessage } from '@shared/ask';
+import type { ApplyResult, PendingDiff } from '@shared/diff';
+import type { Link } from '@shared/entities';
+import type { EvidenceSpan } from '@shared/evidence';
+import type { HealthDashboard } from '@shared/health';
+import type { QueryResult } from '@shared/query';
+import type { Settings } from '@shared/settings';
 
 const API_BASE = '/api';
 const DEFAULT_TIMEOUT = 30_000;
@@ -42,7 +42,13 @@ class ApiErrorClass extends Error {
   isTimeout?: boolean;
   isAbort?: boolean;
 
-  constructor(code: string, message: string, details?: Record<string, unknown>, isTimeout?: boolean, isAbort?: boolean) {
+  constructor(
+    code: string,
+    message: string,
+    details?: Record<string, unknown>,
+    isTimeout?: boolean,
+    isAbort?: boolean
+  ) {
     super(message);
     this.name = 'ApiError';
     this.code = code;
@@ -58,7 +64,7 @@ async function request<T>(
 ): Promise<T> {
   const url = `${API_BASE}${path}`;
   const headers: Record<string, string> = {
-    ...(options.headers as Record<string, string> || {})
+    ...((options.headers as Record<string, string>) || {})
   };
 
   // 仅对非 GET 请求设置 Content-Type
@@ -68,7 +74,7 @@ async function request<T>(
 
   const token = getToken();
   if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+    headers.Authorization = `Bearer ${token}`;
   }
 
   const timeout = options.timeout ?? DEFAULT_TIMEOUT;
@@ -104,7 +110,7 @@ async function request<T>(
         window.dispatchEvent(new CustomEvent('auth:expired'));
       }
 
-      const error = data.error as ApiError || {
+      const error = (data.error as ApiError) || {
         code: 'INTERNAL_ERROR',
         message: '未知错误'
       };
@@ -132,7 +138,12 @@ async function request<T>(
 
 async function requestWithRetry<T>(
   path: string,
-  options: RequestInit & { timeout?: number; retries?: number; retryDelay?: number; signal?: AbortSignal } = {}
+  options: RequestInit & {
+    timeout?: number;
+    retries?: number;
+    retryDelay?: number;
+    signal?: AbortSignal;
+  } = {}
 ): Promise<T> {
   const { retries = 0, retryDelay = 1000, ...requestOptions } = options;
   let lastError: Error | null = null;
@@ -143,8 +154,8 @@ async function requestWithRetry<T>(
     } catch (err) {
       lastError = err as Error;
       if (attempt < retries) {
-        const delay = retryDelay * Math.pow(2, attempt);
-        await new Promise(resolve => setTimeout(resolve, delay));
+        const delay = retryDelay * 2 ** attempt;
+        await new Promise((resolve) => setTimeout(resolve, delay));
       }
     }
   }
@@ -180,14 +191,25 @@ export const api = {
   },
 
   getLlmAdapters() {
-    return request<{ adapters: Array<{ id: string; name: string; enabled: boolean; apiKeyConfigured?: boolean; models: string[] }> }>('/llm/adapters');
+    return request<{
+      adapters: Array<{
+        id: string;
+        name: string;
+        enabled: boolean;
+        apiKeyConfigured?: boolean;
+        models: string[];
+      }>;
+    }>('/llm/adapters');
   },
 
   testLlmAdapter(adapterId: string) {
-    return request<{ adapterId: string; ok: boolean; latencyMs: number; error?: string }>('/llm/test', {
-      method: 'POST',
-      body: JSON.stringify({ adapterId })
-    });
+    return request<{ adapterId: string; ok: boolean; latencyMs: number; error?: string }>(
+      '/llm/test',
+      {
+        method: 'POST',
+        body: JSON.stringify({ adapterId })
+      }
+    );
   },
 
   rebuildStruct() {
@@ -218,7 +240,10 @@ export const api = {
     return request<HealthDashboard>('/health-dashboard');
   },
 
-  askQuestion(question: string, options?: { conversationId?: string; maxReflections?: number; signal?: AbortSignal }) {
+  askQuestion(
+    question: string,
+    options?: { conversationId?: string; maxReflections?: number; signal?: AbortSignal }
+  ) {
     return request<AskResponse>('/ask', {
       method: 'POST',
       body: JSON.stringify({ question, ...options }),
@@ -262,21 +287,19 @@ export const api = {
   },
 
   applyDiff(diffId: string) {
-    return request<ApplyResult>(
-      `/diffs/${diffId}/apply`,
-      { method: 'POST' }
-    );
+    return request<ApplyResult>(`/diffs/${diffId}/apply`, { method: 'POST' });
   },
 
   rejectDiff(diffId: string) {
-    return request<{ diffId: string; applied: boolean }>(
-      `/diffs/${diffId}/reject`,
-      { method: 'POST' }
-    );
+    return request<{ diffId: string; applied: boolean }>(`/diffs/${diffId}/reject`, {
+      method: 'POST'
+    });
   },
 
   getConversation(conversationId: string) {
-    return request<{ items: ConversationMessage[]; total: number }>(`/conversations/${conversationId}`);
+    return request<{ items: ConversationMessage[]; total: number }>(
+      `/conversations/${conversationId}`
+    );
   },
 
   getConversations(params?: { limit?: number; offset?: number }) {

@@ -1,8 +1,8 @@
-import { basename } from 'path';
+import { basename } from 'node:path';
 import matter from 'gray-matter';
-import { storage } from './markdown';
 import { getPool } from '../db/pool';
 import logger from '../i18n/logger';
+import { storage } from './markdown';
 
 export interface ParsedCluster {
   clusterId: string;
@@ -53,25 +53,30 @@ export async function syncSummaries(): Promise<{ clusters: number; members: numb
         const raw = storage.readFile(filePath);
         const parsed = parseSummaryFile(filePath, raw);
 
-        await client.query(`
+        await client.query(
+          `
           INSERT INTO clusters (cluster_id, name, lifecycle, generated_at)
           VALUES ($1, $2, $3, NOW())
           ON CONFLICT (cluster_id) DO UPDATE SET
             name = EXCLUDED.name,
             lifecycle = EXCLUDED.lifecycle,
             generated_at = NOW()
-        `, [parsed.clusterId, parsed.name, parsed.lifecycle]);
+        `,
+          [parsed.clusterId, parsed.name, parsed.lifecycle]
+        );
 
         clusterCount++;
 
         if (parsed.members.length > 0) {
-          await client.query('DELETE FROM cluster_members WHERE cluster_id = $1', [parsed.clusterId]);
+          await client.query('DELETE FROM cluster_members WHERE cluster_id = $1', [
+            parsed.clusterId
+          ]);
 
           for (const slug of parsed.members) {
-            await client.query(
-              'INSERT INTO cluster_members (cluster_id, slug) VALUES ($1, $2)',
-              [parsed.clusterId, slug]
-            );
+            await client.query('INSERT INTO cluster_members (cluster_id, slug) VALUES ($1, $2)', [
+              parsed.clusterId,
+              slug
+            ]);
           }
           memberCount += parsed.members.length;
         }

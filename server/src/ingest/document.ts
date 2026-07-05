@@ -38,7 +38,7 @@ export async function parsePdf(buffer: Buffer): Promise<PdfResult> {
   // pdf-parse 不分页，按 form feed (\f) 切分
   const pages = rawText
     .split('\f')
-    .map(p => cleanText(formulaToLatex(p)))
+    .map((p) => cleanText(formulaToLatex(p)))
     .filter(Boolean);
 
   return { text, pages };
@@ -83,7 +83,7 @@ export async function parseXlsx(buffer: Buffer): Promise<XlsxResult> {
     const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' }) as any[][];
     return {
       name,
-      rows: rows.map(r => (r || []).map(c => String(c ?? '')))
+      rows: rows.map((r) => (r || []).map((c) => String(c ?? '')))
     };
   });
 
@@ -122,9 +122,9 @@ export async function parsePptx(buffer: Buffer): Promise<PptxResult> {
 export function rowsToHtml(rows: string[][]): string {
   if (!rows || rows.length === 0) return '';
   const [header, ...body] = rows;
-  const thead = `<thead><tr>${header.map(c => `<th>${escapeHtml(c)}</th>`).join('')}</tr></thead>`;
+  const thead = `<thead><tr>${header.map((c) => `<th>${escapeHtml(c)}</th>`).join('')}</tr></thead>`;
   const tbody = `<tbody>${body
-    .map(r => `<tr>${(r || []).map(c => `<td>${escapeHtml(c)}</td>`).join('')}</tr>`)
+    .map((r) => `<tr>${(r || []).map((c) => `<td>${escapeHtml(c)}</td>`).join('')}</tr>`)
     .join('')}</tbody>`;
   return `<table>${thead}${tbody}</table>`;
 }
@@ -147,31 +147,31 @@ export function formulaToLatex(text: string): string {
     '√': '\\sqrt',
     '∂': '\\partial',
     '∫': '\\int',
-    'α': '\\alpha',
-    'β': '\\beta',
-    'γ': '\\gamma',
-    'δ': '\\delta',
-    'ε': '\\epsilon',
-    'θ': '\\theta',
-    'λ': '\\lambda',
-    'μ': '\\mu',
-    'ν': '\\nu',
-    'ξ': '\\xi',
-    'π': '\\pi',
-    'ρ': '\\rho',
-    'σ': '\\sigma',
-    'τ': '\\tau',
-    'φ': '\\phi',
-    'ψ': '\\psi',
-    'ω': '\\omega',
-    'Γ': '\\Gamma',
-    'Δ': '\\Delta',
-    'Θ': '\\Theta',
-    'Λ': '\\Lambda',
-    'Σ': '\\Sigma',
-    'Φ': '\\Phi',
-    'Ψ': '\\Psi',
-    'Ω': '\\Omega',
+    α: '\\alpha',
+    β: '\\beta',
+    γ: '\\gamma',
+    δ: '\\delta',
+    ε: '\\epsilon',
+    θ: '\\theta',
+    λ: '\\lambda',
+    μ: '\\mu',
+    ν: '\\nu',
+    ξ: '\\xi',
+    π: '\\pi',
+    ρ: '\\rho',
+    σ: '\\sigma',
+    τ: '\\tau',
+    φ: '\\phi',
+    ψ: '\\psi',
+    ω: '\\omega',
+    Γ: '\\Gamma',
+    Δ: '\\Delta',
+    Θ: '\\Theta',
+    Λ: '\\Lambda',
+    Σ: '\\Sigma',
+    Φ: '\\Phi',
+    Ψ: '\\Psi',
+    Ω: '\\Omega',
     '∈': '\\in',
     '∉': '\\notin',
     '∩': '\\cap',

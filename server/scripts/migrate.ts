@@ -1,5 +1,5 @@
-import { readdirSync, readFileSync } from 'fs';
-import { join } from 'path';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { getPool } from '../src/db/pool';
 import logger from '../src/i18n/logger';
 
@@ -43,7 +43,7 @@ async function runMigrations(): Promise<void> {
     const applied = await getAppliedMigrations(client);
 
     const files = readdirSync(MIGRATIONS_DIR)
-      .filter(f => f.endsWith('.sql'))
+      .filter((f) => f.endsWith('.sql'))
       .sort();
 
     let appliedCount = 0;

@@ -1,5 +1,5 @@
-import { cleanText } from './clean';
 import logger from '../i18n/logger';
+import { cleanText } from './clean';
 
 export interface WebContentResult {
   title: string;
@@ -56,9 +56,7 @@ export function extractHtmlContent(html: string): { title: string; text: string 
   const title = titleMatch ? decodeEntities(titleMatch[1].trim()) : '';
 
   // 去除 DOCTYPE 与注释
-  let body = html
-    .replace(/<!DOCTYPE[^>]*>/gi, '')
-    .replace(/<!--[\s\S]*?-->/g, '');
+  let body = html.replace(/<!DOCTYPE[^>]*>/gi, '').replace(/<!--[\s\S]*?-->/g, '');
 
   // 截取 body
   const bodyMatch = body.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
@@ -82,16 +80,19 @@ export function extractHtmlContent(html: string): { title: string; text: string 
   body = body.replace(/<br\s*\/?>/gi, '\n');
 
   // 列表项
-  body = body.replace(/<li[^>]*>([\s\S]*?)<\/li>/gi, (_, content: string) => `- ${stripTags(content).trim()}\n`);
+  body = body.replace(
+    /<li[^>]*>([\s\S]*?)<\/li>/gi,
+    (_, content: string) => `- ${stripTags(content).trim()}\n`
+  );
 
   // 表格 → 简单文本行
   body = body.replace(/<table[^>]*>([\s\S]*?)<\/table>/gi, (_, content: string) => {
     const rows = content.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi) || [];
-    const parsed = rows.map(r => {
+    const parsed = rows.map((r) => {
       const cells = r.match(/<t[dh][^>]*>[\s\S]*?<\/t[dh]>/gi) || [];
-      return cells.map(c => stripTags(c).trim()).join(' | ');
+      return cells.map((c) => stripTags(c).trim()).join(' | ');
     });
-    return '\n\n' + parsed.join('\n') + '\n\n';
+    return `\n\n${parsed.join('\n')}\n\n`;
   });
 
   // 代码块保留
@@ -137,6 +138,8 @@ function decodeEntities(text: string): string {
     out = out.split(entity).join(ch);
   }
   out = out.replace(/&#(\d+);/g, (_, n: string) => String.fromCharCode(Number(n)));
-  out = out.replace(/&#x([0-9a-fA-F]+);/g, (_, n: string) => String.fromCharCode(parseInt(n, 16)));
+  out = out.replace(/&#x([0-9a-fA-F]+);/g, (_, n: string) =>
+    String.fromCharCode(Number.parseInt(n, 16))
+  );
   return out;
 }

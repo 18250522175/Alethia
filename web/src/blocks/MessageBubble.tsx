@@ -1,5 +1,5 @@
+import { Brain, Coins, Tag, ThumbsDown, ThumbsUp } from '@phosphor-icons/react';
 import { useTranslation } from 'react-i18next';
-import { Brain, Tag, Coins, ThumbsUp, ThumbsDown } from '@phosphor-icons/react';
 
 export interface ChatMessage {
   id: string;
@@ -59,7 +59,8 @@ export default function MessageBubble({ message, onFeedback }: MessageBubbleProp
               {message.sources.slice(0, 3).map((src: any, i) => (
                 <div key={i} className="rounded bg-white/60 p-2 text-xs dark:bg-slate-800/60">
                   <span className="font-mono text-primary-600 dark:text-primary-400">
-                    [^{src.span_id || i + 1}]
+                    [^
+                    {src.span_id || i + 1}]
                   </span>{' '}
                   <span className="line-clamp-1">{src.span_text || src.original_location}</span>
                 </div>

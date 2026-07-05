@@ -1,9 +1,9 @@
-import { existsSync, mkdirSync, writeFileSync, unlinkSync } from 'fs';
-import { dirname, isAbsolute, join } from 'path';
+import { existsSync, mkdirSync, unlinkSync, writeFileSync } from 'node:fs';
+import { dirname, isAbsolute, join } from 'node:path';
 import { getPool } from '../db/pool';
-import { syncEngine } from '../storage/sync';
-import { storage } from '../storage/markdown';
 import logger from '../i18n/logger';
+import { storage } from '../storage/markdown';
+import { syncEngine } from '../storage/sync';
 
 export interface RollbackResult {
   restored: boolean;
@@ -130,7 +130,8 @@ function revertUpdate(filePath: string, payload: any): boolean {
 }
 
 function revertDelete(filePath: string, payload: any): boolean {
-  const oldValue = payload?.oldValue ?? payload?.old_content ?? payload?.oldContent ?? payload?.content;
+  const oldValue =
+    payload?.oldValue ?? payload?.old_content ?? payload?.oldContent ?? payload?.content;
   if (oldValue == null) {
     logger.warn({ filePath }, '回滚 delete: 缺少 oldValue，跳过');
     return false;

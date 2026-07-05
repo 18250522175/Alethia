@@ -1,4 +1,4 @@
-import { createHash } from 'crypto';
+import { createHash } from 'node:crypto';
 import { getPool } from '../db/pool';
 import logger from '../i18n/logger';
 
@@ -8,22 +8,24 @@ import logger from '../i18n/logger';
 export function cleanText(text: string): string {
   if (!text) return '';
 
-  return text
-    // 去除 BOM
-    .replace(/\uFEFF/g, '')
-    // 标准化换行符（CRLF / CR -> LF）
-    .replace(/\r\n/g, '\n')
-    .replace(/\r/g, '\n')
-    // 去除零宽字符
-    .replace(/[\u200B-\u200D\uFEFF]/g, '')
-    // 合并行尾空白
-    .replace(/[ \t]+\n/g, '\n')
-    // 合并行内连续空格（保留缩进）
-    .replace(/(\S)[ \t]{2,}/g, '$1 ')
-    // 合并连续空行（3+ -> 2）
-    .replace(/\n{3,}/g, '\n\n')
-    // 去除首尾空白
-    .trim();
+  return (
+    text
+      // 去除 BOM
+      .replace(/\uFEFF/g, '')
+      // 标准化换行符（CRLF / CR -> LF）
+      .replace(/\r\n/g, '\n')
+      .replace(/\r/g, '\n')
+      // 去除零宽字符
+      .replace(/[\u200B-\u200D\uFEFF]/g, '')
+      // 合并行尾空白
+      .replace(/[ \t]+\n/g, '\n')
+      // 合并行内连续空格（保留缩进）
+      .replace(/(\S)[ \t]{2,}/g, '$1 ')
+      // 合并连续空行（3+ -> 2）
+      .replace(/\n{3,}/g, '\n\n')
+      // 去除首尾空白
+      .trim()
+  );
 }
 
 /**

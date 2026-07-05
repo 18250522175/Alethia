@@ -1,8 +1,8 @@
-import { llmRouter } from '../llm/router';
-import { loadPrompt, parseJSONResponse } from './utils';
-import logger from '../i18n/logger';
 import type { LLMMessage } from '@shared/index';
 import type { GradeResult } from './grader';
+import logger from '../i18n/logger';
+import { llmRouter } from '../llm/router';
+import { loadPrompt, parseJSONResponse } from './utils';
 
 export interface ReflectionResult {
   should_continue: boolean;
@@ -33,22 +33,26 @@ export class Reflector {
   }
 
   trackEntities(entities: string[]): void {
-    entities.forEach(e => this.totalEntities.add(e));
+    entities.forEach((e) => this.totalEntities.add(e));
   }
 
   trackEvidence(evidenceIds: string[]): void {
-    evidenceIds.forEach(e => this.totalEvidence.add(e));
+    evidenceIds.forEach((e) => this.totalEvidence.add(e));
   }
 
-  async reflect(grade: GradeResult, newEntities: string[], newEvidenceIds: string[]): Promise<ReflectionResult> {
+  async reflect(
+    grade: GradeResult,
+    newEntities: string[],
+    newEvidenceIds: string[]
+  ): Promise<ReflectionResult> {
     this.roundCount++;
     const elapsed = Date.now() - this.startTime;
 
     const prevEntityCount = this.totalEntities.size;
     const prevEvidenceCount = this.totalEvidence.size;
 
-    newEntities.forEach(e => this.totalEntities.add(e));
-    newEvidenceIds.forEach(e => this.totalEvidence.add(e));
+    newEntities.forEach((e) => this.totalEntities.add(e));
+    newEvidenceIds.forEach((e) => this.totalEvidence.add(e));
 
     const newEntityCount = this.totalEntities.size - prevEntityCount;
     const newEvidenceCount = this.totalEvidence.size - prevEvidenceCount;
@@ -60,14 +64,18 @@ export class Reflector {
       { role: 'system', content: reflectorPrompt },
       {
         role: 'user',
-        content: JSON.stringify({
-          round: this.roundCount,
-          grade,
-          new_entities_count: newEntityCount,
-          new_evidence_count: newEvidenceCount,
-          total_entities: this.totalEntities.size,
-          total_evidence: this.totalEvidence.size
-        }, null, 2)
+        content: JSON.stringify(
+          {
+            round: this.roundCount,
+            grade,
+            new_entities_count: newEntityCount,
+            new_evidence_count: newEvidenceCount,
+            total_entities: this.totalEntities.size,
+            total_evidence: this.totalEvidence.size
+          },
+          null,
+          2
+        )
       }
     ];
 
@@ -76,12 +84,20 @@ export class Reflector {
     try {
       const adapter = llmRouter.route('qa_gen');
       const response = await adapter.chat({ messages, jsonMode: true, temperature: 0.1 });
-      reflection = parseJSONResponse<ReflectionResult>(response.content, ruleBasedReflection(grade, newEntityCount, newEvidenceCount, this.consecutiveNoGain));
+      reflection = parseJSONResponse<ReflectionResult>(
+        response.content,
+        ruleBasedReflection(grade, newEntityCount, newEvidenceCount, this.consecutiveNoGain)
+      );
       reflection.new_entities_count = newEntityCount;
       reflection.new_evidence_count = newEvidenceCount;
     } catch (err) {
       logger.warn({ err }, '反思器 LLM 调用失败，使用规则判断');
-      reflection = ruleBasedReflection(grade, newEntityCount, newEvidenceCount, this.consecutiveNoGain);
+      reflection = ruleBasedReflection(
+        grade,
+        newEntityCount,
+        newEvidenceCount,
+        this.consecutiveNoGain
+      );
     }
 
     if (this.roundCount >= MAX_ROUNDS) {
@@ -99,12 +115,15 @@ export class Reflector {
       reflection.next_action = '连续两轮无信息增益，停止检索';
     }
 
-    logger.info({
-      round: this.roundCount,
-      should_continue: reflection.should_continue,
-      completeness: reflection.completeness,
-      next_action: reflection.next_action
-    }, '反思完成');
+    logger.info(
+      {
+        round: this.roundCount,
+        should_continue: reflection.should_continue,
+        completeness: reflection.completeness,
+        next_action: reflection.next_action
+      },
+      '反思完成'
+    );
 
     return reflection;
   }

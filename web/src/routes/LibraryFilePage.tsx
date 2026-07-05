@@ -1,25 +1,25 @@
+import {
+  ArrowLeft,
+  Clock,
+  Code,
+  Download,
+  File as FileIcon,
+  FileText,
+  FilmSlate,
+  Hash,
+  Image as ImageIcon,
+  ListBullets,
+  PlayCircle,
+  SpeakerHigh,
+  Spinner,
+  Warning
+} from '@phosphor-icons/react';
+import { useQuery } from '@tanstack/react-query';
 import { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useSearchParams, Link as RouterLink } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import {
-  FileText,
-  ArrowLeft,
-  Spinner,
-  Warning,
-  Hash,
-  Clock,
-  File as FileIcon,
-  FilmSlate,
-  SpeakerHigh,
-  Image as ImageIcon,
-  Download,
-  PlayCircle,
-  Code,
-  ListBullets
-} from '@phosphor-icons/react';
+import { Link as RouterLink, useSearchParams } from 'react-router-dom';
 import api from '../lib/api';
-import { formatFileSize, formatDateTime } from '../lib/format';
+import { formatDateTime, formatFileSize } from '../lib/format';
 
 interface LibraryFile {
   hash: string;
@@ -30,22 +30,19 @@ interface LibraryFile {
   ingestedAt: string;
 }
 
-interface EvidenceSpanItem {
-  spanId: string;
-  originalLocation: string;
-  spanText: string;
-  sourceType: string;
-}
-
 const TIMECODE_REGEX = /(\d{1,2}):(\d{2})(?::(\d{2}))?/g;
 
 function parseTimecodeToSeconds(text: string): number | null {
   const match = text.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
   if (!match) return null;
   if (match[3] !== undefined) {
-    return parseInt(match[1], 10) * 3600 + parseInt(match[2], 10) * 60 + parseInt(match[3], 10);
+    return (
+      Number.parseInt(match[1], 10) * 3600 +
+      Number.parseInt(match[2], 10) * 60 +
+      Number.parseInt(match[3], 10)
+    );
   }
-  return parseInt(match[1], 10) * 60 + parseInt(match[2], 10);
+  return Number.parseInt(match[1], 10) * 60 + Number.parseInt(match[2], 10);
 }
 
 function formatTimecode(seconds: number): string {
@@ -108,7 +105,7 @@ export default function LibraryFilePage() {
         for (const m of matches) {
           const tc = m[0];
           const sec = parseTimecodeToSeconds(tc);
-          if (sec !== null && !out.some(o => o.seconds === sec)) {
+          if (sec !== null && !out.some((o) => o.seconds === sec)) {
             out.push({
               seconds: sec,
               label: tc,
@@ -160,7 +157,9 @@ export default function LibraryFilePage() {
         <Warning size={48} className="mb-3 text-red-400" />
         <p className="text-slate-700 dark:text-slate-200">无法加载文件信息</p>
         <p className="mt-1 font-mono text-xs text-slate-500 dark:text-slate-400">{hash}</p>
-        <p className="mt-1 text-xs text-slate-400">请检查后端 /api/library-files/:hash 路由是否已实现</p>
+        <p className="mt-1 text-xs text-slate-400">
+          请检查后端 /api/library-files/:hash 路由是否已实现
+        </p>
         <RouterLink to="/" className="btn btn-secondary mt-4">
           <ArrowLeft size={14} className="mr-1" />
           {t('common.back', '返回')}
@@ -215,15 +214,8 @@ export default function LibraryFilePage() {
                 }}
               />
               <MetaRow label="大小" value={formatFileSize(file.size)} />
-              <MetaRow
-                label="状态"
-                value={file.status}
-                badge={statusBadgeInfo(file.status)}
-              />
-              <MetaRow
-                label="上传时间"
-                value={formatDateTime(file.ingestedAt)}
-              />
+              <MetaRow label="状态" value={file.status} badge={statusBadgeInfo(file.status)} />
+              <MetaRow label="上传时间" value={formatDateTime(file.ingestedAt)} />
               <MetaRow label="哈希" value={file.hash} mono />
             </dl>
           </section>
@@ -235,7 +227,7 @@ export default function LibraryFilePage() {
                 时间码跳转
               </div>
               <ul className="space-y-1.5">
-                {timecodes.map(tc => (
+                {timecodes.map((tc) => (
                   <li key={tc.spanId + tc.label}>
                     <button
                       type="button"
@@ -256,7 +248,8 @@ export default function LibraryFilePage() {
               </ul>
               {(category === 'audio' || category === 'video') && (
                 <div className="mt-2 border-t border-slate-200 pt-2 text-[11px] text-slate-500 dark:border-slate-700 dark:text-slate-400">
-                  当前时间：<span className="font-mono font-medium">{formatTimecode(currentTime)}</span>
+                  当前时间：
+                  <span className="font-mono font-medium">{formatTimecode(currentTime)}</span>
                 </div>
               )}
             </section>
@@ -266,10 +259,11 @@ export default function LibraryFilePage() {
             <section className="card p-4">
               <div className="mb-3 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
                 <FileText size={12} />
-                证据片段（{evidenceSpans.length}）
+                证据片段（
+                {evidenceSpans.length}）
               </div>
               <ul className="space-y-2">
-                {evidenceSpans.slice(0, 12).map(span => (
+                {evidenceSpans.slice(0, 12).map((span) => (
                   <li
                     key={span.spanId}
                     className="rounded-md bg-slate-50 px-2 py-1.5 text-xs dark:bg-slate-700/40"
@@ -316,7 +310,9 @@ function FileMetaHeader({
   const { Icon, label, color } = categoryIcon(category);
   return (
     <header className="card overflow-hidden p-0">
-      <div className={`border-l-4 ${color === 'primary' ? 'border-primary-500' : 'border-slate-400'} p-5`}>
+      <div
+        className={`border-l-4 ${color === 'primary' ? 'border-primary-500' : 'border-slate-400'} p-5`}
+      >
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0 flex-1">
             <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900 dark:text-slate-100">
@@ -337,11 +333,7 @@ function FileMetaHeader({
             </div>
           </div>
           {contentUrl && (
-            <a
-              href={contentUrl}
-              download={file.originalName}
-              className="btn btn-secondary text-sm"
-            >
+            <a href={contentUrl} download={file.originalName} className="btn btn-secondary text-sm">
               <Download size={14} className="mr-1" />
               下载
             </a>
@@ -375,9 +367,12 @@ function categoryIcon(category: ReturnType<typeof detectCategory>): {
 
 function statusBadgeInfo(status: string): { className: string; label: string } {
   const s = (status || '').toLowerCase();
-  if (s === 'ready' || s === 'processed' || s === 'active') return { className: 'badge-green', label: '已就绪' };
-  if (s === 'pending' || s === 'processing' || s === 'queued') return { className: 'badge-yellow', label: '处理中' };
-  if (s === 'failed' || s === 'error' || s === 'rejected') return { className: 'badge-red', label: '失败' };
+  if (s === 'ready' || s === 'processed' || s === 'active')
+    return { className: 'badge-green', label: '已就绪' };
+  if (s === 'pending' || s === 'processing' || s === 'queued')
+    return { className: 'badge-yellow', label: '处理中' };
+  if (s === 'failed' || s === 'error' || s === 'rejected')
+    return { className: 'badge-red', label: '失败' };
   return { className: 'badge-blue', label: status || '未知' };
 }
 
@@ -396,9 +391,7 @@ function MetaRow({
     <div className="flex items-start justify-between gap-3">
       <dt className="flex-shrink-0 text-slate-500 dark:text-slate-400">{label}</dt>
       <dd className="min-w-0 flex flex-wrap items-center gap-1 text-right">
-        {badge && (
-          <span className={`badge ${badge.className} text-[10px]`}>{badge.label}</span>
-        )}
+        {badge && <span className={`badge ${badge.className} text-[10px]`}>{badge.label}</span>}
         <span
           className={`break-all text-slate-700 dark:text-slate-200 ${mono ? 'font-mono text-[11px]' : ''}`}
         >
@@ -449,7 +442,7 @@ function FilePreview({
           ref={audioRef}
           src={contentUrl}
           controls
-          onTimeUpdate={e => onTimeUpdate((e.target as HTMLAudioElement).currentTime)}
+          onTimeUpdate={(e) => onTimeUpdate((e.target as HTMLAudioElement).currentTime)}
           className="w-full"
         >
           您的浏览器不支持音频播放。
@@ -464,7 +457,7 @@ function FilePreview({
         ref={videoRef}
         src={contentUrl}
         controls
-        onTimeUpdate={e => onTimeUpdate((e.target as HTMLVideoElement).currentTime)}
+        onTimeUpdate={(e) => onTimeUpdate((e.target as HTMLVideoElement).currentTime)}
         className="max-h-[70vh] w-full rounded-lg bg-black"
       >
         您的浏览器不支持视频播放。
@@ -483,15 +476,17 @@ function FilePreview({
   }
 
   if (category === 'text') {
-    return (
-      <TextPreview contentUrl={contentUrl} mime={file.mime} />
-    );
+    return <TextPreview contentUrl={contentUrl} mime={file.mime} />;
   }
 
   return (
     <div className="flex flex-col items-center justify-center gap-3 py-12 text-center text-slate-500 dark:text-slate-400">
       <FileIcon size={48} className="text-slate-300 dark:text-slate-600" />
-      <p className="text-sm">该文件类型（{file.mime || '未知'}）暂不支持在线预览</p>
+      <p className="text-sm">
+        该文件类型（
+        {file.mime || '未知'}
+        ）暂不支持在线预览
+      </p>
       <a href={contentUrl} download={file.originalName} className="btn btn-secondary text-sm">
         <Download size={14} className="mr-1" />
         下载文件查看

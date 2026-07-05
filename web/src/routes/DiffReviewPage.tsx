@@ -1,23 +1,21 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useTranslation } from 'react-i18next';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  CheckCircle,
-  XCircle,
-  Ghost,
-  Warning,
-  Info,
-  Spinner,
-  Empty,
-  Keyboard,
   ArrowDown,
-  ArrowUp
+  ArrowUp,
+  CheckCircle,
+  Empty,
+  Ghost,
+  Info,
+  Keyboard,
+  Spinner,
+  Warning,
+  XCircle
 } from '@phosphor-icons/react';
-import api from '../lib/api';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import DiffCompare from '../components/DiffCompare';
 import { useNotification } from '../contexts/NotificationContext';
-
-const TIER_IDS = ['green', 'yellow', 'red'] as const;
+import api from '../lib/api';
 
 export default function DiffReviewPage() {
   const { t } = useTranslation();
@@ -27,9 +25,24 @@ export default function DiffReviewPage() {
   const queryClient = useQueryClient();
 
   const TIERS = [
-    { id: 'green', label: t('review.tierGreen', '🟢 低风险'), desc: t('review.tierGreenDesc', '可直接应用'), color: 'badge-green' },
-    { id: 'yellow', label: t('review.tierYellow', '🟡 待确认'), desc: t('review.tierYellowDesc', '需人工确认'), color: 'badge-yellow' },
-    { id: 'red', label: t('review.tierRed', '🔴 高风险'), desc: t('review.tierRedDesc', '需谨慎审核'), color: 'badge-red' }
+    {
+      id: 'green',
+      label: t('review.tierGreen', '🟢 低风险'),
+      desc: t('review.tierGreenDesc', '可直接应用'),
+      color: 'badge-green'
+    },
+    {
+      id: 'yellow',
+      label: t('review.tierYellow', '🟡 待确认'),
+      desc: t('review.tierYellowDesc', '需人工确认'),
+      color: 'badge-yellow'
+    },
+    {
+      id: 'red',
+      label: t('review.tierRed', '🔴 高风险'),
+      desc: t('review.tierRedDesc', '需谨慎审核'),
+      color: 'badge-red'
+    }
   ] as const;
 
   const allDiffsQuery = useQuery({
@@ -77,22 +90,28 @@ export default function DiffReviewPage() {
   });
 
   const allDiffs = allDiffsQuery.data?.items || [];
-  const diffs = allDiffs.filter(d => d.tier === activeTier);
+  const diffs = allDiffs.filter((d) => d.tier === activeTier);
 
   const tierCounts: Record<string, number> = { green: 0, yellow: 0, red: 0 };
-  allDiffs.forEach(d => {
+  allDiffs.forEach((d) => {
     if (d.tier && tierCounts[d.tier] !== undefined) {
       tierCounts[d.tier]++;
     }
   });
 
-  const handleApply = useCallback((diffId: string) => {
-    applyMutation.mutate(diffId);
-  }, [applyMutation]);
+  const handleApply = useCallback(
+    (diffId: string) => {
+      applyMutation.mutate(diffId);
+    },
+    [applyMutation]
+  );
 
-  const handleReject = useCallback((diffId: string) => {
-    rejectMutation.mutate(diffId);
-  }, [rejectMutation]);
+  const handleReject = useCallback(
+    (diffId: string) => {
+      rejectMutation.mutate(diffId);
+    },
+    [rejectMutation]
+  );
 
   const handleBatchApply = async () => {
     const items = allDiffsQuery.data?.items || [];
@@ -113,10 +132,10 @@ export default function DiffReviewPage() {
 
       if (e.key === 'j' || e.key === 'ArrowDown') {
         e.preventDefault();
-        setActiveIndex(prev => Math.min(prev + 1, diffs.length - 1));
+        setActiveIndex((prev) => Math.min(prev + 1, diffs.length - 1));
       } else if (e.key === 'k' || e.key === 'ArrowUp') {
         e.preventDefault();
-        setActiveIndex(prev => Math.max(prev - 1, 0));
+        setActiveIndex((prev) => Math.max(prev - 1, 0));
       } else if (e.key === 'Enter') {
         e.preventDefault();
         const currentDiff = diffs[activeIndex];
@@ -134,7 +153,14 @@ export default function DiffReviewPage() {
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [diffs, activeIndex, applyMutation.isPending, rejectMutation.isPending, handleApply, handleReject]);
+  }, [
+    diffs,
+    activeIndex,
+    applyMutation.isPending,
+    rejectMutation.isPending,
+    handleApply,
+    handleReject
+  ]);
 
   useEffect(() => {
     setActiveIndex(0);
@@ -152,37 +178,38 @@ export default function DiffReviewPage() {
               {t('review.title')}
             </h1>
             <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-              {t('review.subtitle', '人类掌权 · 所有 AI 自动生成的知识变更需经你确认才会写入知识库')}
+              {t(
+                'review.subtitle',
+                '人类掌权 · 所有 AI 自动生成的知识变更需经你确认才会写入知识库'
+              )}
             </p>
           </div>
           <div className="flex items-center gap-2 text-xs text-slate-400">
             <Keyboard size={14} />
-            <span className="hidden sm:inline">{t('review.shortcuts', '快捷键: J/K 切换 · Enter 应用 · R 拒绝')}</span>
+            <span className="hidden sm:inline">
+              {t('review.shortcuts', '快捷键: J/K 切换 · Enter 应用 · R 拒绝')}
+            </span>
             <span className="sm:hidden">J/K/Enter/R</span>
           </div>
         </div>
       </header>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        {TIERS.map(tier => {
+        {TIERS.map((tier) => {
           const count = tierCounts[tier.id] || 0;
           return (
             <button
               key={tier.id}
               onClick={() => setActiveTier(tier.id)}
               className={`card flex items-center justify-between p-4 text-left transition-all ${
-                activeTier === tier.id
-                  ? 'ring-2 ring-primary-500'
-                  : 'hover:shadow-md'
+                activeTier === tier.id ? 'ring-2 ring-primary-500' : 'hover:shadow-md'
               }`}
             >
               <div>
                 <div className="text-sm font-medium">{tier.label}</div>
                 <div className="text-xs text-slate-500 dark:text-slate-400">{tier.desc}</div>
               </div>
-              <span className={`badge ${tier.color} text-base`}>
-                {count}
-              </span>
+              <span className={`badge ${tier.color} text-base`}>{count}</span>
             </button>
           );
         })}
@@ -190,7 +217,9 @@ export default function DiffReviewPage() {
 
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">
-          {t('review.pendingDiffs', '{{tier}} 待审核变更', { tier: TIERS.find(t => t.id === activeTier)?.label || '' })}
+          {t('review.pendingDiffs', '{{tier}} 待审核变更', {
+            tier: TIERS.find((t) => t.id === activeTier)?.label || ''
+          })}
           {diffs.length > 0 && (
             <span className="ml-2 text-sm font-normal text-slate-500">
               ({activeIndex + 1} / {diffs.length})
@@ -201,7 +230,7 @@ export default function DiffReviewPage() {
           {diffs.length > 0 && (
             <div className="flex items-center gap-1">
               <button
-                onClick={() => setActiveIndex(prev => Math.max(prev - 1, 0))}
+                onClick={() => setActiveIndex((prev) => Math.max(prev - 1, 0))}
                 disabled={activeIndex === 0}
                 className="btn btn-ghost p-1.5 disabled:opacity-50"
                 title="上一个 (K)"
@@ -209,7 +238,7 @@ export default function DiffReviewPage() {
                 <ArrowUp size={16} />
               </button>
               <button
-                onClick={() => setActiveIndex(prev => Math.min(prev + 1, diffs.length - 1))}
+                onClick={() => setActiveIndex((prev) => Math.min(prev + 1, diffs.length - 1))}
                 disabled={activeIndex === diffs.length - 1}
                 className="btn btn-ghost p-1.5 disabled:opacity-50"
                 title="下一个 (J)"
@@ -240,10 +269,15 @@ export default function DiffReviewPage() {
         <div className="card flex flex-col items-center justify-center py-16 text-center">
           <Empty size={48} className="mb-3 text-slate-300 dark:text-slate-600" />
           <p className="text-slate-500 dark:text-slate-400">
-            {t('review.emptyQueue', '当前队列没有 {{tier}} 变更。', { tier: TIERS.find(t => t.id === activeTier)?.label || '' })}
+            {t('review.emptyQueue', '当前队列没有 {{tier}} 变更。', {
+              tier: TIERS.find((t) => t.id === activeTier)?.label || ''
+            })}
           </p>
           <p className="mt-1 text-xs text-slate-400">
-            {t('review.emptyQueueHint', '当 AI 从上传文件中提取新知识，或检测到知识缺口时，这里会出现待审核条目。')}
+            {t(
+              'review.emptyQueueHint',
+              '当 AI 从上传文件中提取新知识，或检测到知识缺口时，这里会出现待审核条目。'
+            )}
           </p>
         </div>
       ) : (
@@ -277,11 +311,26 @@ interface DiffCardProps {
 function DiffCard({ diff, onApply, onReject, applying, rejecting, isActive }: DiffCardProps) {
   const { t } = useTranslation();
   const TIERS = [
-    { id: 'green', label: t('review.tierGreen', '🟢 低风险'), desc: t('review.tierGreenDesc', '可直接应用'), color: 'badge-green' },
-    { id: 'yellow', label: t('review.tierYellow', '🟡 待确认'), desc: t('review.tierYellowDesc', '需人工确认'), color: 'badge-yellow' },
-    { id: 'red', label: t('review.tierRed', '🔴 高风险'), desc: t('review.tierRedDesc', '需谨慎审核'), color: 'badge-red' }
+    {
+      id: 'green',
+      label: t('review.tierGreen', '🟢 低风险'),
+      desc: t('review.tierGreenDesc', '可直接应用'),
+      color: 'badge-green'
+    },
+    {
+      id: 'yellow',
+      label: t('review.tierYellow', '🟡 待确认'),
+      desc: t('review.tierYellowDesc', '需人工确认'),
+      color: 'badge-yellow'
+    },
+    {
+      id: 'red',
+      label: t('review.tierRed', '🔴 高风险'),
+      desc: t('review.tierRedDesc', '需谨慎审核'),
+      color: 'badge-red'
+    }
   ];
-  const tierMeta = TIERS.find(t => t.id === diff.tier) || TIERS[0];
+  const tierMeta = TIERS.find((t) => t.id === diff.tier) || TIERS[0];
   const impactMeta =
     diff.impact === 'high'
       ? { icon: Warning, color: 'text-red-500', label: t('review.impactHigh', '高影响') }
@@ -295,7 +344,9 @@ function DiffCard({ diff, onApply, onReject, applying, rejecting, isActive }: Di
   const newValue = diff.payload?.newValue ?? '';
 
   return (
-    <div className={`card p-5 transition-all ${isActive ? 'ring-2 ring-primary-500 shadow-lg' : ''}`}>
+    <div
+      className={`card p-5 transition-all ${isActive ? 'ring-2 ring-primary-500 shadow-lg' : ''}`}
+    >
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <span className={`badge ${tierMeta.color}`}>{tierMeta.label}</span>
@@ -306,10 +357,12 @@ function DiffCard({ diff, onApply, onReject, applying, rejecting, isActive }: Di
             </span>
           )}
           <span className="text-xs text-slate-500 dark:text-slate-400">
-            {t('review.entity', '实体：')}<span className="font-mono text-primary-600 dark:text-primary-400">{diff.slug}</span>
+            {t('review.entity', '实体：')}
+            <span className="font-mono text-primary-600 dark:text-primary-400">{diff.slug}</span>
           </span>
           <span className="text-xs text-slate-500 dark:text-slate-400">
-            {t('review.type', '类型：')}{diff.type}
+            {t('review.type', '类型：')}
+            {diff.type}
           </span>
         </div>
         <div className={`flex items-center gap-1 text-xs font-medium ${impactMeta.color}`}>
@@ -329,16 +382,16 @@ function DiffCard({ diff, onApply, onReject, applying, rejecting, isActive }: Di
           <div className="mb-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
             {t('review.context', '上下文')}
           </div>
-          <p className="text-sm text-slate-600 dark:text-slate-300">
-            {diff.payload.context}
-          </p>
+          <p className="text-sm text-slate-600 dark:text-slate-300">{diff.payload.context}</p>
         </div>
       )}
 
       <div className="mt-4 flex items-center justify-between">
         <div className="text-xs text-slate-400">
-          {t('review.confidence', '置信度：{{value}}%', { value: Math.round((diff.confidence || 0) * 100) })} · {t('review.createdAt', '创建于')}{' '}
-          {new Date(diff.createdAt).toLocaleString()}
+          {t('review.confidence', '置信度：{{value}}%', {
+            value: Math.round((diff.confidence || 0) * 100)
+          })}{' '}
+          ·{t('review.createdAt', '创建于')} {new Date(diff.createdAt).toLocaleString()}
         </div>
         <div className="flex gap-2">
           <button

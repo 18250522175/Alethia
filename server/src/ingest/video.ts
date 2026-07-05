@@ -1,9 +1,9 @@
-import { execSync } from 'child_process';
-import { mkdtempSync, rmSync } from 'fs';
-import { tmpdir } from 'os';
-import { basename, join } from 'path';
-import { transcribeAudio } from './audio';
+import { execSync } from 'node:child_process';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { basename, join } from 'node:path';
 import logger from '../i18n/logger';
+import { transcribeAudio } from './audio';
 
 export interface VideoProcessResult {
   text: string;

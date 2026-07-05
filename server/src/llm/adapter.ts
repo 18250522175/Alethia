@@ -1,4 +1,4 @@
-import type { LLMRequest, LLMResponse, LLMAdapter, AdapterId } from '@shared/index';
+import type { AdapterId, LLMAdapter, LLMRequest, LLMResponse } from '@shared/index';
 import logger from '../i18n/logger';
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 60_000;
@@ -27,7 +27,7 @@ export abstract class BaseLLMAdapter implements LLMAdapter {
       'deepseek-reasoner': { prompt: 0.002, completion: 0.008 },
       'yi-large': { prompt: 0.02, completion: 0.02 },
       'Baichuan2-Turbo': { prompt: 0.008, completion: 0.008 },
-      'text-embedding-v1': { prompt: 0.0005, completion: 0 },
+      'text-embedding-v1': { prompt: 0.0005, completion: 0 }
     };
 
     const price = pricing[model] || { prompt: 0.001, completion: 0.002 };
@@ -58,7 +58,6 @@ export class BaseOpenAICompatibleAdapter extends BaseLLMAdapter {
   }
 
   async chat(req: LLMRequest): Promise<LLMResponse> {
-    const startTime = Date.now();
     const model = req.model || this.defaultModel;
 
     try {
@@ -66,7 +65,7 @@ export class BaseOpenAICompatibleAdapter extends BaseLLMAdapter {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`
+          Authorization: `Bearer ${this.apiKey}`
         },
         body: JSON.stringify({
           model,
@@ -112,7 +111,7 @@ export class BaseOpenAICompatibleAdapter extends BaseLLMAdapter {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`
+          Authorization: `Bearer ${this.apiKey}`
         },
         body: JSON.stringify({
           model: this.defaultModel,
@@ -143,7 +142,7 @@ export class BaseOpenAICompatibleAdapter extends BaseLLMAdapter {
       const response = await fetch(`${this.baseURL}/models`, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${this.apiKey}`
+          Authorization: `Bearer ${this.apiKey}`
         },
         signal: AbortSignal.timeout(10000)
       });

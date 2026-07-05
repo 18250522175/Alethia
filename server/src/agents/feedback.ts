@@ -86,19 +86,12 @@ function extractCitedSpanIds(content: string): string[] {
 async function writeShadowBenchmark(message: MessageRow, note?: string): Promise<void> {
   try {
     const pool = getPool();
-    const expectedOutput = (note && note.trim().length > 0)
-      ? note.trim()
-      : '（用户未提供期望输出）';
+    const expectedOutput = note && note.trim().length > 0 ? note.trim() : '（用户未提供期望输出）';
 
     await pool.query(
       `INSERT INTO shadow_benchmarks (type, slug, source_text, expected_output, git_commit)
        VALUES ($1, $2, $3, $4, NULL)`,
-      [
-        'correction',
-        `conv:${message.conversationId}`,
-        message.content,
-        expectedOutput
-      ]
+      ['correction', `conv:${message.conversationId}`, message.content, expectedOutput]
     );
   } catch (err) {
     logger.warn({ err, conversationId: message.conversationId }, '写入 shadow_benchmark 失败');

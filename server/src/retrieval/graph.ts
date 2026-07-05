@@ -1,6 +1,6 @@
+import type { Link } from '@shared/index';
 import { getPool } from '../db/pool';
 import logger from '../i18n/logger';
-import type { Link } from '@shared/index';
 
 export async function graphTraverse(slug: string, depth: number = 2): Promise<Link[]> {
   const MAX_DEPTH = 5;
@@ -33,7 +33,7 @@ export async function graphTraverse(slug: string, depth: number = 2): Promise<Li
       sourceSlug: row.source_slug,
       targetSlug: row.target_slug,
       relation: row.relation,
-      weight: parseFloat(row.weight),
+      weight: Number.parseFloat(row.weight),
       orphaned: row.orphaned,
       createdAt: ''
     }));
@@ -43,13 +43,12 @@ export async function graphTraverse(slug: string, depth: number = 2): Promise<Li
   }
 }
 
-export async function getGraphNodes(limit: number = 200): Promise<{ slug: string; title: string; type: string }[]> {
+export async function getGraphNodes(
+  limit: number = 200
+): Promise<{ slug: string; title: string; type: string }[]> {
   try {
     const pool = getPool();
-    const result = await pool.query(
-      `SELECT slug, title, type FROM pages LIMIT $1`,
-      [limit]
-    );
+    const result = await pool.query(`SELECT slug, title, type FROM pages LIMIT $1`, [limit]);
     return result.rows.map((row: any) => ({
       slug: row.slug,
       title: row.title,
@@ -61,7 +60,9 @@ export async function getGraphNodes(limit: number = 200): Promise<{ slug: string
   }
 }
 
-export async function getGraphEdges(limit: number = 500): Promise<{ source: string; target: string; relation: string; orphaned: boolean }[]> {
+export async function getGraphEdges(
+  limit: number = 500
+): Promise<{ source: string; target: string; relation: string; orphaned: boolean }[]> {
   try {
     const pool = getPool();
     const result = await pool.query(

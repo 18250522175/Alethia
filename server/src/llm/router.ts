@@ -1,17 +1,16 @@
-import type { LLMAdapter, ModelTier, AdapterStatus, AdapterId } from '@shared/index';
-import { BailianAdapter } from './adapters/bailian';
-import { ZhipuAdapter } from './adapters/zhipu';
-import { MoonshotAdapter } from './adapters/moonshot';
-import { ErnieAdapter } from './adapters/ernie';
-import { SparkAdapter } from './adapters/spark';
-import { HunyuanAdapter } from './adapters/hunyuan';
-import { MiniMaxAdapter } from './adapters/minimax';
-import { DeepSeekAdapter } from './adapters/deepseek';
-import { YiAdapter } from './adapters/yi';
-import { BaichuanAdapter } from './adapters/baichuan';
+import type { AdapterId, AdapterStatus, LLMAdapter, ModelTier } from '@shared/index';
 import { RECOMMENDED_MODEL_ASSIGNMENT } from '@shared/index';
 import logger from '../i18n/logger';
-import { loadEnv } from '../config/loader';
+import { BaichuanAdapter } from './adapters/baichuan';
+import { BailianAdapter } from './adapters/bailian';
+import { DeepSeekAdapter } from './adapters/deepseek';
+import { ErnieAdapter } from './adapters/ernie';
+import { HunyuanAdapter } from './adapters/hunyuan';
+import { MiniMaxAdapter } from './adapters/minimax';
+import { MoonshotAdapter } from './adapters/moonshot';
+import { SparkAdapter } from './adapters/spark';
+import { YiAdapter } from './adapters/yi';
+import { ZhipuAdapter } from './adapters/zhipu';
 
 class LLMRouter {
   private adapters: Map<string, LLMAdapter> = new Map();
@@ -23,28 +22,66 @@ class LLMRouter {
   }
 
   private initializeAdapters(): void {
-    const env = loadEnv();
-
-    const adapterConfigs: Array<{ id: AdapterId; cls: any; apiKeyEnv: string; defaultModel: string }> = [
-      { id: 'bailian', cls: BailianAdapter, apiKeyEnv: 'BAILIAN_API_KEY', defaultModel: 'qwen-turbo' },
-      { id: 'zhipu', cls: ZhipuAdapter, apiKeyEnv: 'ZHIPU_API_KEY', defaultModel: 'glm-4-flash' },
-      { id: 'moonshot', cls: MoonshotAdapter, apiKeyEnv: 'MOONSHOT_API_KEY', defaultModel: 'moonshot-v1-8k' },
-      { id: 'ernie', cls: ErnieAdapter, apiKeyEnv: 'ERNIE_API_KEY', defaultModel: 'ernie-speed-128k' },
-      { id: 'spark', cls: SparkAdapter, apiKeyEnv: 'SPARK_API_KEY', defaultModel: 'spark-lite' },
-      { id: 'hunyuan', cls: HunyuanAdapter, apiKeyEnv: 'HUNYUAN_API_KEY', defaultModel: 'hunyuan-lite' },
-      { id: 'minimax', cls: MiniMaxAdapter, apiKeyEnv: 'MINIMAX_API_KEY', defaultModel: 'abab6.5-chat' },
-      { id: 'deepseek', cls: DeepSeekAdapter, apiKeyEnv: 'DEEPSEEK_API_KEY', defaultModel: 'deepseek-chat' },
-      { id: 'yi', cls: YiAdapter, apiKeyEnv: 'YI_API_KEY', defaultModel: 'yi-large' },
-      { id: 'baichuan', cls: BaichuanAdapter, apiKeyEnv: 'BAICHUAN_API_KEY', defaultModel: 'Baichuan2-Turbo' },
+    const adapterConfigs: Array<{
+      id: AdapterId;
+      Cls: any;
+      apiKeyEnv: string;
+      defaultModel: string;
+    }> = [
+      {
+        id: 'bailian',
+        Cls: BailianAdapter,
+        apiKeyEnv: 'BAILIAN_API_KEY',
+        defaultModel: 'qwen-turbo'
+      },
+      { id: 'zhipu', Cls: ZhipuAdapter, apiKeyEnv: 'ZHIPU_API_KEY', defaultModel: 'glm-4-flash' },
+      {
+        id: 'moonshot',
+        Cls: MoonshotAdapter,
+        apiKeyEnv: 'MOONSHOT_API_KEY',
+        defaultModel: 'moonshot-v1-8k'
+      },
+      {
+        id: 'ernie',
+        Cls: ErnieAdapter,
+        apiKeyEnv: 'ERNIE_API_KEY',
+        defaultModel: 'ernie-speed-128k'
+      },
+      { id: 'spark', Cls: SparkAdapter, apiKeyEnv: 'SPARK_API_KEY', defaultModel: 'spark-lite' },
+      {
+        id: 'hunyuan',
+        Cls: HunyuanAdapter,
+        apiKeyEnv: 'HUNYUAN_API_KEY',
+        defaultModel: 'hunyuan-lite'
+      },
+      {
+        id: 'minimax',
+        Cls: MiniMaxAdapter,
+        apiKeyEnv: 'MINIMAX_API_KEY',
+        defaultModel: 'abab6.5-chat'
+      },
+      {
+        id: 'deepseek',
+        Cls: DeepSeekAdapter,
+        apiKeyEnv: 'DEEPSEEK_API_KEY',
+        defaultModel: 'deepseek-chat'
+      },
+      { id: 'yi', Cls: YiAdapter, apiKeyEnv: 'YI_API_KEY', defaultModel: 'yi-large' },
+      {
+        id: 'baichuan',
+        Cls: BaichuanAdapter,
+        apiKeyEnv: 'BAICHUAN_API_KEY',
+        defaultModel: 'Baichuan2-Turbo'
+      }
     ];
 
     for (const config of adapterConfigs) {
       const apiKey = (process.env[config.apiKeyEnv] as string) || '';
-      const adapter = new config.cls(apiKey, config.defaultModel);
+      const adapter = new config.Cls(apiKey, config.defaultModel);
       this.adapters.set(config.id, adapter);
     }
 
-    const configured = this.getAdapterStatuses().filter(s => s.apiKeyConfigured).length;
+    const configured = this.getAdapterStatuses().filter((s) => s.apiKeyConfigured).length;
     logger.info(`LLM 适配器初始化完成，共 ${this.adapters.size} 个，已配置 ${configured} 个`);
   }
 
@@ -79,7 +116,6 @@ class LLMRouter {
   }
 
   getAdapterStatuses(): AdapterStatus[] {
-    const env = loadEnv();
     const statuses: AdapterStatus[] = [];
 
     for (const [id, adapter] of this.adapters.entries()) {
@@ -100,7 +136,7 @@ class LLMRouter {
   }
 
   hasAnyConfigured(): boolean {
-    return this.getAdapterStatuses().some(s => s.apiKeyConfigured);
+    return this.getAdapterStatuses().some((s) => s.apiKeyConfigured);
   }
 }
 

@@ -1,9 +1,9 @@
-import { executeQuery } from '../retrieval/router';
-import { graphTraverse } from '../retrieval/graph';
-import { getPool } from '../db/pool';
-import logger from '../i18n/logger';
 import type { EvidenceSpan, QueryResultItem } from '@shared/index';
 import type { RetrievalPlan } from './planner';
+import { getPool } from '../db/pool';
+import logger from '../i18n/logger';
+import { graphTraverse } from '../retrieval/graph';
+import { executeQuery } from '../retrieval/router';
 
 export interface RetrievalResult {
   items: QueryResultItem[];
@@ -28,7 +28,7 @@ export async function retrieve(plan: RetrievalPlan): Promise<RetrievalResult> {
   let graphContext: string[] = [];
   if (queryResult.items.length > 0) {
     const links = await graphTraverse(queryResult.items[0].slug, 2);
-    graphContext = links.map(l => l.targetSlug);
+    graphContext = links.map((l) => l.targetSlug);
   }
 
   logger.info({ itemCount: queryResult.items.length, evidenceCount: evidence.length }, '检索完成');
@@ -45,7 +45,7 @@ async function getEvidenceForPages(items: QueryResultItem[]): Promise<EvidenceSp
 
   try {
     const pool = getPool();
-    const slugs = items.map(i => i.slug);
+    const slugs = items.map((i) => i.slug);
     const result = await pool.query(
       `SELECT span_id, slug, source_file_hash, source_text_offset, source_text_length,
               original_location, span_text, lang, confidence, source_type

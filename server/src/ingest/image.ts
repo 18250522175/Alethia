@@ -1,5 +1,5 @@
-import { llmRouter } from '../llm/router';
 import logger from '../i18n/logger';
+import { llmRouter } from '../llm/router';
 
 export interface ImageProcessResult {
   text: string;
@@ -11,10 +11,7 @@ export interface ImageProcessResult {
  * 图片处理：OCR (tesseract.js) + VLM 视觉模型描述。
  * 任一环节失败均降级为空文本并写入 warnings，不抛异常。
  */
-export async function processImage(
-  buffer: Buffer,
-  mime: string
-): Promise<ImageProcessResult> {
+export async function processImage(buffer: Buffer, mime: string): Promise<ImageProcessResult> {
   const warnings: string[] = [];
   let ocrText = '';
   let vlmDescription = '';

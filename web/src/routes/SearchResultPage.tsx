@@ -1,25 +1,25 @@
-import { useEffect, useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { useSearchParams, Link as RouterLink } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
 import {
-  MagnifyingGlass,
-  Spinner,
-  Warning,
+  ArrowLeft,
+  ArrowRight,
+  CaretDown,
+  CaretUp,
+  ChatsCircle,
+  Clock,
   Empty,
   Files,
   FileText,
-  ChatsCircle,
-  CaretDown,
-  CaretUp,
-  ArrowRight,
-  Clock,
   Hash,
-  ArrowLeft
+  MagnifyingGlass,
+  Spinner,
+  Warning
 } from '@phosphor-icons/react';
-import api from '../lib/api';
-import { formatRelativeTime, formatFileSize, truncateText } from '../lib/format';
+import { useQuery } from '@tanstack/react-query';
+import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Link as RouterLink, useSearchParams } from 'react-router-dom';
 import HighlightText from '../components/HighlightText';
+import api from '../lib/api';
+import { formatFileSize, formatRelativeTime, truncateText } from '../lib/format';
 
 const PREVIEW_COUNT = 10;
 
@@ -91,7 +91,7 @@ export default function SearchResultPage() {
   };
 
   const toggleGroup = (id: TabId) => {
-    setExpandedGroups(prev => {
+    setExpandedGroups((prev) => {
       const next = new Set(prev);
       if (next.has(id)) {
         next.delete(id);
@@ -123,7 +123,7 @@ export default function SearchResultPage() {
             <input
               type="text"
               value={inputValue}
-              onChange={e => setInputValue(e.target.value)}
+              onChange={(e) => setInputValue(e.target.value)}
               placeholder={t('search.placeholder', '搜索条目、文件、问答记录...')}
               className="input pl-10"
               autoFocus
@@ -139,9 +139,12 @@ export default function SearchResultPage() {
             <span className="font-medium text-slate-700 dark:text-slate-200">{query}</span>
             {t('search.resultKeywordSuffix', '」')}{' '}
             {t('search.resultSummary', '共找到 {{total}} 条结果', { total })}
-            {pages.length > 0 && t('search.pageCount', ' · 条目 {{count}}', { count: pages.length })}
-            {files.length > 0 && t('search.fileCount', ' · 文件 {{count}}', { count: files.length })}
-            {conversations.length > 0 && t('search.convCount', ' · 问答 {{count}}', { count: conversations.length })}
+            {pages.length > 0 &&
+              t('search.pageCount', ' · 条目 {{count}}', { count: pages.length })}
+            {files.length > 0 &&
+              t('search.fileCount', ' · 文件 {{count}}', { count: files.length })}
+            {conversations.length > 0 &&
+              t('search.convCount', ' · 问答 {{count}}', { count: conversations.length })}
           </p>
         )}
       </header>
@@ -149,7 +152,9 @@ export default function SearchResultPage() {
       {!hasQuery ? (
         <div className="card flex flex-col items-center justify-center py-20 text-center">
           <MagnifyingGlass size={48} className="mb-3 text-slate-300 dark:text-slate-600" />
-          <p className="text-slate-600 dark:text-slate-300">{t('search.emptyHint', '请在上方输入要搜索的内容')}</p>
+          <p className="text-slate-600 dark:text-slate-300">
+            {t('search.emptyHint', '请在上方输入要搜索的内容')}
+          </p>
           <p className="mt-1 text-xs text-slate-400">
             {t('search.emptySubHint', '支持搜索百科条目、媒体文件与历史问答记录')}
           </p>
@@ -162,8 +167,12 @@ export default function SearchResultPage() {
       ) : isError ? (
         <div className="card flex flex-col items-center justify-center py-16 text-center">
           <Warning size={40} className="mb-2 text-red-400" />
-          <p className="text-slate-600 dark:text-slate-300">{t('search.errorTitle', '搜索请求失败')}</p>
-          <p className="mt-1 text-xs text-slate-400">{t('search.errorHint', '请检查后端 /api/search 路由是否已实现')}</p>
+          <p className="text-slate-600 dark:text-slate-300">
+            {t('search.errorTitle', '搜索请求失败')}
+          </p>
+          <p className="mt-1 text-xs text-slate-400">
+            {t('search.errorHint', '请检查后端 /api/search 路由是否已实现')}
+          </p>
         </div>
       ) : !hasAnyResult ? (
         <div className="card flex flex-col items-center justify-center py-16 text-center">
@@ -183,7 +192,7 @@ export default function SearchResultPage() {
         <div className="space-y-4">
           {/* Group tabs */}
           <div className="inline-flex rounded-lg border border-slate-200 bg-slate-100 p-1 dark:border-slate-700 dark:bg-slate-800">
-            {tabs.map(tab => {
+            {tabs.map((tab) => {
               const Icon = tab.Icon;
               const active = activeTab === tab.id;
               const count = counts[tab.id];
@@ -225,7 +234,7 @@ export default function SearchResultPage() {
               onToggle={() => toggleGroup('pages')}
               t={t}
             >
-              {pages.map(p => (
+              {pages.map((p) => (
                 <PageResultCard key={p.slug} page={p} query={query} />
               ))}
             </ResultGroup>
@@ -239,7 +248,7 @@ export default function SearchResultPage() {
               onToggle={() => toggleGroup('files')}
               t={t}
             >
-              {files.map(f => (
+              {files.map((f) => (
                 <FileResultCard key={f.hash} file={f} query={query} />
               ))}
             </ResultGroup>
@@ -253,7 +262,7 @@ export default function SearchResultPage() {
               onToggle={() => toggleGroup('conversations')}
               t={t}
             >
-              {conversations.map(c => (
+              {conversations.map((c) => (
                 <ConversationResultCard key={c.id} conv={c} query={query} />
               ))}
             </ResultGroup>
@@ -265,7 +274,7 @@ export default function SearchResultPage() {
 }
 
 function ResultGroup({
-  id,
+  id: _id,
   title,
   icon,
   total,
@@ -295,10 +304,10 @@ function ResultGroup({
     );
   }
 
-  const shownChildren = expanded ? children : (
-    <>
-      {Array.isArray(children) ? children.slice(0, PREVIEW_COUNT) : children}
-    </>
+  const shownChildren = expanded ? (
+    children
+  ) : (
+    <>{Array.isArray(children) ? children.slice(0, PREVIEW_COUNT) : children}</>
   );
 
   return (
@@ -328,9 +337,7 @@ function ResultGroup({
           )}
         </button>
       </header>
-      <div className="divide-y divide-slate-100 dark:divide-slate-700/50">
-        {shownChildren}
-      </div>
+      <div className="divide-y divide-slate-100 dark:divide-slate-700/50">{shownChildren}</div>
     </section>
   );
 }
@@ -371,10 +378,10 @@ function FileResultCard({ file, query }: { file: FileResult; query: string }) {
     file.status === 'ready' || file.status === 'processed'
       ? 'badge-green'
       : file.status === 'pending' || file.status === 'processing'
-      ? 'badge-yellow'
-      : file.status === 'failed' || file.status === 'error'
-      ? 'badge-red'
-      : 'badge-blue';
+        ? 'badge-yellow'
+        : file.status === 'failed' || file.status === 'error'
+          ? 'badge-red'
+          : 'badge-blue';
 
   return (
     <RouterLink

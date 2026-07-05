@@ -25,9 +25,9 @@ export interface LLMResponse {
 export interface LLMAdapter {
   readonly id: AdapterId;
   readonly displayName: string;
-  chat(req: LLMRequest): Promise<LLMResponse>;
-  embed(text: string): Promise<number[]>;
-  probe(): Promise<{ ok: boolean; latencyMs: number; error?: string }>;
+  chat: (req: LLMRequest) => Promise<LLMResponse>;
+  embed: (text: string) => Promise<number[]>;
+  probe: () => Promise<{ ok: boolean; latencyMs: number; error?: string }>;
 }
 
 export interface AdapterStatus {

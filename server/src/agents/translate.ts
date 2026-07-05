@@ -1,7 +1,7 @@
-import { llmRouter } from '../llm/router';
+import type { EvidenceTranslation, LLMMessage } from '@shared/index';
 import { getPool } from '../db/pool';
 import logger from '../i18n/logger';
-import type { LLMMessage, EvidenceTranslation } from '@shared/index';
+import { llmRouter } from '../llm/router';
 
 const DEFAULT_TARGET_LANG = 'zh-CN';
 const CACHE_TTL_DAYS = 90;
@@ -24,10 +24,10 @@ export async function translateEvidence(
   const spans = await loadEvidenceSpans(spanIds);
   if (spans.length === 0) return [];
 
-  const toTranslate = spans.filter(s => s.lang !== targetLang);
+  const toTranslate = spans.filter((s) => s.lang !== targetLang);
   const alreadyMatched = spans
-    .filter(s => s.lang === targetLang)
-    .map(s => ({
+    .filter((s) => s.lang === targetLang)
+    .map((s) => ({
       spanId: s.span_id,
       sourceText: s.span_text,
       translatedText: s.span_text,
@@ -42,12 +42,12 @@ export async function translateEvidence(
   }
 
   const cached = await loadCachedTranslations(
-    toTranslate.map(s => s.span_id),
+    toTranslate.map((s) => s.span_id),
     targetLang
   );
-  const cachedBySpanId = new Map(cached.map(c => [c.spanId, c]));
+  const cachedBySpanId = new Map(cached.map((c) => [c.spanId, c]));
 
-  const pending = toTranslate.filter(s => !cachedBySpanId.has(s.span_id));
+  const pending = toTranslate.filter((s) => !cachedBySpanId.has(s.span_id));
   const results: EvidenceTranslation[] = [...alreadyMatched, ...cached];
 
   if (pending.length === 0) {
@@ -60,7 +60,9 @@ export async function translateEvidence(
   for (const span of pending) {
     const translated = llmTranslations.get(span.span_id);
     const translatedText = translated ?? buildFallbackTranslation(span, targetLang);
-    const model = translated ? (llmTranslations.get(`${span.span_id}__model`) as string) || 'unknown' : 'fallback';
+    const model = translated
+      ? (llmTranslations.get(`${span.span_id}__model`) as string) || 'unknown'
+      : 'fallback';
 
     const entry: EvidenceTranslation = {
       spanId: span.span_id,
@@ -175,9 +177,9 @@ async function callLlmTranslate(
   const result = new Map<string, string>();
   let model = 'unknown';
 
-  const context = spans.map(s =>
-    `### spanId=${s.span_id} | sourceLang=${s.lang}\n${s.span_text}`
-  ).join('\n\n');
+  const context = spans
+    .map((s) => `### spanId=${s.span_id} | sourceLang=${s.lang}\n${s.span_text}`)
+    .join('\n\n');
 
   const llmMessages: LLMMessage[] = [
     { role: 'system', content: TRANSLATE_SYSTEM_PROMPT },
@@ -262,7 +264,9 @@ function mapRow(row: any): EvidenceTranslation {
     translatedText: row.translated_text,
     lang: row.lang,
     model: row.model,
-    createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
-    expiresAt: row.expires_at instanceof Date ? row.expires_at.toISOString() : String(row.expires_at)
+    createdAt:
+      row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
+    expiresAt:
+      row.expires_at instanceof Date ? row.expires_at.toISOString() : String(row.expires_at)
   };
 }

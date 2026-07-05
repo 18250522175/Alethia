@@ -1,17 +1,17 @@
-import { useMemo, useState } from 'react';
-import { useTranslation } from 'react-i18next';
 import {
-  Copy,
-  Check,
   CaretDown,
   CaretRight,
-  Plus,
+  Check,
+  Copy,
+  Empty,
+  FileText,
   Minus,
   PencilSimple,
-  FileText,
-  Empty,
-  Warning,
+  Plus,
+  Warning
 } from '@phosphor-icons/react';
+import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 type DiffRowType = 'added' | 'removed' | 'modified' | 'unchanged';
 
@@ -56,7 +56,7 @@ function computeDiff(oldStr: string, newStr: string): { rows: DiffRow[]; truncat
           leftContent: '',
           rightContent: newLine,
           leftLineNo: null,
-          rightLineNo: i + 1,
+          rightLineNo: i + 1
         });
       } else if (i >= n) {
         rows.push({
@@ -64,7 +64,7 @@ function computeDiff(oldStr: string, newStr: string): { rows: DiffRow[]; truncat
           leftContent: oldLine,
           rightContent: '',
           leftLineNo: i + 1,
-          rightLineNo: null,
+          rightLineNo: null
         });
       } else if (oldLine === newLine) {
         rows.push({
@@ -72,7 +72,7 @@ function computeDiff(oldStr: string, newStr: string): { rows: DiffRow[]; truncat
           leftContent: oldLine,
           rightContent: newLine,
           leftLineNo: i + 1,
-          rightLineNo: i + 1,
+          rightLineNo: i + 1
         });
       } else {
         rows.push({
@@ -80,7 +80,7 @@ function computeDiff(oldStr: string, newStr: string): { rows: DiffRow[]; truncat
           leftContent: oldLine,
           rightContent: newLine,
           leftLineNo: i + 1,
-          rightLineNo: i + 1,
+          rightLineNo: i + 1
         });
       }
     }
@@ -89,7 +89,7 @@ function computeDiff(oldStr: string, newStr: string): { rows: DiffRow[]; truncat
 
   // 构建 LCS DP 表
   const dp: number[][] = Array.from({ length: m + 1 }, () =>
-    new Array<number>(n + 1).fill(0)
+    Array.from<number>({ length: n + 1 }).fill(0)
   );
   for (let i = 1; i <= m; i++) {
     for (let j = 1; j <= n; j++) {
@@ -102,7 +102,11 @@ function computeDiff(oldStr: string, newStr: string): { rows: DiffRow[]; truncat
   }
 
   // 回溯得到操作序列
-  type Op = { type: 'same' | 'add' | 'del'; oldIdx?: number; newIdx?: number };
+  interface Op {
+    type: 'same' | 'add' | 'del';
+    oldIdx?: number;
+    newIdx?: number;
+  }
   const ops: Op[] = [];
   let i = m;
   let j = n;
@@ -131,7 +135,7 @@ function computeDiff(oldStr: string, newStr: string): { rows: DiffRow[]; truncat
         leftContent: oldLines[op.oldIdx!],
         rightContent: newLines[op.newIdx!],
         leftLineNo: op.oldIdx! + 1,
-        rightLineNo: op.newIdx! + 1,
+        rightLineNo: op.newIdx! + 1
       });
       k++;
       continue;
@@ -151,7 +155,7 @@ function computeDiff(oldStr: string, newStr: string): { rows: DiffRow[]; truncat
         leftContent: oldLines[dels[p]],
         rightContent: newLines[adds[p]],
         leftLineNo: dels[p] + 1,
-        rightLineNo: adds[p] + 1,
+        rightLineNo: adds[p] + 1
       });
     }
     for (; p < dels.length; p++) {
@@ -160,7 +164,7 @@ function computeDiff(oldStr: string, newStr: string): { rows: DiffRow[]; truncat
         leftContent: oldLines[dels[p]],
         rightContent: '',
         leftLineNo: dels[p] + 1,
-        rightLineNo: null,
+        rightLineNo: null
       });
     }
     for (; p < adds.length; p++) {
@@ -169,7 +173,7 @@ function computeDiff(oldStr: string, newStr: string): { rows: DiffRow[]; truncat
         leftContent: '',
         rightContent: newLines[adds[p]],
         leftLineNo: null,
-        rightLineNo: adds[p] + 1,
+        rightLineNo: adds[p] + 1
       });
     }
   }
@@ -196,7 +200,7 @@ const ROW_STYLE: Record<DiffRowType, RowStyle> = {
     leftStrike: false,
     rightHighlight: true,
     sign: '+',
-    signColor: 'text-knowledge-600 dark:text-knowledge-400',
+    signColor: 'text-knowledge-600 dark:text-knowledge-400'
   },
   removed: {
     leftBg: 'bg-red-50 dark:bg-red-900/25',
@@ -206,7 +210,7 @@ const ROW_STYLE: Record<DiffRowType, RowStyle> = {
     leftStrike: true,
     rightHighlight: false,
     sign: '-',
-    signColor: 'text-red-600 dark:text-red-400',
+    signColor: 'text-red-600 dark:text-red-400'
   },
   modified: {
     leftBg: 'bg-parchment-50 dark:bg-parchment-900/25',
@@ -216,7 +220,7 @@ const ROW_STYLE: Record<DiffRowType, RowStyle> = {
     leftStrike: true,
     rightHighlight: true,
     sign: '~',
-    signColor: 'text-parchment-600 dark:text-parchment-400',
+    signColor: 'text-parchment-600 dark:text-parchment-400'
   },
   unchanged: {
     leftBg: '',
@@ -226,8 +230,8 @@ const ROW_STYLE: Record<DiffRowType, RowStyle> = {
     leftStrike: false,
     rightHighlight: false,
     sign: ' ',
-    signColor: 'text-transparent',
-  },
+    signColor: 'text-transparent'
+  }
 };
 
 export default function DiffCompare({
@@ -235,7 +239,7 @@ export default function DiffCompare({
   newValue,
   language,
   title,
-  defaultCollapsed = false,
+  defaultCollapsed = false
 }: DiffCompareProps) {
   const { t } = useTranslation();
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
@@ -283,7 +287,7 @@ export default function DiffCompare({
         <div className="flex min-w-0 items-center gap-2">
           <button
             type="button"
-            onClick={() => setCollapsed(c => !c)}
+            onClick={() => setCollapsed((c) => !c)}
             className="btn btn-ghost -ml-1.5 px-1.5 py-1"
             aria-label={collapseLabel}
             title={collapseLabel}
@@ -298,9 +302,7 @@ export default function DiffCompare({
             </h3>
           ) : null}
           {language ? (
-            <span className="badge badge-blue font-mono uppercase text-[10px]">
-              {language}
-            </span>
+            <span className="badge badge-blue font-mono uppercase text-[10px]">{language}</span>
           ) : null}
         </div>
 
@@ -366,11 +368,10 @@ export default function DiffCompare({
           <div className="px-4 py-3 text-xs text-slate-500 dark:text-slate-400">
             {hasChanges
               ? t('diffCompare.collapsedHint', {
-                  defaultValue:
-                    '新增 {{added}} 行 · 删除 {{removed}} 行 · 修改 {{modified}} 行',
+                  defaultValue: '新增 {{added}} 行 · 删除 {{removed}} 行 · 修改 {{modified}} 行',
                   added: stats.added,
                   removed: stats.removed,
-                  modified: stats.modified,
+                  modified: stats.modified
                 })
               : t('diffCompare.identical', '新旧内容完全一致')}
           </div>
@@ -390,7 +391,8 @@ export default function DiffCompare({
                 <div className="flex items-center gap-2 border-b border-yellow-200 bg-yellow-50 px-4 py-2 text-xs text-yellow-700 dark:border-yellow-800/30 dark:bg-yellow-900/20 dark:text-yellow-300">
                   <Warning size={14} weight="bold" />
                   <span>
-                    文件过大（超过 {MAX_LCS_LINES} 行），已使用简化对比模式。完整 LCS 对比可能导致浏览器卡顿。
+                    文件过大（超过 {MAX_LCS_LINES} 行），已使用简化对比模式。完整 LCS
+                    对比可能导致浏览器卡顿。
                   </span>
                 </div>
               )}
@@ -398,11 +400,10 @@ export default function DiffCompare({
               <div className="flex items-center gap-2 border-b border-slate-100 bg-slate-50 px-4 py-2 text-xs text-slate-500 dark:border-slate-700/50 dark:bg-slate-900/30 dark:text-slate-400">
                 {hasChanges
                   ? t('diffCompare.summary', {
-                      defaultValue:
-                        '共 {{added}} 行新增，{{removed}} 行删除，{{modified}} 行修改',
+                      defaultValue: '共 {{added}} 行新增，{{removed}} 行删除，{{modified}} 行修改',
                       added: stats.added,
                       removed: stats.removed,
-                      modified: stats.modified,
+                      modified: stats.modified
                     })
                   : t('diffCompare.identical', '新旧内容完全一致')}
               </div>
@@ -435,9 +436,7 @@ export default function DiffCompare({
                         <span
                           className={`w-5 flex-shrink-0 select-none px-1 text-center ${s.signColor}`}
                         >
-                          {row.type === 'removed' || row.type === 'modified'
-                            ? s.sign
-                            : ''}
+                          {row.type === 'removed' || row.type === 'modified' ? s.sign : ''}
                         </span>
                         <span className="w-8 flex-shrink-0 select-none px-1 text-right text-slate-300 dark:text-slate-600">
                           {row.leftLineNo ?? ''}
@@ -452,15 +451,11 @@ export default function DiffCompare({
                       </div>
 
                       {/* 右侧：新值 */}
-                      <div
-                        className={`flex min-h-[24px] items-start ${s.rightBg}`}
-                      >
+                      <div className={`flex min-h-[24px] items-start ${s.rightBg}`}>
                         <span
                           className={`w-5 flex-shrink-0 select-none px-1 text-center ${s.signColor}`}
                         >
-                          {row.type === 'added' || row.type === 'modified'
-                            ? s.sign
-                            : ''}
+                          {row.type === 'added' || row.type === 'modified' ? s.sign : ''}
                         </span>
                         <span className="w-8 flex-shrink-0 select-none px-1 text-right text-slate-300 dark:text-slate-600">
                           {row.rightLineNo ?? ''}

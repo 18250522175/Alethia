@@ -1,23 +1,23 @@
-import React, { useState, useMemo } from 'react';
-import { useTranslation } from 'react-i18next';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  ChartLine,
-  Play,
-  CheckCircle,
-  XCircle,
-  Warning,
+  ArrowClockwise,
   CaretDown,
   CaretRight,
-  GitBranch,
-  Target,
-  ArrowClockwise,
-  Plus,
-  Funnel,
+  ChartLine,
+  CheckCircle,
   Clock,
+  Funnel,
+  GitBranch,
+  Play,
+  Plus,
+  Target,
   TrendUp,
-  WarningOctagon
+  Warning,
+  WarningOctagon,
+  XCircle
 } from '@phosphor-icons/react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import React, { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import api from '../lib/api';
 
 interface Benchmark {
@@ -155,9 +155,7 @@ export default function EvalReportPage() {
                 <div className="flex items-center gap-3">
                   <WarningOctagon size={24} className="text-red-500" />
                   <div>
-                    <h3 className="font-semibold text-red-800 dark:text-red-200">
-                      异常熔断告警
-                    </h3>
+                    <h3 className="font-semibold text-red-800 dark:text-red-200">异常熔断告警</h3>
                     <p className="text-sm text-red-600 dark:text-red-300">
                       检测到 {data.anomalies.length} 个异常指标
                     </p>
@@ -219,7 +217,13 @@ export default function EvalReportPage() {
                 label="正确率"
                 value={`${Math.round(data.summary.accuracy * 100)}%`}
                 color="bg-emerald-500"
-                trend={data.summary.accuracy >= 0.9 ? 'up' : data.summary.accuracy >= 0.7 ? 'neutral' : 'down'}
+                trend={
+                  data.summary.accuracy >= 0.9
+                    ? 'up'
+                    : data.summary.accuracy >= 0.7
+                      ? 'neutral'
+                      : 'down'
+                }
               />
               <MetricCard
                 icon={<ArrowClockwise size={20} />}
@@ -330,9 +334,7 @@ export default function EvalReportPage() {
                           <td className="px-4 py-3">
                             {bench.slug || <span className="text-slate-400">-</span>}
                           </td>
-                          <td className="px-4 py-3 max-w-xs truncate">
-                            {bench.sourceText}
-                          </td>
+                          <td className="px-4 py-3 max-w-xs truncate">{bench.sourceText}</td>
                           <td className="px-4 py-3">
                             {bench.passed === undefined ? (
                               <span className="badge badge-yellow">未运行</span>
@@ -349,9 +351,11 @@ export default function EvalReportPage() {
                             )}
                           </td>
                           <td className="px-4 py-3 font-medium">
-                            {bench.score !== undefined
-                              ? `${Math.round(bench.score * 100)}%`
-                              : <span className="text-slate-400">-</span>}
+                            {bench.score !== undefined ? (
+                              `${Math.round(bench.score * 100)}%`
+                            ) : (
+                              <span className="text-slate-400">-</span>
+                            )}
                           </td>
                           <td className="px-4 py-3">
                             {bench.gitCommit ? (
@@ -397,30 +401,42 @@ export default function EvalReportPage() {
           </section>
 
           {runMutation.data && (
-            <div className={`card border p-4 text-sm ${
-              runMutation.data.passed
-                ? 'border-green-300 bg-green-50 dark:border-green-700 dark:bg-green-900/20'
-                : 'border-red-300 bg-red-50 dark:border-red-700 dark:bg-red-900/20'
-            }`}>
+            <div
+              className={`card border p-4 text-sm ${
+                runMutation.data.passed
+                  ? 'border-green-300 bg-green-50 dark:border-green-700 dark:bg-green-900/20'
+                  : 'border-red-300 bg-red-50 dark:border-red-700 dark:bg-red-900/20'
+              }`}
+            >
               <div className="flex items-center gap-2 font-semibold">
                 {runMutation.data.passed ? (
-                  <><CheckCircle size={18} className="text-green-500" /> 评估通过</>
+                  <>
+                    <CheckCircle size={18} className="text-green-500" /> 评估通过
+                  </>
                 ) : (
-                  <><XCircle size={18} className="text-red-500" /> 评估失败</>
+                  <>
+                    <XCircle size={18} className="text-red-500" /> 评估失败
+                  </>
                 )}
               </div>
               <div className="mt-2 grid grid-cols-3 gap-4 text-sm">
                 <div>
                   <span className="text-slate-500">正确率: </span>
-                  <span className="font-medium">{Math.round(runMutation.data.accuracy * 100)}%</span>
+                  <span className="font-medium">
+                    {Math.round(runMutation.data.accuracy * 100)}%
+                  </span>
                 </div>
                 <div>
                   <span className="text-slate-500">复现率: </span>
-                  <span className="font-medium">{Math.round(runMutation.data.reproductionRate * 100)}%</span>
+                  <span className="font-medium">
+                    {Math.round(runMutation.data.reproductionRate * 100)}%
+                  </span>
                 </div>
                 <div>
                   <span className="text-slate-500">新增错误: </span>
-                  <span className={`font-medium ${runMutation.data.newErrors > 0 ? 'text-red-600' : ''}`}>
+                  <span
+                    className={`font-medium ${runMutation.data.newErrors > 0 ? 'text-red-600' : ''}`}
+                  >
                     {runMutation.data.newErrors}
                   </span>
                 </div>
@@ -481,11 +497,15 @@ function MetricCard({
       <div className="mt-2 flex items-center justify-between">
         <span className="text-xs text-slate-500 dark:text-slate-400">{label}</span>
         {trend && (
-          <span className={`text-xs ${
-            trend === 'up' ? 'text-green-500' :
-            trend === 'down' ? 'text-red-500' :
-            'text-slate-400'
-          }`}>
+          <span
+            className={`text-xs ${
+              trend === 'up'
+                ? 'text-green-500'
+                : trend === 'down'
+                  ? 'text-red-500'
+                  : 'text-slate-400'
+            }`}
+          >
             {trend === 'up' ? '↑ 良好' : trend === 'down' ? '↓ 偏低' : '→ 正常'}
           </span>
         )}
@@ -578,17 +598,18 @@ function TrendChart({ data }: { data: TrendPoint[] }) {
           </g>
         ))}
 
-        {data.length <= 10 && points.map((p, i) => (
-          <text
-            key={i}
-            x={p.x}
-            y={height - 10}
-            textAnchor="middle"
-            className="fill-slate-400 text-[10px]"
-          >
-            {new Date(p.date).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })}
-          </text>
-        ))}
+        {data.length <= 10 &&
+          points.map((p, i) => (
+            <text
+              key={i}
+              x={p.x}
+              y={height - 10}
+              textAnchor="middle"
+              className="fill-slate-400 text-[10px]"
+            >
+              {new Date(p.date).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })}
+            </text>
+          ))}
       </svg>
     </div>
   );

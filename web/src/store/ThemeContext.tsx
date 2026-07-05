@@ -1,4 +1,5 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import type { ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState } from 'react';
 
 type Theme = 'light' | 'dark' | 'system';
 
@@ -38,7 +39,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     const saved = localStorage.getItem('theme') as Theme | null;
     const currentTheme = saved || 'system';
     if (typeof document !== 'undefined') {
-      const dark = currentTheme === 'dark' || (currentTheme === 'system' && getSystemTheme() === 'dark');
+      const dark =
+        currentTheme === 'dark' || (currentTheme === 'system' && getSystemTheme() === 'dark');
       if (dark) {
         document.documentElement.classList.add('dark');
       } else {

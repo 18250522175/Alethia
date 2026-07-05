@@ -37,7 +37,7 @@ export async function waitForDatabase(
       lastError = err as Error;
       logger.warn(`正在重试连接 PostgreSQL (${i}/${maxRetries})...`);
       if (i < maxRetries) {
-        await new Promise(resolve => setTimeout(resolve, intervalMs));
+        await new Promise((resolve) => setTimeout(resolve, intervalMs));
       }
     }
   }

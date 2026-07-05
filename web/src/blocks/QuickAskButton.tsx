@@ -1,16 +1,16 @@
-import { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
 import {
-  Brain,
-  PaperPlaneTilt,
-  X,
-  Sparkle,
   ArrowSquareOut,
+  Brain,
   Clock,
   Coins,
-  Tag
+  PaperPlaneTilt,
+  Sparkle,
+  Tag,
+  X
 } from '@phosphor-icons/react';
+import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import api from '../lib/api';
 
 interface QuickAnswer {
@@ -23,11 +23,7 @@ interface QuickAnswer {
   conversationId?: string;
 }
 
-const SUGGESTED_QUESTIONS = [
-  '熵的概念是什么？',
-  '什么是知识图谱？',
-  '如何使用这个知识库？'
-];
+const SUGGESTED_QUESTIONS = ['熵的概念是什么？', '什么是知识图谱？', '如何使用这个知识库？'];
 
 export default function QuickAskButton() {
   const { t } = useTranslation();
@@ -121,7 +117,11 @@ export default function QuickAskButton() {
   return (
     <>
       <button
-        onClick={() => { setIsOpen(!isOpen); setAnswer(null); setInput(''); }}
+        onClick={() => {
+          setIsOpen(!isOpen);
+          setAnswer(null);
+          setInput('');
+        }}
         aria-label={t('home.askAI')}
         className={`btn btn-primary fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full shadow-lg transition-all duration-300 hover:scale-110 hover:shadow-xl ${
           isOpen ? 'scale-0 opacity-0' : 'scale-100 opacity-100'
@@ -135,16 +135,17 @@ export default function QuickAskButton() {
           ref={panelRef}
           className="fixed bottom-6 right-6 z-50 w-[420px] max-w-[calc(100vw-3rem)] animate-fade-in"
         >
-          <div className="card flex flex-col overflow-hidden shadow-2xl" style={{ maxHeight: '70vh' }}>
+          <div
+            className="card flex flex-col overflow-hidden shadow-2xl"
+            style={{ maxHeight: '70vh' }}
+          >
             <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-700">
               <div className="flex items-center gap-2">
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-100 dark:bg-primary-900/30">
                   <Brain size={18} className="text-primary-500" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-slate-900 dark:text-white">
-                    快速提问
-                  </p>
+                  <p className="text-sm font-semibold text-slate-900 dark:text-white">快速提问</p>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
                     AI 即时回答，基于知识库
                   </p>
@@ -209,11 +210,14 @@ export default function QuickAskButton() {
                     </div>
                   </div>
 
-                  {(answer.confidence !== undefined || answer.tokensUsed || answer.relatedEntities?.length) && (
+                  {(answer.confidence !== undefined ||
+                    answer.tokensUsed ||
+                    answer.relatedEntities?.length) && (
                     <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
                       {answer.confidence !== undefined && (
                         <span className={`flex items-center gap-1 font-medium ${confidenceColor}`}>
-                          置信度：{Math.round(answer.confidence * 100)}%
+                          置信度：
+                          {Math.round(answer.confidence * 100)}%
                         </span>
                       )}
                       {answer.tokensUsed ? (
@@ -245,8 +249,13 @@ export default function QuickAskButton() {
                       </div>
                       <div className="space-y-1">
                         {answer.sources.slice(0, 2).map((src: any, i) => (
-                          <div key={i} className="truncate text-xs text-slate-600 dark:text-slate-400">
-                            <span className="font-mono text-primary-600 dark:text-primary-400">[{i + 1}]</span>{' '}
+                          <div
+                            key={i}
+                            className="truncate text-xs text-slate-600 dark:text-slate-400"
+                          >
+                            <span className="font-mono text-primary-600 dark:text-primary-400">
+                              [{i + 1}]
+                            </span>{' '}
                             {src.span_text || src.original_location}
                           </div>
                         ))}
@@ -262,7 +271,7 @@ export default function QuickAskButton() {
                 <textarea
                   ref={inputRef}
                   value={input}
-                  onChange={e => setInput(e.target.value)}
+                  onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
                   placeholder="输入你的问题..."
                   rows={1}

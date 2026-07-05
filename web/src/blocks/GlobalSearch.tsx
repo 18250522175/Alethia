@@ -1,6 +1,7 @@
-import { useState, KeyboardEvent } from 'react';
-import { useTranslation } from 'react-i18next';
+import type { KeyboardEvent } from 'react';
 import { MagnifyingGlass, X } from '@phosphor-icons/react';
+import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 interface GlobalSearchProps {
   onSearch: (query: string) => void;
@@ -31,7 +32,7 @@ export default function GlobalSearch({ onSearch, placeholder }: GlobalSearchProp
       <input
         type="text"
         value={value}
-        onChange={e => setValue(e.target.value)}
+        onChange={(e) => setValue(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder={placeholder ?? t('home.searchPlaceholder')}
         className="input pl-10 pr-9"

@@ -1,4 +1,4 @@
-import { createHash } from 'crypto';
+import { createHash } from 'node:crypto';
 import { loadEnv } from '../config/loader';
 import { getPool } from '../db/pool';
 import logger from '../i18n/logger';
@@ -40,10 +40,7 @@ function pickTop(items: Array<{ label: string; score: number }>): { label: strin
   return items.reduce((a, b) => (a.score > b.score ? a : b));
 }
 
-async function getCachedResult(
-  premise: string,
-  hypothesis: string
-): Promise<NliResult | null> {
+async function getCachedResult(premise: string, hypothesis: string): Promise<NliResult | null> {
   try {
     const pool = getPool();
     const hashA = sha256(premise);
@@ -61,11 +58,7 @@ async function getCachedResult(
   return null;
 }
 
-async function cacheResult(
-  premise: string,
-  hypothesis: string,
-  label: NliLabel
-): Promise<void> {
+async function cacheResult(premise: string, hypothesis: string, label: NliLabel): Promise<void> {
   try {
     const pool = getPool();
     const hashA = sha256(premise);
@@ -81,10 +74,7 @@ async function cacheResult(
   }
 }
 
-async function callHfInference(
-  premise: string,
-  hypothesis: string
-): Promise<NliResult> {
+async function callHfInference(premise: string, hypothesis: string): Promise<NliResult> {
   const env = loadEnv();
   const response = await fetch(HF_NLI_URL, {
     method: 'POST',
@@ -125,10 +115,7 @@ async function getLocalClassifier(): Promise<any> {
   return localClassifier;
 }
 
-async function callLocalNli(
-  premise: string,
-  hypothesis: string
-): Promise<NliResult> {
+async function callLocalNli(premise: string, hypothesis: string): Promise<NliResult> {
   const classifier = await getLocalClassifier();
   const output = await classifier(`${premise}</s>${hypothesis}`);
   const candidates: Array<{ label: string; score: number }> = Array.isArray(output)
@@ -141,10 +128,7 @@ async function callLocalNli(
   return { label: normalizeLabel(top.label), score: top.score };
 }
 
-export async function nliCheck(
-  premise: string,
-  hypothesis: string
-): Promise<NliResult> {
+export async function nliCheck(premise: string, hypothesis: string): Promise<NliResult> {
   const cached = await getCachedResult(premise, hypothesis);
   if (cached) {
     return cached;
@@ -179,8 +163,6 @@ export async function nliCheck(
 export async function batchNli(
   pairs: Array<{ premise: string; hypothesis: string }>
 ): Promise<Array<{ label: string; score: number }>> {
-  const results = await Promise.all(
-    pairs.map(p => nliCheck(p.premise, p.hypothesis))
-  );
-  return results.map(r => ({ label: r.label, score: r.score }));
+  const results = await Promise.all(pairs.map((p) => nliCheck(p.premise, p.hypothesis)));
+  return results.map((r) => ({ label: r.label, score: r.score }));
 }

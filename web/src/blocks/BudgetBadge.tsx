@@ -1,5 +1,5 @@
-import { useTranslation } from 'react-i18next';
 import { CurrencyDollar, Warning } from '@phosphor-icons/react';
+import { useTranslation } from 'react-i18next';
 
 interface BudgetUsage {
   used: number;
@@ -29,11 +29,7 @@ function BudgetBar({
 }) {
   const pct = percent(used, total);
   const exceeded = used > total;
-  const barColor = exceeded
-    ? 'bg-red-500'
-    : pct >= 80
-      ? 'bg-yellow-500'
-      : 'bg-primary-500';
+  const barColor = exceeded ? 'bg-red-500' : pct >= 80 ? 'bg-yellow-500' : 'bg-primary-500';
 
   return (
     <div

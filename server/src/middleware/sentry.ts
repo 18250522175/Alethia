@@ -1,4 +1,4 @@
-import { Context, Next } from 'hono';
+import type { Context, Next } from 'hono';
 import logger from '../i18n/logger';
 
 /**
@@ -38,12 +38,12 @@ function captureError(err: unknown, c: Context, isConfigured: boolean): void {
       service: 'alethia-brain',
       path: c.req.path,
       method: c.req.method,
-      sentry_enabled: isConfigured,
+      sentry_enabled: isConfigured
     },
     extra: {
       traceId: traceId ?? null,
-      userAgent: c.req.header('user-agent') ?? null,
-    },
+      userAgent: c.req.header('user-agent') ?? null
+    }
   };
 
   logger.error({ err, sentry: event }, '捕获到未处理异常（Sentry 桩）');

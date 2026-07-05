@@ -1,41 +1,38 @@
-import { useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import type { NotificationType } from '../contexts/NotificationContext';
 import {
+  ArrowLeft,
+  ArrowRight,
   Bell,
   Check,
   CheckCircle,
-  Warning,
+  Clock,
   FileText,
-  ShieldCheck,
-  Info,
-  Trash,
-  ArrowLeft,
-  ArrowRight,
   Funnel,
-  Clock
+  Info,
+  ShieldCheck,
+  Trash,
+  Warning
 } from '@phosphor-icons/react';
-import { useNotification, NotificationType } from '../contexts/NotificationContext';
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useNotification } from '../contexts/NotificationContext';
 
 type TabType = 'all' | NotificationType;
 
 export default function NotificationsPage() {
-  const { t } = useTranslation();
   const navigate = useNavigate();
   const { notifications, unreadCount, markAsRead, markAllAsRead, clearAll } = useNotification();
   const [activeTab, setActiveTab] = useState<TabType>('all');
 
   const filteredNotifications =
-    activeTab === 'all'
-      ? notifications
-      : notifications.filter((n) => n.type === activeTab);
+    activeTab === 'all' ? notifications : notifications.filter((n) => n.type === activeTab);
 
   const tabs: { key: TabType; label: string; icon: React.ReactNode }[] = [
     { key: 'all', label: '全部', icon: <Bell size={16} /> },
     { key: 'review', label: '审核', icon: <ShieldCheck size={16} /> },
     { key: 'system', label: '系统', icon: <Info size={16} /> },
     { key: 'extraction', label: '补提取', icon: <FileText size={16} /> },
-    { key: 'anomaly', label: '异常', icon: <Warning size={16} /> },
+    { key: 'anomaly', label: '异常', icon: <Warning size={16} /> }
   ];
 
   const getUnreadByType = (type: TabType): number => {
@@ -86,10 +83,14 @@ export default function NotificationsPage() {
 
   const getTypeName = (type: NotificationType): string => {
     switch (type) {
-      case 'review': return '审核通知';
-      case 'system': return '系统通知';
-      case 'extraction': return '提取通知';
-      case 'anomaly': return '异常告警';
+      case 'review':
+        return '审核通知';
+      case 'system':
+        return '系统通知';
+      case 'extraction':
+        return '提取通知';
+      case 'anomaly':
+        return '异常告警';
     }
   };
 
@@ -104,11 +105,7 @@ export default function NotificationsPage() {
     <div className="animate-fade-in">
       <header className="mb-6">
         <div className="flex items-center gap-3">
-          <button
-            onClick={() => navigate(-1)}
-            className="btn btn-ghost p-2"
-            title="返回"
-          >
+          <button onClick={() => navigate(-1)} className="btn btn-ghost p-2" title="返回">
             <ArrowLeft size={18} />
           </button>
           <div>
@@ -207,11 +204,13 @@ export default function NotificationsPage() {
                         <div className="flex items-start justify-between gap-3">
                           <div>
                             <div className="flex items-center gap-2">
-                              <p className={`font-medium text-sm ${
-                                !notification.read
-                                  ? 'text-slate-900 dark:text-white'
-                                  : 'text-slate-700 dark:text-slate-300'
-                              }`}>
+                              <p
+                                className={`font-medium text-sm ${
+                                  !notification.read
+                                    ? 'text-slate-900 dark:text-white'
+                                    : 'text-slate-700 dark:text-slate-300'
+                                }`}
+                              >
                                 {notification.title}
                               </p>
                               {!notification.read && (

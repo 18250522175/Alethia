@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
-import { llmRouter } from '../llm/router';
 import { getErrorMessage } from '../i18n/errors.zh-CN';
 import logger from '../i18n/logger';
+import { llmRouter } from '../llm/router';
 
 const app = new Hono();
 
@@ -17,12 +17,15 @@ app.post('/api/llm/test', async (c) => {
 
     const adapter = llmRouter.getAdapter(adapterId);
     if (!adapter) {
-      return c.json({
-        error: {
-          code: 'NOT_FOUND',
-          message: `未找到适配器: ${adapterId}`
-        }
-      }, 404);
+      return c.json(
+        {
+          error: {
+            code: 'NOT_FOUND',
+            message: `未找到适配器: ${adapterId}`
+          }
+        },
+        404
+      );
     }
 
     const result = await adapter.probe();
@@ -34,12 +37,15 @@ app.post('/api/llm/test', async (c) => {
     });
   } catch (err) {
     logger.error({ err }, 'LLM 测试失败');
-    return c.json({
-      error: {
-        code: 'INTERNAL_ERROR',
-        message: getErrorMessage('INTERNAL_ERROR')
-      }
-    }, 500);
+    return c.json(
+      {
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: getErrorMessage('INTERNAL_ERROR')
+        }
+      },
+      500
+    );
   }
 });
 

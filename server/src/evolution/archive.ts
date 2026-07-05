@@ -1,11 +1,11 @@
-import { existsSync } from 'fs';
-import { join } from 'path';
+import type { LLMMessage } from '@shared/index';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { getPool } from '../db/pool';
+import logger from '../i18n/logger';
 import { llmRouter } from '../llm/router';
 import { storage } from '../storage/markdown';
 import { syncEngine } from '../storage/sync';
-import logger from '../i18n/logger';
-import type { LLMMessage } from '@shared/index';
 
 export interface ArchiveResult {
   archived: number;
@@ -34,9 +34,7 @@ interface VersionRow {
  */
 export async function archiveVersions(entitySlug?: string): Promise<ArchiveResult> {
   const pool = getPool();
-  const targets = entitySlug
-    ? [{ slug: entitySlug }]
-    : await findArchiveTargets(pool);
+  const targets = entitySlug ? [{ slug: entitySlug }] : await findArchiveTargets(pool);
 
   let archived = 0;
   const summaries: string[] = [];
@@ -91,7 +89,10 @@ async function findArchiveTargets(pool: ReturnType<typeof getPool>): Promise<{ s
   return result.rows.map((r: any) => ({ slug: r.slug }));
 }
 
-async function countActiveVersions(pool: ReturnType<typeof getPool>, slug: string): Promise<number> {
+async function countActiveVersions(
+  pool: ReturnType<typeof getPool>,
+  slug: string
+): Promise<number> {
   const result = await pool.query(
     `SELECT COUNT(*)::int AS cnt FROM knowledge_versions WHERE slug = $1 AND archived = false`,
     [slug]
@@ -128,7 +129,10 @@ async function generateArchiveSummary(slug: string, records: VersionRow[]): Prom
 
   const llmMessages: LLMMessage[] = [
     { role: 'system', content: ARCHIVE_SUMMARY_PROMPT },
-    { role: 'user', content: `## 实体: ${slug}\n\n## 待归档版本记录 (${records.length} 条)\n${transcript}` }
+    {
+      role: 'user',
+      content: `## 实体: ${slug}\n\n## 待归档版本记录 (${records.length} 条)\n${transcript}`
+    }
   ];
 
   try {
@@ -196,7 +200,10 @@ async function markArchived(
   );
 }
 
-async function replaceVersionHistoryInMarkdown(slug: string, changelogPath: string): Promise<void> {
+async function replaceVersionHistoryInMarkdown(
+  slug: string,
+  _changelogPath: string
+): Promise<void> {
   const wikiFile = findWikiFileForSlug(slug);
   if (!wikiFile) {
     logger.debug({ slug }, '未找到对应 wiki 文件，跳过 Markdown 替换');

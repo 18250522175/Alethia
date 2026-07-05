@@ -1,11 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
-  formatFileSize,
   formatDateTime,
-  formatRelativeTime,
   formatDuration,
-  truncateText,
+  formatFileSize,
+  formatRelativeTime,
   slugToTitle,
+  truncateText
 } from './format';
 
 describe('formatFileSize', () => {

@@ -1,19 +1,19 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
-import { useTranslation } from 'react-i18next';
+import type { EvidenceTranslation } from '../../../shared/types/entities';
+import type { EvidenceSpan } from '../../../shared/types/evidence';
 import {
-  PushPin,
-  Copy,
-  Check,
   ArrowSquareOut,
-  Translate,
+  Check,
+  Copy,
   FileText,
-  MapPin,
-  Globe,
   Gauge,
+  Globe,
+  MapPin,
+  PushPin,
+  Translate,
   X
 } from '@phosphor-icons/react';
-import type { EvidenceSpan } from '../../../shared/types/evidence';
-import type { EvidenceTranslation } from '../../../shared/types/entities';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 interface EvidencePopoverProps {
   evidence: EvidenceSpan;
@@ -55,13 +55,6 @@ export default function EvidencePopover({
     setPlacement(rect.top >= EST_HEIGHT ? 'top' : 'bottom');
   };
 
-  const open = () => {
-    if (!isOpen) {
-      computePlacement();
-      setIsOpen(true);
-    }
-  };
-
   const handleMouseEnter = () => {
     if (isPinned) return;
     if (hoverTimerRef.current) {
@@ -93,7 +86,7 @@ export default function EvidencePopover({
       computePlacement();
       setIsOpen(true);
     }
-    setIsPinned(prev => !prev);
+    setIsPinned((prev) => !prev);
   };
 
   const handleCopy = async (e: React.MouseEvent) => {
@@ -171,7 +164,7 @@ export default function EvidencePopover({
           popoverRef.current.querySelectorAll<HTMLElement>(
             'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
           )
-        ).filter(el => !el.hasAttribute('disabled'));
+        ).filter((el) => !el.hasAttribute('disabled'));
         if (focusables.length === 0) return;
         const first = focusables[0];
         const last = focusables[focusables.length - 1];
@@ -196,7 +189,6 @@ export default function EvidencePopover({
     };
   }, [isOpen, isPinned, focusFirst]);
 
-  const showTranslation = isNonChinese(evidence.lang) && !!translation;
   const confidence = evidence.confidence;
   const confBadgeClass =
     confidence === undefined
@@ -259,7 +251,9 @@ export default function EvidencePopover({
                       : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'
                   }`}
                   title={isPinned ? t('evidence.unpin', '取消钉住') : t('evidence.pin', '钉住')}
-                  aria-label={isPinned ? t('evidence.unpin', '取消钉住') : t('evidence.pin', '钉住')}
+                  aria-label={
+                    isPinned ? t('evidence.unpin', '取消钉住') : t('evidence.pin', '钉住')
+                  }
                   aria-pressed={isPinned}
                 >
                   <PushPin size={14} weight={isPinned ? 'fill' : 'regular'} />
@@ -281,7 +275,7 @@ export default function EvidencePopover({
               <div className="mb-2">
                 <div className="mb-1 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
                   <Translate size={11} />
-                  {t('evidence.translation', '译文')} · {translation!.lang}
+                  {t('evidence.translation', '译文')} ·{translation!.lang}
                 </div>
                 <blockquote className="max-h-40 overflow-y-auto rounded-md border-l-2 border-knowledge-300 bg-knowledge-50 p-2 text-sm leading-relaxed text-slate-700 dark:border-knowledge-700 dark:bg-knowledge-900/20 dark:text-slate-200">
                   {translation!.translatedText}
@@ -295,15 +289,18 @@ export default function EvidencePopover({
                 <>
                   <button
                     type="button"
-                    onClick={(e) => { e.stopPropagation(); setShowOriginal(!showOriginal); }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowOriginal(!showOriginal);
+                    }}
                     className="mb-1 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
                   >
                     <Translate size={11} />
-                    {t('evidence.original', '原文')} · {evidence.lang}
+                    {t('evidence.original', '原文')} ·{evidence.lang}
                     <span className="ml-auto text-[9px]">
                       {showOriginal
-                    ? t('evidence.collapse', '▲ 收起')
-                    : t('evidence.expand', '▼ 展开')}
+                        ? t('evidence.collapse', '▲ 收起')
+                        : t('evidence.expand', '▼ 展开')}
                     </span>
                   </button>
                   {showOriginal && (

@@ -1,12 +1,12 @@
-import { Bell, Gauge, User, List, ChatsCircle, CurrencyDollar } from '@phosphor-icons/react';
-import { useTheme } from '../store/ThemeContext';
-import { useAuth } from '../store/AuthContext';
-import { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
-import { useNotification, NotificationCenter } from '../contexts/NotificationContext';
-import SearchCombobox from '../blocks/SearchCombobox';
 import { Popover, PopoverButton, PopoverPanel } from '@headlessui/react';
+import { Bell, ChatsCircle, CurrencyDollar, Gauge, List, User } from '@phosphor-icons/react';
+import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
+import SearchCombobox from '../blocks/SearchCombobox';
+import { NotificationCenter, useNotification } from '../contexts/NotificationContext';
+import { useAuth } from '../store/AuthContext';
+import { useTheme } from '../store/ThemeContext';
 
 interface TopBarProps {
   onToggleSidebar: () => void;
@@ -116,10 +116,7 @@ export default function TopBar({ onToggleSidebar }: TopBarProps) {
       </div>
 
       <div className="flex items-center gap-2">
-        <button
-          onClick={() => navigate('/qa')}
-          className="btn btn-primary gap-2"
-        >
+        <button onClick={() => navigate('/qa')} className="btn btn-primary gap-2">
           <ChatsCircle size={18} />
           <span className="hidden sm:inline">{t('topbar.quickAsk', '快速提问')}</span>
         </button>
@@ -127,9 +124,11 @@ export default function TopBar({ onToggleSidebar }: TopBarProps) {
         <Popover className="relative">
           <PopoverButton
             className="btn btn-ghost p-2 relative"
-            aria-label={unreadCount > 0
-              ? t('topbar.notificationUnread', '通知（{{count}} 条未读）', { count: unreadCount })
-              : t('topbar.notification', '通知')}
+            aria-label={
+              unreadCount > 0
+                ? t('topbar.notificationUnread', '通知（{{count}} 条未读）', { count: unreadCount })
+                : t('topbar.notification', '通知')
+            }
           >
             <Bell size={20} />
             {unreadCount > 0 && (
@@ -141,16 +140,8 @@ export default function TopBar({ onToggleSidebar }: TopBarProps) {
               </span>
             )}
           </PopoverButton>
-          <PopoverPanel
-            anchor="bottom end"
-            className="z-50 mt-2 w-96"
-          >
-            {({ close }) => (
-              <NotificationCenter
-                isOpen={true}
-                onClose={close}
-              />
-            )}
+          <PopoverPanel anchor="bottom end" className="z-50 mt-2 w-96">
+            {({ close }) => <NotificationCenter isOpen onClose={close} />}
           </PopoverPanel>
         </Popover>
 
@@ -161,10 +152,7 @@ export default function TopBar({ onToggleSidebar }: TopBarProps) {
           >
             <CurrencyDollar size={20} />
           </PopoverButton>
-          <PopoverPanel
-            anchor="bottom end"
-            className="z-50 mt-2 w-64"
-          >
+          <PopoverPanel anchor="bottom end" className="z-50 mt-2 w-64">
             <div className="card p-3 shadow-xl animate-fade-in">
               <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-slate-700 dark:text-slate-200">
                 <CurrencyDollar size={16} className="text-primary-500" />
@@ -212,7 +200,9 @@ export default function TopBar({ onToggleSidebar }: TopBarProps) {
               onKeyDown={handleMenuKeyDown}
             >
               <button
-                ref={el => { menuItemsRef.current[0] = el; }}
+                ref={(el) => {
+                  menuItemsRef.current[0] = el;
+                }}
                 onClick={toggleTheme}
                 role="menuitem"
                 tabIndex={0}
@@ -221,7 +211,9 @@ export default function TopBar({ onToggleSidebar }: TopBarProps) {
                 {isDark ? t('topbar.lightMode', '浅色模式') : t('topbar.darkMode', '深色模式')}
               </button>
               <button
-                ref={el => { menuItemsRef.current[1] = el; }}
+                ref={(el) => {
+                  menuItemsRef.current[1] = el;
+                }}
                 onClick={() => {
                   navigate('/settings');
                   setShowUserMenu(false);
@@ -234,7 +226,9 @@ export default function TopBar({ onToggleSidebar }: TopBarProps) {
               </button>
               <hr className="my-1 border-slate-200 dark:border-slate-700" />
               <button
-                ref={el => { menuItemsRef.current[2] = el; }}
+                ref={(el) => {
+                  menuItemsRef.current[2] = el;
+                }}
                 onClick={handleLogout}
                 role="menuitem"
                 tabIndex={0}
@@ -250,28 +244,22 @@ export default function TopBar({ onToggleSidebar }: TopBarProps) {
   );
 }
 
-function BudgetMiniBar({
-  label,
-  used,
-  total
-}: {
-  label: string;
-  used: number;
-  total: number;
-}) {
+function BudgetMiniBar({ label, used, total }: { label: string; used: number; total: number }) {
   const pct = total > 0 ? Math.round((used / total) * 100) : 0;
   const exceeded = used > total;
-  const barColor = exceeded
-    ? 'bg-red-500'
-    : pct >= 80
-      ? 'bg-yellow-500'
-      : 'bg-primary-500';
+  const barColor = exceeded ? 'bg-red-500' : pct >= 80 ? 'bg-yellow-500' : 'bg-primary-500';
 
   return (
     <div>
       <div className="mb-1 flex items-center justify-between text-xs">
         <span className="text-slate-500 dark:text-slate-400">{label}</span>
-        <span className={exceeded ? 'font-medium text-red-600 dark:text-red-400' : 'text-slate-600 dark:text-slate-300'}>
+        <span
+          className={
+            exceeded
+              ? 'font-medium text-red-600 dark:text-red-400'
+              : 'text-slate-600 dark:text-slate-300'
+          }
+        >
           {exceeded ? '超额' : `${pct}%`}
         </span>
       </div>

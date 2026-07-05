@@ -1,8 +1,8 @@
 import i18n from 'i18next';
-import { initReactI18next } from 'react-i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
-import zhCN from './locales/zh-CN.json';
+import { initReactI18next } from 'react-i18next';
 import en from './locales/en.json';
+import zhCN from './locales/zh-CN.json';
 
 i18n
   .use(LanguageDetector)
@@ -10,7 +10,7 @@ i18n
   .init({
     resources: {
       'zh-CN': { translation: zhCN },
-      'en': { translation: en }
+      en: { translation: en }
     },
     fallbackLng: 'zh-CN',
     interpolation: {

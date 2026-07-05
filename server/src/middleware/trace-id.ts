@@ -1,4 +1,4 @@
-import { Context, Next } from 'hono';
+import type { Context, Next } from 'hono';
 
 // 请求 / 响应中携带 TraceId 的头名称
 const REQUEST_ID_HEADER = 'x-request-id';
@@ -14,9 +14,7 @@ const REQUEST_ID_HEADER = 'x-request-id';
  */
 export async function traceIdMiddleware(c: Context, next: Next) {
   const incoming = c.req.header(REQUEST_ID_HEADER);
-  const traceId = incoming && incoming.trim().length > 0
-    ? incoming.trim()
-    : crypto.randomUUID();
+  const traceId = incoming && incoming.trim().length > 0 ? incoming.trim() : crypto.randomUUID();
 
   // 写入上下文，供下游 handler 通过 c.get('traceId') 关联日志
   c.set('traceId', traceId);
