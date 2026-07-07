@@ -1,0 +1,38 @@
+-- Advanced search fields
+ALTER TABLE pages ADD COLUMN IF NOT EXISTS tags TEXT[] NOT NULL DEFAULT '{}';
+ALTER TABLE pages ADD COLUMN IF NOT EXISTS cv_score REAL NOT NULL DEFAULT 0.0;
+ALTER TABLE pages ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+ALTER TABLE pages ADD COLUMN IF NOT EXISTS state VARCHAR(50) NOT NULL DEFAULT 'active';
+ALTER TABLE pages ADD COLUMN IF NOT EXISTS is_stub BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE pages ADD COLUMN IF NOT EXISTS is_featured BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE pages ADD COLUMN IF NOT EXISTS is_merged BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE pages ADD COLUMN IF NOT EXISTS merged_into VARCHAR(255);
+
+-- Quality rating (A/B/C)
+ALTER TABLE pages ADD COLUMN IF NOT EXISTS quality VARCHAR(10) NOT NULL DEFAULT 'C';
+
+-- Indexes
+CREATE INDEX IF NOT EXISTS idx_pages_tags ON pages USING gin(tags);
+CREATE INDEX IF NOT EXISTS idx_pages_type ON pages(type);
+CREATE INDEX IF NOT EXISTS idx_pages_quality ON pages(quality);
+CREATE INDEX IF NOT EXISTS idx_pages_cv_score ON pages(cv_score);
+CREATE INDEX IF NOT EXISTS idx_pages_created_at ON pages(created_at);
+CREATE INDEX IF NOT EXISTS idx_pages_state ON pages(state);
+
+-- Saved searches
+CREATE TABLE IF NOT EXISTS saved_searches (
+  name VARCHAR(255) PRIMARY KEY,
+  query TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Search history
+CREATE TABLE IF NOT EXISTS search_history (
+  id SERIAL PRIMARY KEY,
+  query TEXT NOT NULL,
+  result_count INTEGER NOT NULL DEFAULT 0,
+  ts TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_search_history_ts ON search_history(ts DESC);

@@ -526,6 +526,47 @@ export const api = {
     }>(`/embed-proxy?${query.toString()}`);
   },
 
+  getSearchCompletions(prefix?: string) {
+    return request<{
+      types: string[];
+      namespaces: string[];
+      tags: string[];
+      contexts: string[];
+      qualities: string[];
+    }>('/search/completions', { params: prefix ? { prefix } : {} });
+  },
+
+  getSyntaxHelp() {
+    return request<{
+      items: Array<{ key: string; description: string; example: string }>;
+    }>('/search/syntax-help');
+  },
+
+  saveSearch(name: string, query: string, description?: string) {
+    return request<{ success: boolean }>('/saved-searches', {
+      method: 'POST',
+      body: JSON.stringify({ name, query, description })
+    });
+  },
+
+  getSavedSearches() {
+    return request<{
+      items: Array<{
+        name: string;
+        query: string;
+        description: string;
+        created_at: string;
+        updated_at: string;
+      }>;
+    }>('/saved-searches');
+  },
+
+  deleteSavedSearch(name: string) {
+    return request<{ success: boolean }>(`/saved-searches/${encodeURIComponent(name)}`, {
+      method: 'DELETE'
+    });
+  },
+
   getLibraryFile(hash: string) {
     return request<{
       file: {

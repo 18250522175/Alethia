@@ -18,7 +18,9 @@ import { getErrorMessage } from '../i18n/errors.zh-CN';
 import { budgetManager } from '../evolution/budget';
 import { randomUUID } from 'crypto';
 import { join } from 'path';
-import { existsSync, unlinkSync } from 'fs';
+import { existsSync, unlinkSync, readdirSync } from 'fs';
+import { createHash } from 'crypto';
+import { getSyntaxHelp } from '../retrieval/syntaxParser';
 import type {
   RebuildReport,
   ExtractReport,
@@ -1662,6 +1664,48 @@ ${relationsBlock}
     if (existsSync(filePath)) {
       unlinkSync(filePath);
     }
+  }
+
+  /**
+   * 获取高级搜索语法补全候选
+   */
+  async getSearchCompletions(prefix: string): Promise<{
+    types: string[];
+    namespaces: string[];
+    tags: string[];
+    contexts: string[];
+    qualities: string[];
+  }> {
+    const pool = getPool();
+    const [typeResult, nsResult, tagResult, ctxResult] = await Promise.all([
+      pool.query(
+        `SELECT type, COUNT(*) as cnt FROM pages GROUP BY type ORDER BY cnt DESC LIMIT 20`
+      ),
+      pool.query(
+        `SELECT DISTINCT SPLIT_PART(path, '/', 1) AS ns FROM pages WHERE path LIKE '%/%' LIMIT 20`
+      ),
+      pool.query(
+        `SELECT DISTINCT unnest(tags) AS tag FROM pages WHERE tags <> '{}' ORDER BY tag LIMIT 50`
+      ),
+      pool.query(
+        `SELECT DISTINCT unnest(contexts) AS ctx FROM pages WHERE contexts <> '{}' ORDER BY ctx LIMIT 50`
+      )
+    ]);
+
+    return {
+      types: typeResult.rows.map((r: any) => r.type).filter(Boolean),
+      namespaces: nsResult.rows.map((r: any) => r.ns).filter(Boolean),
+      tags: tagResult.rows.map((r: any) => r.tag).filter(Boolean),
+      contexts: ctxResult.rows.map((r: any) => r.ctx).filter(Boolean),
+      qualities: ['A', 'B', 'C']
+    };
+  }
+
+  /**
+   * 获取语法帮助
+   */
+  getSyntaxDocumentation() {
+    return getSyntaxHelp();
   }
 
   /**

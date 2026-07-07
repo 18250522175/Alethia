@@ -893,7 +893,7 @@ app.get('/api/embed-proxy', async (c) => {
   try {
     const type = c.req.query('type') || '';
     const refresh = c.req.query('refresh') === 'true';
-    
+
     const params: Record<string, string> = {};
     for (const [key, value] of c.req.query.entries()) {
       if (key !== 'type' && key !== 'refresh') {
@@ -910,6 +910,79 @@ app.get('/api/embed-proxy', async (c) => {
     return c.json(result);
   } catch (err) {
     loggerInstance.error({ err }, '嵌入数据代理失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+// Search syntax completions
+app.get('/api/search/completions', async (c) => {
+  try {
+    const prefix = c.req.query('prefix') || '';
+    const result = await brainAPI.getSearchCompletions(prefix);
+    return c.json(result);
+  } catch (err) {
+    loggerInstance.error({ err }, '获取搜索补全失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+// Search syntax help
+app.get('/api/search/syntax-help', async (c) => {
+  try {
+    const result = brainAPI.getSyntaxDocumentation();
+    return c.json({ items: result });
+  } catch (err) {
+    loggerInstance.error({ err }, '获取语法帮助失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+// Save search
+app.post('/api/saved-searches', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { name, query, description } = body;
+    if (!name || !query) {
+      return c.json({ error: { code: 'BAD_REQUEST', message: '缺少 name 或 query' } }, 400);
+    }
+    const pool = getPool();
+    await pool.query(
+      `INSERT INTO saved_searches (name, query, description, created_at)
+       VALUES ($1, $2, $3, NOW())
+       ON CONFLICT (name) DO UPDATE SET
+         query = EXCLUDED.query,
+         description = EXCLUDED.description,
+         updated_at = NOW()`,
+      [name, query, description || '']
+    );
+    return c.json({ success: true });
+  } catch (err) {
+    loggerInstance.error({ err }, '保存搜索失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+app.get('/api/saved-searches', async (c) => {
+  try {
+    const pool = getPool();
+    const result = await pool.query(
+      'SELECT name, query, description, created_at, updated_at FROM saved_searches ORDER BY updated_at DESC'
+    );
+    return c.json({ items: result.rows });
+  } catch (err) {
+    loggerInstance.error({ err }, '获取已保存搜索失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+app.delete('/api/saved-searches/:name', async (c) => {
+  try {
+    const name = c.req.param('name');
+    const pool = getPool();
+    await pool.query('DELETE FROM saved_searches WHERE name = $1', [name]);
+    return c.json({ success: true });
+  } catch (err) {
+    loggerInstance.error({ err }, '删除已保存搜索失败');
     return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
   }
 });
