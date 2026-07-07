@@ -453,6 +453,79 @@ export const api = {
     }>(`/pages/${encodeURIComponent(slug)}/backlinks`, { params: { contextChars: contextChars || 80 } });
   },
 
+  getEntityPreview(slug: string) {
+    return request<{
+      title: string;
+      summary: string;
+      lastModified: string;
+      quality?: string;
+      type: string;
+      aliases: string[];
+      backlinkCount: number;
+      hasOpenThreads: boolean;
+    }>(`/preview/${encodeURIComponent(slug)}`);
+  },
+
+  ingestFile(file: File, sha256: string) {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('sha256', sha256);
+    return request<{
+      libraryUrl: string;
+      alreadyExists: boolean;
+      extractionQueued: boolean;
+    }>('/ingest/upload', {
+      method: 'POST',
+      body: formData,
+      headers: { 'Content-Type': undefined }
+    });
+  },
+
+  listSnippets(category?: string) {
+    return request<{
+      items: Array<{
+        name: string;
+        trigger: string;
+        description: string;
+        category: string;
+      }>;
+    }>('/snippets', { params: category ? { category } : {} });
+  },
+
+  getSnippet(name: string) {
+    return request<{
+      name: string;
+      trigger: string;
+      description: string;
+      category: string;
+      content: string;
+    }>(`/snippets/${encodeURIComponent(name)}`);
+  },
+
+  saveSnippet(name: string, content: string) {
+    return request<{ success: boolean }>(`/snippets/${encodeURIComponent(name)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ content })
+    });
+  },
+
+  deleteSnippet(name: string) {
+    return request<{ success: boolean }>(`/snippets/${encodeURIComponent(name)}`, {
+      method: 'DELETE'
+    });
+  },
+
+  embedProxy(type: string, params: Record<string, string>, refresh?: boolean) {
+    const query = new URLSearchParams({ type, ...params });
+    if (refresh) query.set('refresh', 'true');
+    return request<{
+      data: any;
+      cached: boolean;
+      cachedAt?: string;
+      expiresAt: string;
+    }>(`/embed-proxy?${query.toString()}`);
+  },
+
   getLibraryFile(hash: string) {
     return request<{
       file: {

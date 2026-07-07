@@ -1,10 +1,13 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import MarkdownIt from 'markdown-it';
 import matter from 'gray-matter';
 import hljs from 'highlight.js/lib/common';
 import { useTranslation } from 'react-i18next';
 import { CaretRight } from '@phosphor-icons/react';
 import type { EvidenceSpan } from '@shared/evidence';
+import { calculateAllTables } from '../lib/tableCalculator';
+import EntityPreviewCard from './EntityPreviewCard';
+import { brainEmbedPlugin, BrainEmbedElement } from './BrainEmbed';
 
 interface MarkdownRendererProps {
   content: string;
@@ -12,6 +15,9 @@ interface MarkdownRendererProps {
   showFrontmatter?: boolean;
   onEvidenceClick?: (spanId: string) => void;
   aliasMap?: Record<string, string>;
+  onNavigate?: (slug: string) => void;
+  onOpenInSidebar?: (slug: string) => void;
+  onEditSummary?: (slug: string, summary: string) => void;
 }
 
 /* ----------------------------- helpers ----------------------------- */
@@ -105,6 +111,8 @@ const md: MarkdownIt = new MarkdownIt({
   }
 });
 
+brainEmbedPlugin(md);
+
 /* evidence_span：将 `[^span_id]` 渲染为可点击的角标 */
 md.inline.ruler.before('link', 'evidence_span', (state, silent) => {
   const src = state.src;
@@ -164,6 +172,20 @@ md.renderer.rules.link_close = (tokens, idx, options, env, self) => {
   const isMedia = stack.length > 0 ? !!stack.pop() : false;
   if (isMedia) return '</sup>';
   return origLinkClose ? origLinkClose(tokens, idx, options, env, self) : self.renderToken(tokens, idx, options);
+};
+
+const origTableTdOpen = md.renderer.rules.table_cell_open;
+md.renderer.rules.table_cell_open = (tokens, idx, options, env, self) => {
+  const token = tokens[idx];
+  const nextIdx = idx + 1;
+  if (nextIdx < tokens.length && tokens[nextIdx].type === 'inline') {
+    const content = tokens[nextIdx].content;
+    if (content.trim().startsWith('=')) {
+      const safeFormula = md.utils.escapeHtml(content.trim());
+      token.attrPush(['data-formula', safeFormula]);
+    }
+  }
+  return origTableTdOpen ? origTableTdOpen(tokens, idx, options, env, self) : self.renderToken(tokens, idx, options);
 };
 
 /* ----------------------------- prose styles ----------------------------- */
@@ -284,10 +306,15 @@ export default function MarkdownRenderer({
   evidenceSpans,
   showFrontmatter = false,
   onEvidenceClick,
-  aliasMap
+  aliasMap,
+  onNavigate,
+  onOpenInSidebar,
+  onEditSummary
 }: MarkdownRendererProps) {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
+  const [previewSlug, setPreviewSlug] = useState<string | null>(null);
+  const [previewPosition, setPreviewPosition] = useState({ x: 0, y: 0 });
 
   const env = useMemo(() => {
     const evidenceIds = new Set<string>();
@@ -336,6 +363,7 @@ export default function MarkdownRenderer({
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
+    calculateAllTables(el);
     const activate = (target: HTMLElement) => {
       const node = target.closest('.evidence-marker, .media-ref') as HTMLElement | null;
       if (!node) return;
@@ -355,7 +383,41 @@ export default function MarkdownRenderer({
       el.removeEventListener('click', onClick);
       el.removeEventListener('keydown', onKey);
     };
-  }, [onEvidenceClick]);
+  }, [onEvidenceClick, content]);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const handleMouseEnter = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const anchor = target.closest('a') as HTMLAnchorElement | null;
+      if (!anchor) return;
+
+      const href = anchor.getAttribute('href') || '';
+      if (!href.startsWith('/wiki/')) return;
+
+      const slug = decodeURIComponent(href.slice('/wiki/'.length));
+      const rect = anchor.getBoundingClientRect();
+      setPreviewPosition({
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2
+      });
+      setPreviewSlug(slug);
+    };
+
+    const handleMouseLeave = () => {
+      setPreviewSlug(null);
+    };
+
+    el.addEventListener('mouseenter', handleMouseEnter, true);
+    el.addEventListener('mouseleave', handleMouseLeave, true);
+
+    return () => {
+      el.removeEventListener('mouseenter', handleMouseEnter, true);
+      el.removeEventListener('mouseleave', handleMouseLeave, true);
+    };
+  }, []);
 
   const frontmatterEntries = useMemo(
     () => (frontmatter && typeof frontmatter === 'object' ? Object.entries(frontmatter) : []),
@@ -400,6 +462,17 @@ export default function MarkdownRenderer({
           )
         )}
       </div>
+
+      {previewSlug && (
+        <EntityPreviewCard
+          slug={previewSlug}
+          position={previewPosition}
+          onClose={() => setPreviewSlug(null)}
+          onNavigate={onNavigate || (() => {})}
+          onOpenInSidebar={onOpenInSidebar || (() => {})}
+          onEditSummary={onEditSummary || (() => {})}
+        />
+      )}
     </div>
   );
 }

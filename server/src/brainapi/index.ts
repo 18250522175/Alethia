@@ -1478,6 +1478,331 @@ ${relationsBlock}
 
     return results.slice(0, limit);
   }
+
+  /**
+   * 获取实体预览数据（用于悬浮卡片）
+   */
+  async getEntityPreview(slug: string): Promise<{
+    title: string;
+    summary: string;
+    lastModified: string;
+    quality?: string;
+    type: string;
+    aliases: string[];
+    backlinkCount: number;
+    hasOpenThreads: boolean;
+  }> {
+    const pool = getPool();
+
+    const [pageResult, backlinkResult] = await Promise.all([
+      pool.query(
+        `SELECT title, type, aliases, content_md, raw_md, updated_at, parsed_json
+         FROM pages WHERE slug = $1`,
+        [slug]
+      ),
+      pool.query(
+        `SELECT COUNT(*) as cnt FROM links WHERE target_slug = $1 AND NOT orphaned`,
+        [slug]
+      )
+    ]);
+
+    if (pageResult.rows.length === 0) {
+      throw new Error(`实体 ${slug} 不存在`);
+    }
+
+    const row = pageResult.rows[0];
+
+    let summary = '';
+    const content = row.content_md || '';
+    const assessmentMatch = content.match(/^##\s+Assessment\s*\n([\s\S]*?)(?=\n##\s|$)/i);
+    if (assessmentMatch) {
+      summary = assessmentMatch[1].replace(/\n/g, ' ').trim();
+      if (summary.length > 200) {
+        const lastPeriod = summary.lastIndexOf('.', 200);
+        const lastSpace = summary.lastIndexOf(' ', 200);
+        const cutoff = lastPeriod > 100 ? lastPeriod + 1 : (lastSpace > 100 ? lastSpace : 200);
+        summary = summary.slice(0, cutoff) + '...';
+      }
+    }
+
+    const parsedJson = typeof row.parsed_json === 'string' ? JSON.parse(row.parsed_json) : row.parsed_json;
+    const openThreads = parsedJson?.sections?.['Open Threads'] || '';
+    const hasOpenThreads = openThreads.trim().length > 0;
+
+    return {
+      title: row.title || slug,
+      summary,
+      lastModified: row.updated_at ? new Date(row.updated_at).toISOString() : new Date().toISOString(),
+      quality: parsedJson?.frontmatter?.quality,
+      type: row.type || 'concept',
+      aliases: row.aliases || [],
+      backlinkCount: parseInt(backlinkResult.rows[0]?.cnt || '0'),
+      hasOpenThreads
+    };
+  }
+
+  /**
+   * 摄入文件（拖拽上传）
+   */
+  async ingestFile(originalName: string, mime: string, content: Buffer, sha256: string): Promise<{
+    libraryUrl: string;
+    alreadyExists: boolean;
+    extractionQueued: boolean;
+  }> {
+    const pool = getPool();
+
+    const existingResult = await pool.query(
+      'SELECT hash FROM library_files WHERE hash = $1',
+      [sha256]
+    );
+
+    if (existingResult.rows.length > 0) {
+      return {
+        libraryUrl: `library://${sha256}`,
+        alreadyExists: true,
+        extractionQueued: false
+      };
+    }
+
+    storage.saveLibraryFile(sha256, content);
+
+    await pool.query(
+      `INSERT INTO library_files (hash, mime, original_name, size, status, ingested_at)
+       VALUES ($1, $2, $3, $4, 'new', NOW())`,
+      [sha256, mime, originalName, content.length]
+    );
+
+    return {
+      libraryUrl: `library://${sha256}`,
+      alreadyExists: false,
+      extractionQueued: true
+    };
+  }
+
+  /**
+   * 模板片段相关 API
+   */
+  async listSnippets(category?: string): Promise<Array<{
+    name: string;
+    trigger: string;
+    description: string;
+    category: string;
+  }>> {
+    const snippetsPath = join(storage.getSkillsPath(), 'snippets');
+    const results: Array<{ name: string; trigger: string; description: string; category: string }> = [];
+
+    if (!existsSync(snippetsPath)) return results;
+
+    const files = await new Promise<string[]>((resolve) => {
+      require('fs').readdir(snippetsPath, (err: any, files: string[]) => {
+        resolve(err ? [] : files.filter(f => f.endsWith('.md')));
+      });
+    });
+
+    for (const file of files) {
+      try {
+        const content = storage.readFile(join(snippetsPath, file));
+        const parsed = require('gray-matter')(content);
+        const name = file.replace('.md', '');
+        if (!category || parsed.data.category === category) {
+          results.push({
+            name,
+            trigger: parsed.data.trigger || name,
+            description: parsed.data.description || '',
+            category: parsed.data.category || '其他'
+          });
+        }
+      } catch {
+        continue;
+      }
+    }
+
+    return results;
+  }
+
+  async getSnippet(name: string): Promise<{
+    name: string;
+    trigger: string;
+    description: string;
+    category: string;
+    content: string;
+  }> {
+    const snippetsPath = join(storage.getSkillsPath(), 'snippets');
+    const filePath = join(snippetsPath, `${name}.md`);
+
+    if (!existsSync(filePath)) {
+      throw new Error(`片段 ${name} 不存在`);
+    }
+
+    const content = storage.readFile(filePath);
+    const parsed = require('gray-matter')(content);
+
+    return {
+      name,
+      trigger: parsed.data.trigger || name,
+      description: parsed.data.description || '',
+      category: parsed.data.category || '其他',
+      content: parsed.content || ''
+    };
+  }
+
+  async saveSnippet(name: string, content: string): Promise<void> {
+    const snippetsPath = join(storage.getSkillsPath(), 'snippets');
+    if (!existsSync(snippetsPath)) {
+      require('fs').mkdirSync(snippetsPath, { recursive: true });
+    }
+
+    storage.atomicWrite(join(snippetsPath, `${name}.md`), content);
+  }
+
+  async deleteSnippet(name: string): Promise<void> {
+    const snippetsPath = join(storage.getSkillsPath(), 'snippets');
+    const filePath = join(snippetsPath, `${name}.md`);
+
+    if (existsSync(filePath)) {
+      unlinkSync(filePath);
+    }
+  }
+
+  /**
+   * 嵌入数据代理 API
+   */
+  async embedProxy(type: string, params: Record<string, string>, refresh: boolean = false): Promise<{
+    data: any;
+    cached: boolean;
+    cachedAt?: string;
+    expiresAt: string;
+  }> {
+    const pool = getPool();
+    const paramsHash = createHash('sha256').update(JSON.stringify(params)).digest('hex');
+    const cacheKey = `${type}:${paramsHash}`;
+
+    const cacheDuration = {
+      stock: 5 * 60 * 1000,
+      weather: 30 * 60 * 1000,
+      rss: 60 * 60 * 1000,
+      crypto: 5 * 60 * 1000,
+      json: 5 * 60 * 1000
+    };
+
+    if (!refresh) {
+      const cacheResult = await pool.query(
+        'SELECT data, cached_at FROM embed_cache WHERE key = $1 AND expires_at > NOW()',
+        [cacheKey]
+      );
+
+      if (cacheResult.rows.length > 0) {
+        return {
+          data: JSON.parse(cacheResult.rows[0].data),
+          cached: true,
+          cachedAt: cacheResult.rows[0].cached_at?.toISOString(),
+          expiresAt: new Date(Date.now() + (cacheDuration[type as keyof typeof cacheDuration] || 300000)).toISOString()
+        };
+      }
+    }
+
+    let data: any = null;
+
+    try {
+      switch (type) {
+        case 'stock': {
+          const symbol = params.symbol;
+          const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`;
+          const response = await fetch(url, { timeout: 5000 });
+          const json = await response.json();
+          const meta = json.chart?.result?.[0]?.meta || {};
+          data = {
+            symbol,
+            price: meta.regularMarketPrice,
+            change: meta.regularMarketChange,
+            changePercent: meta.regularMarketChangePercent,
+            currency: meta.currency
+          };
+          break;
+        }
+        case 'weather': {
+          const city = params.city;
+          const apiKey = process.env.OPENWEATHERMAP_API_KEY;
+          if (!apiKey) {
+            data = { error: 'OpenWeatherMap API key not configured' };
+            break;
+          }
+          const url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&appid=${apiKey}&units=${params.units || 'metric'}`;
+          const response = await fetch(url, { timeout: 5000 });
+          const json = await response.json();
+          data = {
+            city: json.name,
+            temp: json.main?.temp,
+            feelsLike: json.main?.feels_like,
+            humidity: json.main?.humidity,
+            description: json.weather?.[0]?.description,
+            icon: json.weather?.[0]?.icon,
+            windSpeed: json.wind?.speed
+          };
+          break;
+        }
+        case 'rss': {
+          const url = params.url;
+          const response = await fetch(url, { timeout: 5000 });
+          const xml = await response.text();
+          const parser = new (require('xml2js').Parser)({ trim: true, explicitArray: false });
+          const json = await new Promise((resolve) => parser.parseString(xml, (_, result) => resolve(result)));
+          const items = json.rss?.channel?.item || [];
+          const limit = parseInt(params.limit || '5');
+          data = {
+            title: json.rss?.channel?.title,
+            items: Array.isArray(items) ? items.slice(0, limit).map((item: any) => ({
+              title: item.title,
+              link: item.link,
+              pubDate: item.pubDate
+            })) : []
+          };
+          break;
+        }
+        case 'crypto': {
+          const symbol = params.symbol;
+          const url = `https://api.coingecko.com/api/v3/simple/price?ids=${symbol}&vs_currencies=usd`;
+          const response = await fetch(url, { timeout: 5000 });
+          const json = await response.json();
+          data = {
+            symbol,
+            price: json[symbol]?.usd
+          };
+          break;
+        }
+        case 'json': {
+          const url = params.url;
+          const response = await fetch(url, { timeout: 5000 });
+          data = await response.json();
+          break;
+        }
+        default:
+          data = { error: `Unsupported embed type: ${type}` };
+      }
+    } catch (err) {
+      logger.warn({ err, type, params }, '嵌入数据获取失败');
+      data = { error: 'Failed to fetch data' };
+    }
+
+    const expiresAt = new Date(Date.now() + (cacheDuration[type as keyof typeof cacheDuration] || 300000));
+
+    await pool.query(
+      `INSERT INTO embed_cache (key, type, params, data, cached_at, expires_at)
+       VALUES ($1, $2, $3, $4, NOW(), $5)
+       ON CONFLICT (key) DO UPDATE SET
+         data = EXCLUDED.data,
+         cached_at = NOW(),
+         expires_at = EXCLUDED.expires_at`,
+      [cacheKey, type, JSON.stringify(params), JSON.stringify(data), expiresAt]
+    );
+
+    return {
+      data,
+      cached: false,
+      cachedAt: new Date().toISOString(),
+      expiresAt: expiresAt.toISOString()
+    };
+  }
 }
 
 /**

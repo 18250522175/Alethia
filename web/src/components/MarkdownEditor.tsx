@@ -8,10 +8,13 @@ import {
   Quotes,
   Code,
   Link as LinkIcon,
-  Spinner
+  Spinner,
+  Upload
 } from '@phosphor-icons/react';
 import api from '../lib/api';
 import HighlightText from './HighlightText';
+import CommandPalette from './CommandPalette';
+import { useNotification } from '../contexts/NotificationContext';
 
 interface MarkdownEditorProps {
   value: string;
@@ -54,14 +57,37 @@ function getCursorPixelPosition(textarea: HTMLTextAreaElement, pos: number) {
   };
 }
 
+const ALLOWED_FILE_TYPES: Record<string, string[]> = {
+  image: ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml'],
+  document: ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+  audio: ['audio/mpeg', 'audio/wav', 'audio/x-wav'],
+  video: ['video/mp4'],
+  text: ['text/markdown', 'text/plain', 'application/json', 'text/x-markdown']
+};
+
+const ALLOWED_EXTENSIONS: string[] = [
+  'jpg', 'jpeg', 'png', 'webp', 'gif', 'svg',
+  'pdf', 'docx',
+  'mp3', 'wav',
+  'mp4',
+  'md', 'txt', 'json'
+];
+
 export default function MarkdownEditor({ value, onChange }: MarkdownEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const { addNotification } = useNotification();
 
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [triggerStart, setTriggerStart] = useState(-1);
   const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0, lineHeight: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [isUploading, setIsUploading] = useState(false);
+
+  const [isPaletteOpen, setIsPaletteOpen] = useState(false);
+  const [paletteTriggerStart, setPaletteTriggerStart] = useState(-1);
 
   const { data: searchData, isFetching } = useQuery({
     queryKey: ['entity-search', query],
@@ -72,12 +98,164 @@ export default function MarkdownEditor({ value, onChange }: MarkdownEditorProps)
 
   const suggestions: SuggestionItem[] = searchData?.items ?? [];
 
+  const calculateSHA256 = useCallback(async (file: File): Promise<string> => {
+    const arrayBuffer = await new Promise<ArrayBuffer>((resolve, reject) => {
+      const fileReader = new FileReader();
+      fileReader.onload = () => resolve(fileReader.result as ArrayBuffer);
+      fileReader.onerror = () => reject(fileReader.error);
+      fileReader.readAsArrayBuffer(file);
+    });
+    
+    const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  }, []);
+
+  const isValidFileType = useCallback((file: File): boolean => {
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    if (ext && ALLOWED_EXTENSIONS.includes(ext)) return true;
+    
+    const allowedMimeTypes = Object.values(ALLOWED_FILE_TYPES).flat();
+    return allowedMimeTypes.includes(file.type);
+  }, []);
+
+  const isImageFile = useCallback((file: File): boolean => {
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    if (ext && ['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg'].includes(ext)) return true;
+    return ALLOWED_FILE_TYPES.image.includes(file.type);
+  }, []);
+
+  const handleFileUpload = useCallback(async (file: File) => {
+    if (!isValidFileType(file)) {
+      alert('不支持的文件类型。请上传图片、文档、音频、视频或文本文件。');
+      return;
+    }
+
+    setIsUploading(true);
+    setUploadProgress(0);
+
+    try {
+      setUploadProgress(10);
+      const sha256 = await calculateSHA256(file);
+      setUploadProgress(30);
+
+      const result = await api.ingestFile(file, sha256);
+      setUploadProgress(100);
+
+      const textarea = textareaRef.current;
+      if (!textarea) return;
+
+      const start = textarea.selectionStart;
+      const fileName = file.name;
+      const isImage = isImageFile(file);
+      
+      let insertText: string;
+      let cursorOffset: number;
+      
+      if (isImage) {
+        insertText = `![描述](library://sha256-${sha256})`;
+        cursorOffset = start + 2;
+      } else {
+        insertText = `[${fileName}](library://sha256-${sha256})`;
+        cursorOffset = start + fileName.length + 1;
+      }
+
+      const newValue = value.slice(0, start) + insertText + value.slice(start);
+      onChange(newValue);
+
+      requestAnimationFrame(() => {
+        textarea.focus();
+        if (isImage) {
+          textarea.setSelectionRange(cursorOffset, cursorOffset + 2);
+        } else {
+          textarea.setSelectionRange(cursorOffset, cursorOffset);
+        }
+      });
+
+      addNotification({
+        type: 'system',
+        title: '文件上传成功',
+        description: `${fileName} 已上传并添加到文档中`
+      });
+    } catch (error) {
+      console.error('Upload failed:', error);
+      addNotification({
+        type: 'system',
+        title: '文件上传失败',
+        description: '上传过程中发生错误，请重试'
+      });
+    } finally {
+      setIsUploading(false);
+      setTimeout(() => setUploadProgress(0), 500);
+    }
+  }, [calculateSHA256, isValidFileType, isImageFile, value, onChange, addNotification]);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length > 0) {
+      handleFileUpload(files[0]);
+    }
+  }, [handleFileUpload]);
+
+  const handlePaste = useCallback((e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.type.startsWith('image/')) {
+        const file = item.getAsFile();
+        if (file) {
+          e.preventDefault();
+          handleFileUpload(file);
+          break;
+        }
+      }
+    }
+  }, [handleFileUpload]);
+
   const closeAutocomplete = useCallback(() => {
     setIsOpen(false);
     setQuery('');
     setSelectedIndex(0);
     setTriggerStart(-1);
   }, []);
+
+  const closePalette = useCallback(() => {
+    setIsPaletteOpen(false);
+    setPaletteTriggerStart(-1);
+  }, []);
+
+  const insertSnippetContent = useCallback((content: string) => {
+    const textarea = textareaRef.current;
+    if (!textarea || paletteTriggerStart < 0) return;
+
+    const before = value.slice(0, paletteTriggerStart);
+    const after = value.slice(textarea.selectionStart);
+    const newValue = `${before}${content}${after}`;
+
+    onChange(newValue);
+    closePalette();
+
+    requestAnimationFrame(() => {
+      textarea.focus();
+      const newCursorPos = paletteTriggerStart + content.length;
+      textarea.setSelectionRange(newCursorPos, newCursorPos);
+    });
+  }, [value, onChange, paletteTriggerStart, closePalette]);
 
   const updateDropdownPosition = useCallback((textarea: HTMLTextAreaElement, cursorPos: number) => {
     setDropdownPos(getCursorPixelPosition(textarea, cursorPos));
@@ -109,6 +287,14 @@ export default function MarkdownEditor({ value, onChange }: MarkdownEditorProps)
     const cursorPos = e.target.selectionStart;
     onChange(newValue);
 
+    if (isPaletteOpen && paletteTriggerStart >= 0) {
+      if (newValue[paletteTriggerStart] !== '/') {
+        closePalette();
+        return;
+      }
+      return;
+    }
+
     if (isOpen && triggerStart >= 0) {
       if (newValue.slice(triggerStart, triggerStart + 2) !== '[[') {
         closeAutocomplete();
@@ -134,9 +320,21 @@ export default function MarkdownEditor({ value, onChange }: MarkdownEditorProps)
       setTriggerStart(cursorPos - 2);
       updateDropdownPosition(e.target, cursorPos);
     }
-  }, [isOpen, triggerStart, onChange, closeAutocomplete, updateDropdownPosition]);
+
+    if (cursorPos >= 1 && newValue[cursorPos - 1] === '/') {
+      const prevChar = cursorPos >= 2 ? newValue[cursorPos - 2] : '';
+      if (prevChar === '' || prevChar === '\n' || prevChar === ' ' || prevChar === '\t') {
+        setIsPaletteOpen(true);
+        setPaletteTriggerStart(cursorPos - 1);
+      }
+    }
+  }, [isOpen, triggerStart, isPaletteOpen, paletteTriggerStart, onChange, closeAutocomplete, closePalette, updateDropdownPosition]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (isPaletteOpen) {
+      return;
+    }
+
     if (!isOpen) return;
 
     if (e.key === 'ArrowDown') {
@@ -154,7 +352,7 @@ export default function MarkdownEditor({ value, onChange }: MarkdownEditorProps)
       e.preventDefault();
       closeAutocomplete();
     }
-  }, [isOpen, suggestions, selectedIndex, insertSuggestion, closeAutocomplete]);
+  }, [isOpen, isPaletteOpen, suggestions, selectedIndex, insertSuggestion, closeAutocomplete]);
 
   const handleScroll = useCallback(() => {
     if (isOpen && textareaRef.current) {
@@ -212,7 +410,8 @@ export default function MarkdownEditor({ value, onChange }: MarkdownEditorProps)
     { icon: ListNumbers, label: 'Numbered list', action: () => insertAtCursor('\n1. ') },
     { icon: Quotes, label: 'Quote', action: () => insertAtCursor('\n> ') },
     { icon: Code, label: 'Code', action: () => wrapSelection('`', '`') },
-    { icon: LinkIcon, label: 'Link', action: () => wrapSelection('[', '](url)') }
+    { icon: LinkIcon, label: 'Link', action: () => wrapSelection('[', '](url)') },
+    { icon: Upload, label: 'Upload', action: () => {} }
   ];
 
   return (
@@ -236,14 +435,32 @@ export default function MarkdownEditor({ value, onChange }: MarkdownEditorProps)
       </div>
 
       {/* Textarea wrapper */}
-      <div className="relative">
+      <div 
+        className={`relative rounded-lg border-2 transition-all duration-200 ${
+          isDragging 
+            ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20' 
+            : 'border-slate-200 dark:border-slate-700'
+        }`}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
+        {isDragging && (
+          <div className="absolute inset-0 flex items-center justify-center bg-primary-500/10 rounded-lg pointer-events-none z-10">
+            <div className="flex flex-col items-center gap-2 text-primary-600 dark:text-primary-400">
+              <Upload size={32} />
+              <span className="font-medium">释放以上传文件</span>
+            </div>
+          </div>
+        )}
         <textarea
           ref={textareaRef}
           value={value}
           onChange={handleInput}
           onKeyDown={handleKeyDown}
           onBlur={handleBlur}
-          className="input min-h-[60vh] w-full resize-y font-mono text-sm leading-6"
+          onPaste={handlePaste}
+          className="input min-h-[60vh] w-full resize-y font-mono text-sm leading-6 border-none rounded-lg"
           spellCheck={false}
         />
 
@@ -311,7 +528,23 @@ export default function MarkdownEditor({ value, onChange }: MarkdownEditorProps)
             )}
           </div>
         )}
+
+        {isUploading && (
+          <div className="absolute bottom-0 left-0 right-0 h-1 bg-slate-200 dark:bg-slate-700 rounded-b-lg">
+            <div 
+              className="h-full bg-primary-500 transition-all duration-300"
+              style={{ width: `${uploadProgress}%` }}
+            />
+          </div>
+        )}
       </div>
+
+      <CommandPalette
+        isOpen={isPaletteOpen}
+        onClose={closePalette}
+        onInsert={insertSnippetContent}
+        triggerStart={paletteTriggerStart}
+      />
     </div>
   );
 }

@@ -808,4 +808,110 @@ app.get('/api/entities/search', async (c) => {
   }
 });
 
+// Entity preview
+app.get('/api/preview/:slug', async (c) => {
+  try {
+    const slug = c.req.param('slug');
+    const result = await brainAPI.getEntityPreview(slug);
+    c.header('Cache-Control', 'public, max-age=300');
+    return c.json(result);
+  } catch (err) {
+    loggerInstance.error({ err }, '获取实体预览失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+// Ingest file upload
+app.post('/api/ingest/upload', async (c) => {
+  try {
+    const body = await c.req.formData();
+    const file = body.get('file') as File;
+    const sha256 = body.get('sha256') as string;
+    
+    if (!file || !sha256) {
+      return c.json({ error: { code: 'BAD_REQUEST', message: '缺少文件或哈希值' } }, 400);
+    }
+
+    const bytes = await file.arrayBuffer();
+    const buffer = Buffer.from(bytes);
+    const result = await brainAPI.ingestFile(file.name, file.type, buffer, sha256);
+    return c.json(result);
+  } catch (err) {
+    loggerInstance.error({ err }, '文件摄入失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+// Snippets
+app.get('/api/snippets', async (c) => {
+  try {
+    const category = c.req.query('category') || undefined;
+    const result = await brainAPI.listSnippets(category);
+    return c.json({ items: result });
+  } catch (err) {
+    loggerInstance.error({ err }, '获取片段列表失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+app.get('/api/snippets/:name', async (c) => {
+  try {
+    const name = c.req.param('name');
+    const result = await brainAPI.getSnippet(name);
+    return c.json(result);
+  } catch (err) {
+    loggerInstance.error({ err }, '获取片段失败');
+    return c.json({ error: { code: 'NOT_FOUND', message: '片段不存在' } }, 404);
+  }
+});
+
+app.put('/api/snippets/:name', async (c) => {
+  try {
+    const name = c.req.param('name');
+    const body = await c.req.json();
+    await brainAPI.saveSnippet(name, body.content);
+    return c.json({ success: true });
+  } catch (err) {
+    loggerInstance.error({ err }, '保存片段失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+app.delete('/api/snippets/:name', async (c) => {
+  try {
+    const name = c.req.param('name');
+    await brainAPI.deleteSnippet(name);
+    return c.json({ success: true });
+  } catch (err) {
+    loggerInstance.error({ err }, '删除片段失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+// Embed proxy
+app.get('/api/embed-proxy', async (c) => {
+  try {
+    const type = c.req.query('type') || '';
+    const refresh = c.req.query('refresh') === 'true';
+    
+    const params: Record<string, string> = {};
+    for (const [key, value] of c.req.query.entries()) {
+      if (key !== 'type' && key !== 'refresh') {
+        params[key] = value;
+      }
+    }
+
+    if (!type) {
+      return c.json({ error: { code: 'BAD_REQUEST', message: '缺少 type 参数' } }, 400);
+    }
+
+    const result = await brainAPI.embedProxy(type, params, refresh);
+    c.header('Cache-Control', 'public, max-age=300');
+    return c.json(result);
+  } catch (err) {
+    loggerInstance.error({ err }, '嵌入数据代理失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
 export default app;
