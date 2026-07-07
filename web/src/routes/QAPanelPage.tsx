@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
+import { DEFAULT_SUGGESTED_QUESTIONS } from '../lib/constants';
 import {
   PaperPlaneTilt,
   ThumbsUp,
@@ -46,13 +47,6 @@ interface Conversation {
   updatedAt: number;
   compressed?: boolean;
 }
-
-const SUGGESTED_QUESTIONS = [
-  '熵的概念是什么？',
-  '热力学第二定律如何应用于信息论？',
-  '知识库中有哪些核心概念？',
-  '什么是 Compiled Truth Markdown？'
-];
 
 interface Conversation {
   id: string;
@@ -410,7 +404,7 @@ export default function QAPanelPage() {
                   {t('qa.welcomeSubtitle', 'AI 将基于知识库中已提取的内容进行多轮反思问答，并标注每条结论的来源。')}
                 </p>
                 <div className="grid w-full max-w-2xl grid-cols-1 gap-3 sm:grid-cols-2">
-                  {SUGGESTED_QUESTIONS.map((q, i) => (
+                  {DEFAULT_SUGGESTED_QUESTIONS.map((q, i) => (
                     <button
                       key={i}
                       onClick={() => handleSend(q)}

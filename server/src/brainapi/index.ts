@@ -387,10 +387,15 @@ class BrainAPI {
           modifiedFiles.push(`${diff.slug}.md`);
 
           const versionId = randomUUID();
+          const maxVersionResult = await client.query(
+            `SELECT COALESCE(MAX(version), 0) as max_version FROM knowledge_versions WHERE slug = $1`,
+            [diff.slug]
+          );
+          const nextVersion = (maxVersionResult.rows[0]?.max_version || 0) + 1;
           await client.query(
             `INSERT INTO knowledge_versions (id, slug, version, content, batch_id, created_at)
              VALUES ($1, $2, $3, $4, $5, NOW())`,
-            [versionId, diff.slug, 1, newContent.slice(0, 5000), `diff-${diffId}`]
+            [versionId, diff.slug, nextVersion, newContent.slice(0, 5000), `diff-${diffId}`]
           );
 
           await syncEngine.syncAll();
@@ -459,9 +464,6 @@ class BrainAPI {
           const prevVersion = versionResult.rows[0];
           storage.atomicWrite(targetFile, prevVersion.content);
           restoredFiles.push(`${slug}.md`);
-
-          // 重新同步回滚后的页面
-          await syncEngine.syncAll();
         } else if (logEntry.op === 'create') {
           // 如果是创建操作且没有历史版本，删除文件
           if (existsSync(targetFile)) {
@@ -469,6 +471,11 @@ class BrainAPI {
             restoredFiles.push(`${slug}.md (已删除)`);
           }
         }
+      }
+
+      // 循环结束后统一同步一次，避免 N 次全量同步
+      if (restoredFiles.length > 0) {
+        await syncEngine.syncAll();
       }
 
       return {
@@ -840,6 +847,7 @@ ${relationsBlock}
       const pool = getPool();
       const limit = params?.limit || 100;
       const opFilter = params?.op;
+      const sqlLimit = limit * 1000;
 
       // 使用两个独立查询避免动态参数索引混乱
       const subResult = opFilter
@@ -849,16 +857,16 @@ ${relationsBlock}
              FROM auto_change_log
              WHERE op = $1
              ORDER BY created_at DESC
-             LIMIT $2 * 1000`,
-            [opFilter, limit]
+             LIMIT $2`,
+            [opFilter, sqlLimit]
           )
         : await pool.query(
             `SELECT batch_id, op, target, created_at,
                     COUNT(*) OVER (PARTITION BY batch_id, op) as cnt
              FROM auto_change_log
              ORDER BY created_at DESC
-             LIMIT $1 * 1000`,
-            [limit]
+             LIMIT $1`,
+            [sqlLimit]
           );
 
       // 构建 batch_id 列表用于外层查询
@@ -1326,24 +1334,45 @@ ${relationsBlock}
       return [];
     }
 
+    // 收集所有需要查询的边，批量查询避免 N+1
+    const edgePairs: [string, string][] = [];
+    const edgeIndexMap = new Map<string, number>(); // key: "s->t", value: edge index in batch
+    for (const row of result.rows) {
+      const nodePath: string[] = row.node_path;
+      for (let i = 0; i < nodePath.length - 1; i++) {
+        const key = `${nodePath[i]}->${nodePath[i + 1]}`;
+        if (!edgeIndexMap.has(key)) {
+          edgeIndexMap.set(key, edgePairs.length);
+          edgePairs.push([nodePath[i], nodePath[i + 1]]);
+        }
+      }
+    }
+
+    // 批量查询所有边
+    let edgeRelationMap = new Map<string, string>();
+    if (edgePairs.length > 0) {
+      const edgeParams = edgePairs.flatMap(([s, t]) => [s, t]);
+      const edgePlaceholders = edgePairs.map((_, i) => `($${i * 2 + 1}, $${i * 2 + 2})`).join(', ');
+      const edgeRes = await pool.query(
+        `SELECT source_slug, target_slug, relation FROM links
+         WHERE (source_slug, target_slug) IN (${edgePlaceholders})`,
+        edgeParams
+      );
+      for (const r of edgeRes.rows) {
+        edgeRelationMap.set(`${r.source_slug}->${r.target_slug}`, r.relation);
+      }
+    }
+
     const paths = [];
     for (const row of result.rows) {
       const nodePath: string[] = row.node_path;
-      const edgeKeys: string[] = row.edge_path;
       const edges = [];
       for (let i = 0; i < nodePath.length - 1; i++) {
-        const s = nodePath[i];
-        const t = nodePath[i + 1];
-        const edgeRes = await pool.query(
-          `SELECT relation FROM links
-           WHERE source_slug = $1 AND target_slug = $2
-           LIMIT 1`,
-          [s, t]
-        );
+        const key = `${nodePath[i]}->${nodePath[i + 1]}`;
         edges.push({
-          source: s,
-          target: t,
-          relation: edgeRes.rows[0]?.relation || 'related'
+          source: nodePath[i],
+          target: nodePath[i + 1],
+          relation: edgeRelationMap.get(key) || 'related'
         });
       }
       paths.push({
@@ -1389,7 +1418,7 @@ ${relationsBlock}
     if (sourceSlugs.length === 0) return [];
 
     const contentResult = await pool.query(
-      `SELECT slug, content_md FROM pages WHERE slug = ANY($1)`,
+      `SELECT slug, LEFT(content_md, 300) as content_md FROM pages WHERE slug = ANY($1)`,
       [sourceSlugs]
     );
     const contentMap = new Map<string, string>();

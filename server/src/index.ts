@@ -70,7 +70,7 @@ app.get('/health', async (c) => {
 
   const env = loadEnv();
   const adapters = ['BAILIAN', 'ZHIPU', 'MOONSHOT', 'ERNIE', 'SPARK', 'HUNYUAN', 'MINIMAX', 'DEEPSEEK', 'YI', 'BAICHUAN'];
-  const hasAnyLlm = adapters.some(a => (process.env[`${a}_API_KEY`] || '').trim().length > 0);
+  const hasAnyLlm = adapters.some(a => ((env as Record<string, string>)[`${a}_API_KEY`] || '').trim().length > 0);
   const llmStatus = hasAnyLlm ? 'configured' : 'none';
 
   const embeddingStatus = env.EMBEDDING_PROVIDER === 'local' ? 'local' :

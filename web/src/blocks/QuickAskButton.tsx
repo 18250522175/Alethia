@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { DEFAULT_SUGGESTED_QUESTIONS } from '../lib/constants';
 import {
   Brain,
   PaperPlaneTilt,
@@ -22,12 +23,6 @@ interface QuickAnswer {
   estimatedCost?: number;
   conversationId?: string;
 }
-
-const SUGGESTED_QUESTIONS = [
-  '熵的概念是什么？',
-  '什么是知识图谱？',
-  '如何使用这个知识库？'
-];
 
 export default function QuickAskButton() {
   const { t } = useTranslation();
@@ -167,7 +162,7 @@ export default function QuickAskButton() {
                     试试这些问题
                   </p>
                   <div className="space-y-2">
-                    {SUGGESTED_QUESTIONS.map((q, i) => (
+                    {DEFAULT_SUGGESTED_QUESTIONS.map((q, i) => (
                       <button
                         key={i}
                         onClick={() => handleAsk(q)}
