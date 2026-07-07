@@ -78,7 +78,7 @@ export default function DashboardPage() {
   });
 
   const handleRebuild = () => {
-    if (confirm('确定要重建知识库结构吗？此操作将重新计算所有实体关系和索引，可能需要一段时间。')) {
+    if (confirm(t('dashboard.rebuildConfirm', '确定要重建知识库结构吗？此操作将重新计算所有实体关系和索引，可能需要一段时间。'))) {
       rebuildMutation.mutate();
     }
   };
@@ -87,19 +87,19 @@ export default function DashboardPage() {
   const isLoading = healthQuery.isLoading;
   const isError = healthQuery.isError;
 
-  const days = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+  const dayKeys = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
   const today = new Date();
   const dayLabels = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(today);
     d.setDate(today.getDate() - (6 - i));
-    return days[d.getDay()];
+    return t(`dashboard.days.${dayKeys[d.getDay()]}`);
   });
 
   const trendData = {
     labels: dayLabels,
     datasets: [
       {
-        label: '页面数',
+        label: t('dashboard.pages', '页面数'),
         data: data?.scale.trend?.map((t: any) => t.nodes) || Array(7).fill(data?.scale.pages || 0),
         borderColor: '#6366f1',
         backgroundColor: 'rgba(99, 102, 241, 0.1)',
@@ -107,7 +107,7 @@ export default function DashboardPage() {
         tension: 0.4
       },
       {
-        label: '关系数',
+        label: t('dashboard.edges', '关系数'),
         data: data?.scale.trend?.map((t: any) => t.edges) || Array(7).fill(data?.scale.edges || 0),
         borderColor: '#06b6d4',
         backgroundColor: 'rgba(6, 182, 212, 0.1)',
@@ -125,7 +125,7 @@ export default function DashboardPage() {
   const otherCost = monthlyBudget ? (monthlyBudget.spent - qaCost) * 0.3 : 0;
 
   const costPieData = {
-    labels: ['问答', '提取', '审核', '其他'],
+    labels: [t('dashboard.qa', '问答'), t('dashboard.extraction', '提取'), t('dashboard.review', '审核'), t('dashboard.other', '其他')],
     datasets: [
       {
         data: [qaCost, extractionCost, reviewCost, otherCost].map(v => Math.max(v, 0.1)),
@@ -198,7 +198,7 @@ export default function DashboardPage() {
             {t('health.title')}
           </h1>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            知识库整体规模、审核待办、AI 质量、预算与归档状态一览
+            {t('dashboard.subtitle', '知识库整体规模、审核待办、AI 质量、预算与归档状态一览')}
           </p>
         </div>
         <button
@@ -207,7 +207,7 @@ export default function DashboardPage() {
           className="btn btn-primary"
         >
           <ArrowsClockwise size={16} className={`mr-1.5 ${rebuildMutation.isPending ? 'animate-spin' : ''}`} />
-          {rebuildMutation.isPending ? '重建中...' : '重建结构'}
+          {rebuildMutation.isPending ? t('dashboard.rebuilding', '重建中...') : t('dashboard.rebuild', '重建结构')}
         </button>
       </header>
 
@@ -216,8 +216,8 @@ export default function DashboardPage() {
       ) : isError || !data ? (
         <div className="card flex flex-col items-center justify-center py-16 text-center">
           <Warning size={40} className="mb-2 text-red-400" />
-          <p className="text-slate-600 dark:text-slate-300">仪表盘数据加载失败</p>
-          <p className="mt-1 text-xs text-slate-400">请检查数据库连接是否正常</p>
+          <p className="text-slate-600 dark:text-slate-300">{t('dashboard.loadError', '仪表盘数据加载失败')}</p>
+          <p className="mt-1 text-xs text-slate-400">{t('dashboard.loadErrorHint', '请检查数据库连接是否正常')}</p>
         </div>
       ) : (
         <>
@@ -228,21 +228,21 @@ export default function DashboardPage() {
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
               <StatCard
                 icon={<Database size={20} />}
-                label="页面数"
+                label={t('dashboard.pages', '页面数')}
                 value={data.scale.pages}
                 color="bg-blue-500"
                 onClick={() => navigate('/wiki')}
               />
               <StatCard
                 icon={<TrendUp size={20} />}
-                label="节点数"
+                label={t('dashboard.nodes', '节点数')}
                 value={data.scale.nodes}
                 color="bg-indigo-500"
                 onClick={() => navigate('/graph')}
               />
               <StatCard
                 icon={<LinkIcon size={20} />}
-                label="边数"
+                label={t('dashboard.edges', '边数')}
                 value={data.scale.edges}
                 color="bg-purple-500"
                 onClick={() => navigate('/graph')}
@@ -263,7 +263,7 @@ export default function DashboardPage() {
               <div className="mb-4 flex items-center gap-2">
                 <ChartLine size={18} className="text-primary-500" />
                 <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">
-                  增长趋势
+                  {t('dashboard.trend', '增长趋势')}
                 </h3>
               </div>
               <div className="h-64">
@@ -275,7 +275,7 @@ export default function DashboardPage() {
               <div className="mb-4 flex items-center gap-2">
                 <ChartPie size={18} className="text-emerald-500" />
                 <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">
-                  成本分布
+                  {t('dashboard.costDist', '成本分布')}
                 </h3>
               </div>
               <div className="h-64">
@@ -291,12 +291,12 @@ export default function DashboardPage() {
                 {t('health.reviewBacklog')}
               </h2>
               <div className="space-y-3">
-                <BacklogRow label="🟢 低风险" count={data.reviewBacklog.green} color="text-green-600" onClick={() => navigate('/review?risk=low')} />
-                <BacklogRow label="🟡 待确认" count={data.reviewBacklog.yellow} color="text-yellow-600" onClick={() => navigate('/review?risk=medium')} />
-                <BacklogRow label="🔴 高风险" count={data.reviewBacklog.red} color="text-red-600" onClick={() => navigate('/review?risk=high')} />
+                <BacklogRow label={t('dashboard.lowRisk', '🟢 低风险')} count={data.reviewBacklog.green} color="text-green-600" onClick={() => navigate('/review?risk=low')} />
+                <BacklogRow label={t('dashboard.pendingConfirm', '🟡 待确认')} count={data.reviewBacklog.yellow} color="text-yellow-600" onClick={() => navigate('/review?risk=medium')} />
+                <BacklogRow label={t('dashboard.highRisk', '🔴 高风险')} count={data.reviewBacklog.red} color="text-red-600" onClick={() => navigate('/review?risk=high')} />
               </div>
               <div className="mt-4 border-t border-slate-200 pt-3 text-xs text-slate-500 dark:border-slate-700 dark:text-slate-400">
-                总计：{data.reviewBacklog.green + data.reviewBacklog.yellow + data.reviewBacklog.red} 条待审核
+                {t('dashboard.totalPending', { count: data.reviewBacklog.green + data.reviewBacklog.yellow + data.reviewBacklog.red })}
               </div>
             </section>
 
@@ -320,19 +320,19 @@ export default function DashboardPage() {
                 />
               </div>
               <div className="mt-3 border-t border-slate-200 pt-3 text-xs text-slate-500 dark:border-slate-700 dark:text-slate-400">
-                单次问答上限：${data.budget.perQueryLimit.toFixed(2)}
+                {t('dashboard.perQueryLimit', { amount: data.budget.perQueryLimit.toFixed(2) })}
               </div>
             </section>
 
             <section className="card p-5">
               <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold">
                 <Brain size={18} className="text-primary-500" />
-                AI 质量
+                {t('health.aIQuality', 'AI 质量')}
               </h2>
               <div className="space-y-3">
                 <div>
                   <div className="mb-1 flex justify-between text-xs">
-                    <span className="text-slate-500 dark:text-slate-400">正确率</span>
+                    <span className="text-slate-500 dark:text-slate-400">{t('dashboard.correctness', '正确率')}</span>
                     <span className="font-medium">
                       {Math.round(data.aiQuality.correctness * 100)}%
                     </span>
@@ -346,7 +346,7 @@ export default function DashboardPage() {
                 </div>
                 <div>
                   <div className="mb-1 flex justify-between text-xs">
-                    <span className="text-slate-500 dark:text-slate-400">缓存命中率</span>
+                    <span className="text-slate-500 dark:text-slate-400">{t('dashboard.cacheHit', '缓存命中率')}</span>
                     <span className="font-medium">{Math.round(data.cacheHitRate * 100)}%</span>
                   </div>
                   <div className="h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700">
@@ -378,14 +378,14 @@ export default function DashboardPage() {
             />
             <StatCard
               icon={<Files size={20} />}
-              label="观察文件数"
+              label={t('dashboard.observedFiles', '观察文件数')}
               value={data.observedFiles}
               color="bg-cyan-500"
               onClick={() => navigate('/library')}
             />
             <StatCard
               icon={<Warning size={20} />}
-              label="断裂证据链"
+              label={t('dashboard.brokenChains', '断裂证据链')}
               value={data.brokenEvidenceChains}
               color={data.brokenEvidenceChains > 0 ? 'bg-red-500' : 'bg-green-500'}
               warning={data.brokenEvidenceChains > 0}
@@ -400,9 +400,13 @@ export default function DashboardPage() {
 
           {rebuildMutation.data && (
             <div className="card border-green-300 bg-green-50 p-4 text-sm dark:border-green-700 dark:bg-green-900/20">
-              <strong>重建完成：</strong>
-              处理页面 {rebuildMutation.data.pages} 条 · 链接 {rebuildMutation.data.links} 条 ·
-              幽灵关系 {rebuildMutation.data.ghostCount} 条 · 耗时 {rebuildMutation.data.durationMs}ms
+              <strong>{t('dashboard.rebuildSuccess', '重建完成')}：</strong>
+              {t('dashboard.rebuildDetail', '处理 {{pages}} 个页面，{{links}} 个链接，{{ghosts}} 个幽灵关系，耗时 {{duration}} 秒', {
+                pages: rebuildMutation.data.pages,
+                links: rebuildMutation.data.links,
+                ghosts: rebuildMutation.data.ghostCount,
+                duration: (rebuildMutation.data.durationMs / 1000).toFixed(1)
+              })}
             </div>
           )}
         </>

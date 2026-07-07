@@ -390,8 +390,8 @@ export default function DiffCompare({
                 <div className="flex items-center gap-2 border-b border-yellow-200 bg-yellow-50 px-4 py-2 text-xs text-yellow-700 dark:border-yellow-800/30 dark:bg-yellow-900/20 dark:text-yellow-300">
                   <Warning size={14} weight="bold" />
                   <span>
-                    文件过大（超过 {MAX_LCS_LINES} 行），已使用简化对比模式。完整 LCS 对比可能导致浏览器卡顿。
-                  </span>
+                  {t('diffCompare.truncatedWarning', { limit: MAX_LCS_LINES })}
+                </span>
                 </div>
               )}
               {/* 摘要条 */}

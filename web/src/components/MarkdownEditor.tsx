@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import {
   TextB,
@@ -74,6 +75,7 @@ const ALLOWED_EXTENSIONS: string[] = [
 ];
 
 export default function MarkdownEditor({ value, onChange }: MarkdownEditorProps) {
+  const { t } = useTranslation();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -131,7 +133,7 @@ export default function MarkdownEditor({ value, onChange }: MarkdownEditorProps)
 
   const handleFileUpload = useCallback(async (file: File) => {
     if (!isValidFileType(file)) {
-      alert('不支持的文件类型。请上传图片、文档、音频、视频或文本文件。');
+      alert(t('editor.unsupportedFileType'));
       return;
     }
 
@@ -178,22 +180,22 @@ export default function MarkdownEditor({ value, onChange }: MarkdownEditorProps)
 
       addNotification({
         type: 'system',
-        title: '文件上传成功',
-        description: `${fileName} 已上传并添加到文档中`
+        title: t('editor.uploadSuccess'),
+        description: t('editor.uploadSuccessDesc', { name: fileName })
       });
     } catch (error) {
       console.error('Upload failed:', error);
       addNotification({
         type: 'system',
-        title: '文件上传失败',
-        description: '上传过程中发生错误，请重试'
+        title: t('editor.uploadFailed'),
+        description: t('editor.uploadFailedDesc')
       });
     } finally {
       setIsUploading(false);
       if (uploadTimerRef.current) clearTimeout(uploadTimerRef.current);
       uploadTimerRef.current = setTimeout(() => setUploadProgress(0), 500);
     }
-  }, [calculateSHA256, isValidFileType, isImageFile, value, onChange, addNotification]);
+  }, [calculateSHA256, isValidFileType, isImageFile, value, onChange, addNotification, t]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -482,7 +484,7 @@ export default function MarkdownEditor({ value, onChange }: MarkdownEditorProps)
           <div className="absolute inset-0 flex items-center justify-center bg-primary-500/10 rounded-lg pointer-events-none z-10">
             <div className="flex flex-col items-center gap-2 text-primary-600 dark:text-primary-400">
               <Upload size={32} />
-              <span className="font-medium">释放以上传文件</span>
+              <span className="font-medium">{t('editor.dropToUpload')}</span>
             </div>
           </div>
         )}
@@ -509,13 +511,13 @@ export default function MarkdownEditor({ value, onChange }: MarkdownEditorProps)
             {isFetching && suggestions.length === 0 && (
               <div className="flex items-center gap-2 px-3 py-2.5 text-sm text-slate-500 dark:text-slate-400">
                 <Spinner size={14} className="animate-spin" />
-                搜索中…
+                {t('editor.searching')}
               </div>
             )}
 
             {!isFetching && suggestions.length === 0 && query.length > 0 && (
               <div className="px-3 py-2.5 text-sm text-slate-500 dark:text-slate-400">
-                无匹配结果
+                {t('editor.noMatch')}
               </div>
             )}
 
@@ -549,7 +551,7 @@ export default function MarkdownEditor({ value, onChange }: MarkdownEditorProps)
                           </div>
                           {item.aliases.length > 0 && (
                             <div className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-                              别名: {item.aliases.join(', ')}
+                              {t('editor.aliases', { aliases: item.aliases.join(', ') })}
                             </div>
                           )}
                         </div>

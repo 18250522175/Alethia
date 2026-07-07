@@ -25,17 +25,17 @@ import { useTheme } from '../store/ThemeContext';
 import { useNotification } from '../contexts/NotificationContext';
 
 const sections = [
-  { id: 'appearance', icon: Palette, label: '外观' },
-  { id: 'language', icon: Translate, label: '语言' },
-  { id: 'budget', icon: Wallet, label: '预算' },
-  { id: 'models', icon: Brain, label: '模型分配' },
-  { id: 'embedding', icon: Database, label: '嵌入' },
-  { id: 'reranking', icon: ArrowDown, label: '重排序' },
-  { id: 'nli', icon: ClipboardText, label: 'NLI' },
-  { id: 'aliases', icon: Link, label: '别名' },
-  { id: 'data', icon: Folder, label: '数据' },
-  { id: 'advanced', icon: SlidersHorizontal, label: '高级' },
-];
+  { id: 'appearance', icon: Palette },
+  { id: 'language', icon: Translate },
+  { id: 'budget', icon: Wallet },
+  { id: 'models', icon: Brain },
+  { id: 'embedding', icon: Database },
+  { id: 'reranking', icon: ArrowDown },
+  { id: 'nli', icon: ClipboardText },
+  { id: 'aliases', icon: Link },
+  { id: 'data', icon: Folder },
+  { id: 'advanced', icon: SlidersHorizontal },
+] as const;
 
 export default function SettingsPage() {
   const { t } = useTranslation();
@@ -111,13 +111,13 @@ export default function SettingsPage() {
         <div className="flex items-center gap-2">
           {isDirty && (
             <span className="text-xs text-amber-600 dark:text-amber-400">
-              有未保存的更改
+              {t('settings.unsavedChanges')}
             </span>
           )}
           {saveStatus === 'saved' && (
             <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
               <Check size={14} />
-              已保存
+              {t('settings.saved')}
             </span>
           )}
           <button
@@ -126,7 +126,7 @@ export default function SettingsPage() {
             className="btn btn-secondary text-sm"
           >
             <ArrowCounterClockwise size={16} className="mr-1.5" />
-            重置
+            {t('settings.reset')}
           </button>
           <button
             onClick={handleSave}
@@ -134,7 +134,7 @@ export default function SettingsPage() {
             className="btn btn-primary text-sm"
           >
             <FloppyDisk size={16} className="mr-1.5" />
-            {saveStatus === 'saving' ? '保存中...' : '保存设置'}
+            {saveStatus === 'saving' ? t('settings.saving') : t('settings.saveSettings')}
           </button>
         </div>
       </div>
@@ -155,7 +155,7 @@ export default function SettingsPage() {
                   }`}
                 >
                   <Icon size={18} />
-                  {section.label}
+                  {t(`settings.${section.id}Section`)}
                 </button>
               );
             })}
@@ -206,6 +206,7 @@ interface SettingsSectionProps {
 
 function AppearanceSettings({ settings, onChange }: SettingsSectionProps) {
   const { theme, setTheme } = useTheme();
+  const { t } = useTranslation();
 
   const handleThemeChange = (newTheme: 'system' | 'light' | 'dark') => {
     setTheme(newTheme);
@@ -216,41 +217,41 @@ function AppearanceSettings({ settings, onChange }: SettingsSectionProps) {
     <div className="card p-6">
       <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold">
         <Palette size={20} className="text-primary-500" />
-        外观设置
+        {t('settings.appearanceTitle')}
       </h2>
       <div className="space-y-6">
         <div>
-          <label className="mb-3 block text-sm font-medium">主题模式</label>
+          <label className="mb-3 block text-sm font-medium">{t('settings.themeMode')}</label>
           <div className="flex gap-3">
             {([
-              { id: 'system', label: '跟随系统' },
-              { id: 'light', label: '浅色' },
-              { id: 'dark', label: '深色' },
-            ] as const).map((t) => (
+              { id: 'system', label: t('settings.themeSystem') },
+              { id: 'light', label: t('settings.themeLight') },
+              { id: 'dark', label: t('settings.themeDark') },
+            ] as const).map((themeOpt) => (
               <button
-                key={t.id}
-                onClick={() => handleThemeChange(t.id)}
-                className={`btn ${theme === t.id ? 'btn-primary' : 'btn-secondary'}`}
+                key={themeOpt.id}
+                onClick={() => handleThemeChange(themeOpt.id)}
+                className={`btn ${theme === themeOpt.id ? 'btn-primary' : 'btn-secondary'}`}
               >
-                {t.label}
+                {themeOpt.label}
               </button>
             ))}
           </div>
         </div>
         <div>
-          <label className="mb-2 block text-sm font-medium">字体大小</label>
+          <label className="mb-2 block text-sm font-medium">{t('settings.fontSize')}</label>
           <select
             value={settings.appearance?.fontSize || 'medium'}
             onChange={e => onChange('appearance.fontSize', e.target.value)}
             className="input max-w-xs"
           >
-            <option value="small">小</option>
-            <option value="medium">中</option>
-            <option value="large">大</option>
+            <option value="small">{t('settings.fontSmall')}</option>
+            <option value="medium">{t('settings.fontMedium')}</option>
+            <option value="large">{t('settings.fontLarge')}</option>
           </select>
         </div>
         <div>
-          <label className="mb-2 block text-sm font-medium">强调色</label>
+          <label className="mb-2 block text-sm font-medium">{t('settings.accentColor')}</label>
           <div className="flex gap-2">
             {['blue', 'purple', 'green', 'orange', 'pink'].map((color) => (
               <button
@@ -272,15 +273,15 @@ function AppearanceSettings({ settings, onChange }: SettingsSectionProps) {
           </div>
         </div>
         <div>
-          <label className="mb-2 block text-sm font-medium">密度</label>
+          <label className="mb-2 block text-sm font-medium">{t('settings.density')}</label>
           <select
             value={settings.appearance?.density || 'comfortable'}
             onChange={e => onChange('appearance.density', e.target.value)}
             className="input max-w-xs"
           >
-            <option value="compact">紧凑</option>
-            <option value="comfortable">舒适</option>
-            <option value="spacious">宽松</option>
+            <option value="compact">{t('settings.densityCompact')}</option>
+            <option value="comfortable">{t('settings.densityComfortable')}</option>
+            <option value="spacious">{t('settings.densitySpacious')}</option>
           </select>
         </div>
       </div>
@@ -289,7 +290,7 @@ function AppearanceSettings({ settings, onChange }: SettingsSectionProps) {
 }
 
 function LanguageSettings({ settings, onChange }: SettingsSectionProps) {
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
 
   const handleLangChange = (lang: string) => {
     i18n.changeLanguage(lang);
@@ -300,11 +301,11 @@ function LanguageSettings({ settings, onChange }: SettingsSectionProps) {
     <div className="card p-6">
       <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold">
         <Translate size={20} className="text-primary-500" />
-        语言设置
+        {t('settings.languageTitle')}
       </h2>
       <div className="space-y-6">
         <div>
-          <label className="mb-3 block text-sm font-medium">界面语言</label>
+          <label className="mb-3 block text-sm font-medium">{t('settings.interfaceLanguage')}</label>
           <div className="grid gap-3 sm:grid-cols-2">
             {[
               { code: 'zh-CN', label: '简体中文', flag: '🇨🇳' },
@@ -329,7 +330,7 @@ function LanguageSettings({ settings, onChange }: SettingsSectionProps) {
           </div>
         </div>
         <div>
-          <label className="mb-2 block text-sm font-medium">知识库默认语言</label>
+          <label className="mb-2 block text-sm font-medium">{t('settings.defaultKnowledgeLang')}</label>
           <select
             value={settings.language?.defaultKnowledgeLang || 'zh-CN'}
             onChange={e => onChange('language.defaultKnowledgeLang', e.target.value)}
@@ -337,7 +338,7 @@ function LanguageSettings({ settings, onChange }: SettingsSectionProps) {
           >
             <option value="zh-CN">简体中文</option>
             <option value="en">English</option>
-            <option value="auto">自动检测</option>
+            <option value="auto">{t('settings.autoDetect')}</option>
           </select>
         </div>
         <label className="flex items-center gap-2">
@@ -347,7 +348,7 @@ function LanguageSettings({ settings, onChange }: SettingsSectionProps) {
             onChange={e => onChange('language.autoTranslateEvidence', e.target.checked)}
             className="h-4 w-4 rounded"
           />
-          <span className="text-sm">自动翻译证据片段</span>
+          <span className="text-sm">{t('settings.autoTranslateEvidence')}</span>
         </label>
       </div>
     </div>
@@ -356,6 +357,7 @@ function LanguageSettings({ settings, onChange }: SettingsSectionProps) {
 
 function BudgetSettings({ settings, onChange }: SettingsSectionProps) {
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
 
   const budgetQuery = useQuery({
     queryKey: ['budget-remaining'],
@@ -381,28 +383,28 @@ function BudgetSettings({ settings, onChange }: SettingsSectionProps) {
     <div className="card p-6">
       <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold">
         <Wallet size={20} className="text-primary-500" />
-        预算设置
+        {t('settings.budgetTitle')}
       </h2>
       <div className="space-y-6">
         {budgetQuery.isLoading ? (
-          <div className="text-sm text-slate-500">加载预算信息...</div>
+          <div className="text-sm text-slate-500">{t('settings.loadingBudget')}</div>
         ) : budgetQuery.data && (
           <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800">
             <div className="flex flex-wrap items-center gap-6">
               <div>
-                <p className="text-xs text-slate-500">今日剩余</p>
+                <p className="text-xs text-slate-500">{t('settings.todayRemaining')}</p>
                 <p className="text-lg font-bold text-green-600 dark:text-green-400">
                   ${budgetQuery.data.daily?.toFixed(2) ?? '0.00'}
                 </p>
               </div>
               <div>
-                <p className="text-xs text-slate-500">今日已用</p>
+                <p className="text-xs text-slate-500">{t('settings.todaySpent')}</p>
                 <p className="text-lg font-bold text-amber-600 dark:text-amber-400">
                   ${((budgetQuery.data.dailyLimit ?? 0) - (budgetQuery.data.daily ?? 0)).toFixed(2)}
                 </p>
               </div>
               <div>
-                <p className="text-xs text-slate-500">总预算</p>
+                <p className="text-xs text-slate-500">{t('settings.totalBudget')}</p>
                 <p className="text-lg font-bold">
                   ${budgetQuery.data.dailyLimit?.toFixed(2) ?? '0.00'}
                 </p>
@@ -412,7 +414,7 @@ function BudgetSettings({ settings, onChange }: SettingsSectionProps) {
         )}
         <div className="grid gap-4 sm:grid-cols-3">
           <div>
-            <label className="mb-2 block text-sm font-medium">日预算（美元）</label>
+            <label className="mb-2 block text-sm font-medium">{t('settings.dailyBudgetUSD')}</label>
             <input
               type="number"
               value={settings.budget?.daily ?? 5}
@@ -427,7 +429,7 @@ function BudgetSettings({ settings, onChange }: SettingsSectionProps) {
             />
           </div>
           <div>
-            <label className="mb-2 block text-sm font-medium">月预算（美元）</label>
+            <label className="mb-2 block text-sm font-medium">{t('settings.monthlyBudgetUSD')}</label>
             <input
               type="number"
               value={settings.budget?.monthly ?? 50}
@@ -442,7 +444,7 @@ function BudgetSettings({ settings, onChange }: SettingsSectionProps) {
             />
           </div>
           <div>
-            <label className="mb-2 block text-sm font-medium">单次问答上限（美元）</label>
+            <label className="mb-2 block text-sm font-medium">{t('settings.perQueryBudgetUSD')}</label>
             <input
               type="number"
               value={settings.budget?.perQuery ?? 0.5}
@@ -465,7 +467,7 @@ function BudgetSettings({ settings, onChange }: SettingsSectionProps) {
               onChange={e => onChange('budget.nightFuse', e.target.checked)}
               className="h-4 w-4 rounded"
             />
-            <span className="text-sm">启用夜间熔断（23:00-06:00 限制使用）</span>
+            <span className="text-sm">{t('settings.nightFuseDesc')}</span>
           </label>
           <label className="flex items-center gap-2">
             <input
@@ -474,10 +476,10 @@ function BudgetSettings({ settings, onChange }: SettingsSectionProps) {
               onChange={e => onChange('budget.alertEnabled', e.target.checked)}
               className="h-4 w-4 rounded"
             />
-            <span className="text-sm">预算告警</span>
+            <span className="text-sm">{t('settings.budgetAlert')}</span>
           </label>
           <div>
-            <label className="mb-2 block text-sm font-medium">告警阈值（使用百分比）</label>
+            <label className="mb-2 block text-sm font-medium">{t('settings.alertThreshold')}</label>
             <input
               type="range"
               min={50}
@@ -497,7 +499,7 @@ function BudgetSettings({ settings, onChange }: SettingsSectionProps) {
           className="btn btn-primary text-sm"
         >
           <FloppyDisk size={16} className="mr-1.5" />
-          {updateBudgetMutation.isPending ? '保存中...' : '保存预算设置'}
+          {updateBudgetMutation.isPending ? t('settings.saving') : t('settings.saveBudgetSettings')}
         </button>
       </div>
     </div>
@@ -505,6 +507,7 @@ function BudgetSettings({ settings, onChange }: SettingsSectionProps) {
 }
 
 function ModelAllocationSettings({ settings, onChange }: SettingsSectionProps) {
+  const { t } = useTranslation();
   const adaptersQuery = useQuery({
     queryKey: ['llm-adapters'],
     queryFn: () => api.getLlmAdapters(),
@@ -516,12 +519,12 @@ function ModelAllocationSettings({ settings, onChange }: SettingsSectionProps) {
   ]);
 
   const tasks = [
-    { id: 'qa', label: '问答', description: '用户问答、对话系统' },
-    { id: 'summary', label: '摘要', description: '文档摘要、内容概括' },
-    { id: 'extraction', label: '提取', description: '信息抽取、实体识别' },
-    { id: 'reasoning', label: '推理', description: '复杂推理、多步反思' },
-    { id: 'rewrite', label: '改写', description: '知识改写、内容优化' },
-    { id: 'draft', label: '草稿', description: '草稿生成、初始写作' },
+    { id: 'qa', label: t('settings.taskQa'), description: t('settings.taskQaDesc') },
+    { id: 'summary', label: t('settings.taskSummary'), description: t('settings.taskSummaryDesc') },
+    { id: 'extraction', label: t('settings.taskExtraction'), description: t('settings.taskExtractionDesc') },
+    { id: 'reasoning', label: t('settings.taskReasoning'), description: t('settings.taskReasoningDesc') },
+    { id: 'rewrite', label: t('settings.taskRewrite'), description: t('settings.taskRewriteDesc') },
+    { id: 'draft', label: t('settings.taskDraft'), description: t('settings.taskDraftDesc') },
   ];
 
   const adapters = adaptersQuery.data?.adapters || [];
@@ -554,10 +557,10 @@ function ModelAllocationSettings({ settings, onChange }: SettingsSectionProps) {
     <div className="card p-6">
       <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold">
         <Brain size={20} className="text-primary-500" />
-        模型分配
+        {t('settings.modelsTitle')}
       </h2>
       <p className="mb-6 text-sm text-slate-500 dark:text-slate-400">
-        为不同任务类型分配最适合的模型。拖动调整优先级。
+        {t('settings.modelsDesc')}
       </p>
       <div className="space-y-3">
         {taskOrder.map(taskId => {
@@ -585,7 +588,7 @@ function ModelAllocationSettings({ settings, onChange }: SettingsSectionProps) {
                   onChange={e => onChange(`models.${task.id}`, e.target.value)}
                   className="input w-full text-sm"
                 >
-                  <option value="">自动选择</option>
+                  <option value="">{t('settings.autoSelect')}</option>
                   {adapters.map((adapter: any) => (
                     <option key={adapter.id} value={adapter.id}>
                       {adapter.displayName}
@@ -602,15 +605,16 @@ function ModelAllocationSettings({ settings, onChange }: SettingsSectionProps) {
 }
 
 function EmbeddingSettings({ settings, onChange }: SettingsSectionProps) {
+  const { t } = useTranslation();
   return (
     <div className="card p-6">
       <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold">
         <Database size={20} className="text-primary-500" />
-        嵌入设置
+        {t('settings.embeddingTitle')}
       </h2>
       <div className="space-y-6">
         <div>
-          <label className="mb-2 block text-sm font-medium">嵌入模型</label>
+          <label className="mb-2 block text-sm font-medium">{t('settings.embeddingModel')}</label>
           <select
             value={settings.embedding?.model || 'bge-m3'}
             onChange={e => onChange('embedding.model', e.target.value)}
@@ -623,20 +627,20 @@ function EmbeddingSettings({ settings, onChange }: SettingsSectionProps) {
           </select>
         </div>
         <div>
-          <label className="mb-2 block text-sm font-medium">向量维度</label>
+          <label className="mb-2 block text-sm font-medium">{t('settings.dimensions')}</label>
           <select
             value={settings.embedding?.dimensions || 1024}
             onChange={e => onChange('embedding.dimensions', parseInt(e.target.value))}
             className="input max-w-xs"
           >
-            <option value={512}>512 维</option>
-            <option value={768}>768 维</option>
-            <option value={1024}>1024 维</option>
-            <option value={1536}>1536 维</option>
+            <option value={512}>{t('settings.dimensionTemplate', { dim: 512 })}</option>
+            <option value={768}>{t('settings.dimensionTemplate', { dim: 768 })}</option>
+            <option value={1024}>{t('settings.dimensionTemplate', { dim: 1024 })}</option>
+            <option value={1536}>{t('settings.dimensionTemplate', { dim: 1536 })}</option>
           </select>
         </div>
         <div>
-          <label className="mb-2 block text-sm font-medium">Top-K 检索数量</label>
+          <label className="mb-2 block text-sm font-medium">{t('settings.topK')}</label>
           <input
             type="range"
             min={3}
@@ -646,7 +650,7 @@ function EmbeddingSettings({ settings, onChange }: SettingsSectionProps) {
             className="w-full max-w-xs"
           />
           <span className="ml-2 text-sm text-slate-500">
-            {settings.embedding?.topK ?? 10} 个结果
+            {t('settings.resultsCount', { count: settings.embedding?.topK ?? 10 })}
           </span>
         </div>
         <label className="flex items-center gap-2">
@@ -656,7 +660,7 @@ function EmbeddingSettings({ settings, onChange }: SettingsSectionProps) {
             onChange={e => onChange('embedding.hybridSearch', e.target.checked)}
             className="h-4 w-4 rounded"
           />
-          <span className="text-sm">启用混合检索（BM25 + 向量）</span>
+          <span className="text-sm">{t('settings.hybridSearch')}</span>
         </label>
       </div>
     </div>
@@ -664,11 +668,12 @@ function EmbeddingSettings({ settings, onChange }: SettingsSectionProps) {
 }
 
 function RerankingSettings({ settings, onChange }: SettingsSectionProps) {
+  const { t } = useTranslation();
   return (
     <div className="card p-6">
       <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold">
         <ArrowDown size={20} className="text-primary-500" />
-        重排序设置
+        {t('settings.rerankingTitle')}
       </h2>
       <div className="space-y-6">
         <label className="flex items-center gap-2">
@@ -678,10 +683,10 @@ function RerankingSettings({ settings, onChange }: SettingsSectionProps) {
             onChange={e => onChange('reranking.enabled', e.target.checked)}
             className="h-4 w-4 rounded"
           />
-          <span className="text-sm">启用重排序</span>
+          <span className="text-sm">{t('settings.enableReranking')}</span>
         </label>
         <div>
-          <label className="mb-2 block text-sm font-medium">重排序模型</label>
+          <label className="mb-2 block text-sm font-medium">{t('settings.rerankingModel')}</label>
           <select
             value={settings.reranking?.model || 'bge-reranker-v2-m3'}
             onChange={e => onChange('reranking.model', e.target.value)}
@@ -694,7 +699,7 @@ function RerankingSettings({ settings, onChange }: SettingsSectionProps) {
           </select>
         </div>
         <div>
-          <label className="mb-2 block text-sm font-medium">重排序后保留数量</label>
+          <label className="mb-2 block text-sm font-medium">{t('settings.rerankingTopN')}</label>
           <input
             type="range"
             min={1}
@@ -705,7 +710,7 @@ function RerankingSettings({ settings, onChange }: SettingsSectionProps) {
             disabled={settings.reranking?.enabled === false}
           />
           <span className="ml-2 text-sm text-slate-500">
-            {settings.reranking?.topN ?? 5} 个结果
+            {t('settings.resultsCount', { count: settings.reranking?.topN ?? 5 })}
           </span>
         </div>
       </div>
@@ -714,14 +719,15 @@ function RerankingSettings({ settings, onChange }: SettingsSectionProps) {
 }
 
 function NLISettings({ settings, onChange }: SettingsSectionProps) {
+  const { t } = useTranslation();
   return (
     <div className="card p-6">
       <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold">
         <ClipboardText size={20} className="text-primary-500" />
-        NLI 设置
+        {t('settings.nliTitle')}
       </h2>
       <p className="mb-6 text-sm text-slate-500 dark:text-slate-400">
-        自然语言推理用于验证 AI 生成内容与证据的一致性。
+        {t('settings.nliDesc')}
       </p>
       <div className="space-y-6">
         <label className="flex items-center gap-2">
@@ -731,10 +737,10 @@ function NLISettings({ settings, onChange }: SettingsSectionProps) {
             onChange={e => onChange('nli.enabled', e.target.checked)}
             className="h-4 w-4 rounded"
           />
-          <span className="text-sm">启用 NLI 验证</span>
+          <span className="text-sm">{t('settings.enableNLI')}</span>
         </label>
         <div>
-          <label className="mb-2 block text-sm font-medium">NLI 模型</label>
+          <label className="mb-2 block text-sm font-medium">{t('settings.nliModel')}</label>
           <select
             value={settings.nli?.model || 'xiaobu-v2'}
             onChange={e => onChange('nli.model', e.target.value)}
@@ -747,7 +753,7 @@ function NLISettings({ settings, onChange }: SettingsSectionProps) {
           </select>
         </div>
         <div>
-          <label className="mb-2 block text-sm font-medium">蕴含阈值</label>
+          <label className="mb-2 block text-sm font-medium">{t('settings.entailmentThreshold')}</label>
           <input
             type="range"
             min={0}
@@ -762,18 +768,18 @@ function NLISettings({ settings, onChange }: SettingsSectionProps) {
           </span>
         </div>
         <div>
-          <label className="mb-2 block text-sm font-medium">多轮反思次数</label>
+          <label className="mb-2 block text-sm font-medium">{t('settings.maxReflections')}</label>
           <select
             value={settings.nli?.maxReflections ?? 3}
             onChange={e => onChange('nli.maxReflections', parseInt(e.target.value))}
             disabled={settings.nli?.enabled === false}
             className="input max-w-xs disabled:opacity-50"
           >
-            <option value={0}>0 次（禁用反思）</option>
-            <option value={1}>1 次</option>
-            <option value={2}>2 次</option>
-            <option value={3}>3 次</option>
-            <option value={5}>5 次</option>
+            <option value={0}>{t('settings.reflectionDisabled')}</option>
+            <option value={1}>{t('settings.reflectionCount', { count: 1 })}</option>
+            <option value={2}>{t('settings.reflectionCount', { count: 2 })}</option>
+            <option value={3}>{t('settings.reflectionCount', { count: 3 })}</option>
+            <option value={5}>{t('settings.reflectionCount', { count: 5 })}</option>
           </select>
         </div>
       </div>
@@ -784,8 +790,9 @@ function NLISettings({ settings, onChange }: SettingsSectionProps) {
 function DataSettings({ settings, onChange }: SettingsSectionProps) {
   const [cleaningGhost, setCleaningGhost] = useState(false);
   const { addNotification } = useNotification();
+  const { t } = useTranslation();
   const handleCleanGhost = async () => {
-    if (!confirm('确定要清理孤立关系吗？此操作将移除指向已删除条目的链接，不可恢复。')) {
+    if (!confirm(t('settings.cleanGhostConfirm'))) {
       return;
     }
     setCleaningGhost(true);
@@ -793,14 +800,14 @@ function DataSettings({ settings, onChange }: SettingsSectionProps) {
       await api.cleanGhostRelations();
       addNotification({
         type: 'system',
-        title: '清理完成',
-        description: '孤立关系已成功清理'
+        title: t('settings.ghostCleanSuccess'),
+        description: t('settings.ghostCleanSuccessDesc')
       });
     } catch (err: any) {
       addNotification({
         type: 'system',
-        title: '清理失败',
-        description: err.message || '清理孤立关系时发生错误'
+        title: t('settings.ghostCleanFailed'),
+        description: err.message || t('settings.ghostCleanFailedDesc')
       });
     } finally {
       setCleaningGhost(false);
@@ -810,11 +817,11 @@ function DataSettings({ settings, onChange }: SettingsSectionProps) {
     <div className="card p-6">
       <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold">
         <Folder size={20} className="text-primary-500" />
-        数据设置
+        {t('settings.dataTitle')}
       </h2>
       <div className="space-y-6">
         <div>
-          <label className="mb-2 block text-sm font-medium">知识库目录</label>
+          <label className="mb-2 block text-sm font-medium">{t('settings.libraryPath')}</label>
           <input
             type="text"
             value={settings.data?.libraryPath || './library'}
@@ -823,7 +830,7 @@ function DataSettings({ settings, onChange }: SettingsSectionProps) {
           />
         </div>
         <div>
-          <label className="mb-2 block text-sm font-medium">观察目录</label>
+          <label className="mb-2 block text-sm font-medium">{t('settings.observedPath')}</label>
           <input
             type="text"
             value={settings.data?.observedPath || './observed'}
@@ -838,7 +845,7 @@ function DataSettings({ settings, onChange }: SettingsSectionProps) {
             onChange={e => onChange('data.autoObserve', e.target.checked)}
             className="h-4 w-4 rounded"
           />
-          <span className="text-sm">自动观察文件变化</span>
+          <span className="text-sm">{t('settings.autoObserve')}</span>
         </label>
         <label className="flex items-center gap-2">
           <input
@@ -847,26 +854,26 @@ function DataSettings({ settings, onChange }: SettingsSectionProps) {
             onChange={e => onChange('data.versionControl', e.target.checked)}
             className="h-4 w-4 rounded"
           />
-          <span className="text-sm">启用版本控制（自动归档历史版本）</span>
+          <span className="text-sm">{t('settings.versionControl')}</span>
         </label>
         <div>
-          <label className="mb-2 block text-sm font-medium">版本保留数量</label>
+          <label className="mb-2 block text-sm font-medium">{t('settings.maxVersions')}</label>
           <select
             value={settings.data?.maxVersions ?? 50}
             onChange={e => onChange('data.maxVersions', parseInt(e.target.value))}
             className="input max-w-xs"
           >
-            <option value={10}>10 个版本</option>
-            <option value={25}>25 个版本</option>
-            <option value={50}>50 个版本</option>
-            <option value={100}>100 个版本</option>
-            <option value={0}>全部保留</option>
+            <option value={10}>{t('settings.versionCount', { count: 10 })}</option>
+            <option value={25}>{t('settings.versionCount', { count: 25 })}</option>
+            <option value={50}>{t('settings.versionCount', { count: 50 })}</option>
+            <option value={100}>{t('settings.versionCount', { count: 100 })}</option>
+            <option value={0}>{t('settings.keepAll')}</option>
           </select>
         </div>
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/20">
-          <p className="text-sm font-medium text-amber-800 dark:text-amber-200">危险操作</p>
+          <p className="text-sm font-medium text-amber-800 dark:text-amber-200">{t('settings.dangerZone')}</p>
           <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
-            清理孤立关系，移除指向已删除条目的链接。
+            {t('settings.dangerZoneDesc')}
           </p>
           <button
             onClick={handleCleanGhost}
@@ -874,7 +881,7 @@ function DataSettings({ settings, onChange }: SettingsSectionProps) {
             className="mt-3 btn bg-amber-600 text-white hover:bg-amber-700 text-xs disabled:opacity-50"
           >
             <Trash size={14} className={`mr-1.5 ${cleaningGhost ? 'animate-spin' : ''}`} />
-            {cleaningGhost ? '清理中...' : '清理孤立关系'}
+            {cleaningGhost ? t('settings.cleaningGhost') : t('settings.cleanGhost')}
           </button>
         </div>
       </div>
@@ -883,11 +890,12 @@ function DataSettings({ settings, onChange }: SettingsSectionProps) {
 }
 
 function AdvancedSettings({ settings, onChange }: SettingsSectionProps) {
+  const { t } = useTranslation();
   return (
     <div className="card p-6">
       <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold">
         <SlidersHorizontal size={20} className="text-primary-500" />
-        高级设置
+        {t('settings.advancedTitle')}
       </h2>
       <div className="space-y-6">
         <label className="flex items-center gap-2">
@@ -897,7 +905,7 @@ function AdvancedSettings({ settings, onChange }: SettingsSectionProps) {
             onChange={e => onChange('advanced.shadowEval', e.target.checked)}
             className="h-4 w-4 rounded"
           />
-          <span className="text-sm">启用影子评测（后台自动评估输出质量）</span>
+          <span className="text-sm">{t('settings.shadowEval')}</span>
         </label>
         <label className="flex items-center gap-2">
           <input
@@ -906,23 +914,23 @@ function AdvancedSettings({ settings, onChange }: SettingsSectionProps) {
             onChange={e => onChange('advanced.semanticRings', e.target.checked)}
             className="h-4 w-4 rounded"
           />
-          <span className="text-sm">启用语义年轮</span>
+          <span className="text-sm">{t('settings.semanticRings')}</span>
         </label>
         <div>
-          <label className="mb-2 block text-sm font-medium">日志级别</label>
+          <label className="mb-2 block text-sm font-medium">{t('settings.logLevel')}</label>
           <select
             value={settings.advanced?.logLevel || 'info'}
             onChange={e => onChange('advanced.logLevel', e.target.value)}
             className="input max-w-xs"
           >
-            <option value="debug">Debug（详细）</option>
-            <option value="info">Info（信息）</option>
-            <option value="warn">Warning（警告）</option>
-            <option value="error">Error（错误）</option>
+            <option value="debug">{t('settings.logDebug')}</option>
+            <option value="info">{t('settings.logInfo')}</option>
+            <option value="warn">{t('settings.logWarn')}</option>
+            <option value="error">{t('settings.logError')}</option>
           </select>
         </div>
         <div>
-          <label className="mb-2 block text-sm font-medium">请求超时（秒）</label>
+          <label className="mb-2 block text-sm font-medium">{t('settings.requestTimeout')}</label>
           <input
             type="number"
             value={settings.advanced?.timeout ?? 60}
@@ -932,7 +940,7 @@ function AdvancedSettings({ settings, onChange }: SettingsSectionProps) {
           />
         </div>
         <div>
-          <label className="mb-2 block text-sm font-medium">并发请求数</label>
+          <label className="mb-2 block text-sm font-medium">{t('settings.concurrency')}</label>
           <input
             type="number"
             value={settings.advanced?.concurrency ?? 3}

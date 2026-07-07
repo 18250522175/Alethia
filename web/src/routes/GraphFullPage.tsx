@@ -28,18 +28,18 @@ import {
 import api from '../lib/api';
 
 const LAYOUTS = [
-  { id: 'cose', label: '力导向' },
-  { id: 'circle', label: '同心圆' },
-  { id: 'breadthfirst', label: '树形' },
-  { id: 'grid', label: '网格' }
+  { id: 'cose', labelKey: 'graphFull.layoutForce' },
+  { id: 'circle', labelKey: 'graphFull.layoutCircle' },
+  { id: 'breadthfirst', labelKey: 'graphFull.layoutTree' },
+  { id: 'grid', labelKey: 'graphFull.layoutGrid' }
 ] as const;
 
 const TIME_PERIODS = [
-  { id: 'all', label: '全部' },
-  { id: '7d', label: '7 天' },
-  { id: '30d', label: '30 天' },
-  { id: '90d', label: '90 天' },
-  { id: '1y', label: '1 年' }
+  { id: 'all', labelKey: 'graphFull.timeAll' },
+  { id: '7d', labelKey: 'graphFull.time7d' },
+  { id: '30d', labelKey: 'graphFull.time30d' },
+  { id: '90d', labelKey: 'graphFull.time90d' },
+  { id: '1y', labelKey: 'graphFull.time1y' }
 ];
 
 interface NodeContextMenuState {
@@ -546,7 +546,7 @@ export default function GraphFullPage() {
           {t('graph.title')}
         </h1>
         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-          全屏沉浸式图谱 · 节点大小反映关联强度 · 红色虚线为幽灵关系
+          {t('graphFull.subtitle')}
         </p>
       </header>
 
@@ -573,7 +573,7 @@ export default function GraphFullPage() {
                   : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700'
               }`}
             >
-              {l.label}
+              {t(l.labelKey)}
             </button>
           ))}
         </div>
@@ -582,11 +582,11 @@ export default function GraphFullPage() {
           onChange={e => setFilterType(e.target.value)}
           className="input text-xs"
         >
-          <option value="all">全部类型</option>
-          <option value="concept">概念</option>
-          <option value="person">人物</option>
-          <option value="file">文件</option>
-          <option value="portal">门户</option>
+          <option value="all">{t('graphFull.typeAll')}</option>
+          <option value="concept">{t('graphFull.typeConcept')}</option>
+          <option value="person">{t('graphFull.typePerson')}</option>
+          <option value="file">{t('graphFull.typeFile')}</option>
+          <option value="portal">{t('graphFull.typePortal')}</option>
         </select>
 
         <button
@@ -594,7 +594,7 @@ export default function GraphFullPage() {
           className={`btn btn-secondary gap-1.5 text-xs ${showTimeline ? 'ring-2 ring-primary-500' : ''}`}
         >
           <Clock size={14} />
-          时间轴
+          {t('graphFull.timeline')}
         </button>
 
         <button
@@ -602,7 +602,7 @@ export default function GraphFullPage() {
           className={`btn btn-secondary gap-1.5 text-xs ${showClusters ? 'ring-2 ring-primary-500' : ''}`}
         >
           <ShareNetwork size={14} />
-          聚类
+          {t('graphFull.cluster')}
         </button>
 
         <button
@@ -610,20 +610,20 @@ export default function GraphFullPage() {
           className="btn btn-secondary gap-1.5 text-xs"
         >
           <Download size={14} />
-          导出图片
+          {t('graphFull.exportImage')}
         </button>
 
         <button
           onClick={handleExportJson}
           className="btn btn-secondary gap-1.5 text-xs"
-          title="导出 JSON 数据"
+          title={t('graphFull.exportJsonTitle')}
         >
           <FileCode size={14} />
-          导出 JSON
+          {t('graphFull.exportJson')}
         </button>
 
         <div className="ml-auto flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
-          <span>{nodeCount} 节点</span>
+          <span>{t('graphFull.nodeCount', { count: nodeCount })}</span>
           <span>{edgeCount} 边</span>
           {ghostCount > 0 && (
             <span className="flex items-center gap-1 text-red-500">
@@ -648,7 +648,7 @@ export default function GraphFullPage() {
                     : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-700'
                 }`}
               >
-                {p.label}
+                {t(p.labelKey)}
               </button>
             ))}
           </div>

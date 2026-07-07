@@ -30,10 +30,10 @@ interface ChangeLogBatch {
 }
 
 const OP_FILTERS = [
-  { id: 'all', label: '全部操作', icon: ClockCounterClockwise },
-  { id: 'create', label: '创建', icon: FilePlus },
-  { id: 'update', label: '更新', icon: Pencil },
-  { id: 'delete', label: '删除', icon: FileX }
+  { id: 'all', labelKey: 'changelog.opAll', icon: ClockCounterClockwise },
+  { id: 'create', labelKey: 'changelog.opCreate', icon: FilePlus },
+  { id: 'update', labelKey: 'changelog.opUpdate', icon: Pencil },
+  { id: 'delete', labelKey: 'changelog.opDelete', icon: FileX }
 ] as const;
 
 function copyToClipboard(text: string): Promise<void> {
@@ -62,7 +62,7 @@ export default function ChangelogPage() {
   });
 
   const handleRollback = (batchId: string) => {
-    if (!confirm('确定要回滚此批次吗？此操作将恢复已变更的文件，可能触发知识库结构重建。')) {
+    if (!confirm(t('changelog.rollbackConfirm'))) {
       return;
     }
     rollbackMutation.mutate(batchId);
@@ -102,7 +102,7 @@ export default function ChangelogPage() {
             {t('nav.changelog')}
           </h1>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            查看最近 24 小时的自动变更记录，支持按批次回滚
+            {t('changelog.subtitle')}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -112,7 +112,7 @@ export default function ChangelogPage() {
             className="input w-auto"
           >
             {OP_FILTERS.map(f => (
-              <option key={f.id} value={f.id}>{f.label}</option>
+              <option key={f.id} value={f.id}>{t(f.labelKey)}</option>
             ))}
           </select>
           <button
@@ -124,7 +124,7 @@ export default function ChangelogPage() {
               size={16}
               className={`mr-1.5 ${changelogQuery.isFetching ? 'animate-spin' : ''}`}
             />
-            刷新
+            {t('changelog.refresh')}
           </button>
         </div>
       </header>
@@ -137,15 +137,15 @@ export default function ChangelogPage() {
       ) : isError ? (
         <div className="card flex flex-col items-center justify-center py-16 text-center">
           <Warning size={40} className="mb-2 text-red-400" />
-          <p className="text-slate-600 dark:text-slate-300">变更日志加载失败</p>
-          <p className="mt-1 text-xs text-slate-400">请检查后端服务是否正常运行</p>
+          <p className="text-slate-600 dark:text-slate-300">{t('changelog.loadError')}</p>
+          <p className="mt-1 text-xs text-slate-400">{t('changelog.loadErrorHint')}</p>
         </div>
       ) : batches.length === 0 ? (
         <div className="card flex flex-col items-center justify-center py-16 text-center">
           <Empty size={48} className="mb-3 text-slate-300 dark:text-slate-600" />
-          <p className="text-slate-500 dark:text-slate-400">暂无变更记录</p>
+          <p className="text-slate-500 dark:text-slate-400">{t('changelog.empty')}</p>
           <p className="mt-1 text-xs text-slate-400">
-            当 AI 自动从文件中提取知识或执行结构变更时，这里会显示变更批次。
+            {t('changelog.emptyHint')}
           </p>
         </div>
       ) : (
@@ -153,7 +153,7 @@ export default function ChangelogPage() {
           {activeBatches.length > 0 && (
             <section className="space-y-3">
               <h2 className="text-sm font-semibold uppercase text-slate-500 dark:text-slate-400">
-                近期变更 ({activeBatches.length})
+                {t('changelog.recentBatchesCount', { count: activeBatches.length })}
               </h2>
               <div className="space-y-3">
                 {activeBatches.map(batch => (
@@ -180,7 +180,7 @@ export default function ChangelogPage() {
               >
                 <span className="flex items-center gap-2">
                   <Archive size={16} />
-                  归档批次 ({archiveBatches.length})
+                  {t('changelog.archiveBatchesCount', { count: archiveBatches.length })}
                 </span>
                 {archiveExpanded ? <CaretUp size={16} /> : <CaretDown size={16} />}
               </button>
@@ -208,9 +208,9 @@ export default function ChangelogPage() {
         <div className="card border-green-300 bg-green-50 p-4 text-sm dark:border-green-700 dark:bg-green-900/20">
           <div className="flex items-start justify-between">
             <div>
-              <strong>回滚成功：</strong>
-              已恢复 {rollbackMutation.data.restoredFiles.length} 个文件
-              {rollbackMutation.data.rebuildTriggered && ' · 已触发结构重建'}
+              <strong>{t('changelog.rollbackSuccess')}</strong>
+              {t('changelog.rollbackSuccessDesc', { count: rollbackMutation.data.restoredFiles.length })}
+              {rollbackMutation.data.rebuildTriggered && t('changelog.rollbackTriggered')}
             </div>
             <button
               onClick={() => rollbackMutation.reset()}
@@ -261,7 +261,7 @@ function BatchCard({
           {archived && (
             <span className="badge badge-blue flex items-center gap-1">
               <Archive size={12} />
-              归档
+              {t('changelog.archived')}
             </span>
           )}
           <span className="flex items-center gap-1.5 font-mono text-sm text-primary-600 dark:text-primary-400">
@@ -269,7 +269,7 @@ function BatchCard({
             <button
               onClick={onCopy}
               className="rounded p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300"
-              title="复制批次 ID"
+              title={t('changelog.copyBatchId')}
             >
               {copied ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
             </button>
@@ -284,29 +284,29 @@ function BatchCard({
         {createCount > 0 && (
           <span className="badge badge-green flex items-center gap-1">
             <FilePlus size={12} />
-            创建 {createCount}
+            {t('changelog.createCount', { count: createCount })}
           </span>
         )}
         {updateCount > 0 && (
           <span className="badge badge-yellow flex items-center gap-1">
             <Pencil size={12} />
-            更新 {updateCount}
+            {t('changelog.updateCount', { count: updateCount })}
           </span>
         )}
         {deleteCount > 0 && (
           <span className="badge badge-red flex items-center gap-1">
             <FileX size={12} />
-            删除 {deleteCount}
+            {t('changelog.deleteCount', { count: deleteCount })}
           </span>
         )}
         <span className="text-xs text-slate-500 dark:text-slate-400">
-          共 {batch.totalOps} 项操作 · {batch.targets.length} 个目标
+          {t('changelog.totalOps', { total: batch.totalOps, targets: batch.targets.length })}
         </span>
       </div>
 
       <div className="rounded-lg bg-slate-50 p-3 dark:bg-slate-700/50">
         <div className="mb-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
-          涉及目标
+          {t('changelog.targets')}
         </div>
         <ul className="space-y-1 text-sm">
           {displayTargets.map((target, idx) => (
@@ -323,12 +323,12 @@ function BatchCard({
             {expanded ? (
               <>
                 <CaretUp size={12} />
-                收起
+                {t('changelog.collapse')}
               </>
             ) : (
               <>
                 <CaretDown size={12} />
-                展开全部 {batch.targets.length} 个
+                {t('changelog.expandAll', { count: batch.targets.length })}
               </>
             )}
           </button>
@@ -346,7 +346,7 @@ function BatchCard({
             className="btn btn-danger text-sm"
           >
             <ArrowCounterClockwise size={14} className="mr-1" />
-            {rollingBack ? '回滚中...' : '回滚此批次'}
+            {rollingBack ? t('changelog.rollingBack') : t('changelog.rollback')}
           </button>
         )}
       </div>

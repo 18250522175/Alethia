@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowRight, Pencil, Clock, Link, ChatsCircle, Spinner } from '@phosphor-icons/react';
 import { api } from '../lib/api';
@@ -41,6 +42,7 @@ export default function EntityPreviewCard({
   onOpenInSidebar,
   onEditSummary
 }: EntityPreviewCardProps) {
+  const { t } = useTranslation();
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState('');
   const [cardPosition, setCardPosition] = useState({ x: 0, y: 0 });
@@ -224,7 +226,7 @@ export default function EntityPreviewCard({
                     onClick={handleCancelEdit}
                     className="rounded-lg px-2 py-1 text-xs text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700"
                   >
-                    取消
+                    {t('common.cancel')}
                   </button>
                   <button
                     onClick={e => {
@@ -234,14 +236,14 @@ export default function EntityPreviewCard({
                     }}
                     className="rounded-lg bg-parchment-500 px-2 py-1 text-xs font-medium text-white hover:bg-parchment-600"
                   >
-                    保存
+                    {t('common.save')}
                   </button>
                 </div>
-                <p className="text-xs text-slate-400">Ctrl+Enter 保存</p>
+                <p className="text-xs text-slate-400">{t('entityPreview.saveHint')}</p>
               </div>
             ) : (
               <p className="line-clamp-4 text-sm text-slate-600 leading-relaxed dark:text-slate-300">
-                {preview.summary || '暂无摘要'}
+                {preview.summary || t('entityPreview.noSummary')}
               </p>
             )}
           </div>
@@ -253,12 +255,12 @@ export default function EntityPreviewCard({
             </div>
             <div className="flex items-center gap-1">
               <Link size={12} />
-              <span>{preview.backlinkCount} 个反向链接</span>
+              <span>{t('entityPreview.backlinkCount', { count: preview.backlinkCount })}</span>
             </div>
             {preview.hasOpenThreads && (
               <div className="flex items-center gap-1 text-amber-500">
                 <ChatsCircle size={12} />
-                <span>有开放线程</span>
+                <span>{t('entityPreview.hasOpenThreads')}</span>
               </div>
             )}
           </div>
@@ -271,21 +273,21 @@ export default function EntityPreviewCard({
               className="flex flex-1 items-center justify-center gap-1 rounded-lg bg-parchment-500 px-3 py-2 text-xs font-medium text-white hover:bg-parchment-600 transition-colors"
             >
               <ArrowRight size={12} />
-              <span>点击跳转</span>
+              <span>{t('entityPreview.clickToNavigate')}</span>
             </button>
             <button
               onClick={handleOpenInSidebar}
               className="flex items-center justify-center gap-1 rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700/50 transition-colors"
             >
               <ArrowRight size={12} />
-              <span>在侧栏打开</span>
+              <span>{t('entityPreview.openInSidebar')}</span>
             </button>
             <button
               onClick={handleEditSummary}
               className="flex items-center justify-center gap-1 rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700/50 transition-colors"
             >
               <Pencil size={12} />
-              <span>就地编辑摘要</span>
+              <span>{t('entityPreview.editSummaryInline')}</span>
             </button>
           </div>
         </div>

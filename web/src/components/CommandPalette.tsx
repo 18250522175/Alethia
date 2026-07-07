@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { MagnifyingGlass, X, ArrowRight, Calendar, FileText } from '@phosphor-icons/react';
 import api from '../lib/api';
 import HighlightText from './HighlightText';
@@ -31,9 +32,9 @@ function fuzzyMatch(text: string, query: string): boolean {
   return queryIndex === lowerQuery.length;
 }
 
-function groupByCategory(snippets: Snippet[]): Record<string, Snippet[]> {
+function groupByCategory(snippets: Snippet[], defaultCategory: string): Record<string, Snippet[]> {
   return snippets.reduce((acc, snippet) => {
-    const category = snippet.category || '未分类';
+    const category = snippet.category || defaultCategory;
     if (!acc[category]) {
       acc[category] = [];
     }
@@ -63,6 +64,7 @@ function replaceVariables(content: string, variables: Record<string, string>): s
 }
 
 export default function CommandPalette({ isOpen, onClose, onInsert, triggerStart }: CommandPaletteProps) {
+  const { t } = useTranslation();
   const [searchQuery, setSearchQuery] = useState('');
   const [snippets, setSnippets] = useState<Snippet[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -97,7 +99,7 @@ export default function CommandPalette({ isOpen, onClose, onInsert, triggerStart
     fuzzyMatch(snippet.trigger, searchQuery)
   );
 
-  const groupedSnippets = groupByCategory(filteredSnippets);
+  const groupedSnippets = groupByCategory(filteredSnippets, t('commandPalette.uncategorized'));
   const flatList = filteredSnippets;
 
   const handleSelectSnippet = useCallback(async (snippet: Snippet) => {
@@ -212,7 +214,7 @@ export default function CommandPalette({ isOpen, onClose, onInsert, triggerStart
                   setSearchQuery(e.target.value);
                   setSelectedIndex(0);
                 }}
-                placeholder="搜索模板片段..."
+                placeholder={t('commandPalette.searchPlaceholder')}
                 className="flex-1 bg-transparent text-sm outline-none placeholder:text-slate-400 dark:text-slate-100"
               />
               <button
@@ -227,8 +229,8 @@ export default function CommandPalette({ isOpen, onClose, onInsert, triggerStart
               {flatList.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 text-slate-500 dark:text-slate-400">
                   <FileText size={48} className="mb-3 opacity-50" />
-                  <div className="text-sm">无匹配的模板片段</div>
-                  <div className="mt-1 text-xs">尝试其他关键词</div>
+                  <div className="text-sm">{t('commandPalette.noMatch')}</div>
+                  <div className="mt-1 text-xs">{t('commandPalette.tryOtherKeywords')}</div>
                 </div>
               ) : (
                 Object.entries(groupedSnippets).map(([category, items]) => (
@@ -276,9 +278,9 @@ export default function CommandPalette({ isOpen, onClose, onInsert, triggerStart
             </div>
 
             <div className="border-t border-slate-200 px-4 py-2 text-xs text-slate-400 dark:border-slate-700">
-              <span className="mr-4">↑↓ 选择</span>
-              <span className="mr-4">↵ 确认</span>
-              <span>Esc 关闭</span>
+              <span className="mr-4">{t('commandPalette.arrowSelect')}</span>
+              <span className="mr-4">{t('commandPalette.enterConfirm')}</span>
+              <span>{t('commandPalette.escClose')}</span>
             </div>
           </>
         ) : (
@@ -306,14 +308,14 @@ export default function CommandPalette({ isOpen, onClose, onInsert, triggerStart
                 onClick={handleInsert}
                 className="rounded-md bg-primary-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-primary-700"
               >
-                插入
+                {t('commandPalette.insert')}
               </button>
             </div>
 
             <div className="p-4 space-y-4">
               <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800">
                 <div className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">
-                  模板预览
+                  {t('commandPalette.templatePreview')}
                 </div>
                 <pre className="text-xs font-mono text-slate-600 dark:text-slate-300 whitespace-pre-wrap max-h-32 overflow-auto">
                   {replaceVariables(selectedSnippet.content || '', variables)}
@@ -322,7 +324,7 @@ export default function CommandPalette({ isOpen, onClose, onInsert, triggerStart
 
               <div className="space-y-3">
                 <div className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                  变量设置
+                  {t('commandPalette.variableSettings')}
                 </div>
                 {Object.keys(variables).map((key, idx) => (
                   <div key={key}>
@@ -331,7 +333,7 @@ export default function CommandPalette({ isOpen, onClose, onInsert, triggerStart
                       {key === 'date' && (
                         <span className="ml-1.5 flex items-center gap-0.5 text-slate-400">
                           <Calendar size={10} />
-                          自动填充
+                          {t('commandPalette.autoFill')}
                         </span>
                       )}
                     </label>
@@ -358,9 +360,9 @@ export default function CommandPalette({ isOpen, onClose, onInsert, triggerStart
             </div>
 
             <div className="border-t border-slate-200 px-4 py-2 text-xs text-slate-400 dark:border-slate-700">
-              <span className="mr-4">Tab 切换输入</span>
-              <span className="mr-4">↵ 确认插入</span>
-              <span>Esc 返回列表</span>
+              <span className="mr-4">{t('commandPalette.tabSwitch')}</span>
+              <span className="mr-4">{t('commandPalette.enterInsert')}</span>
+              <span>{t('commandPalette.escBack')}</span>
             </div>
           </>
         )}
