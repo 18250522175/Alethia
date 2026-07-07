@@ -714,4 +714,36 @@ app.get('/api/budget/alerts', async (c) => {
   }
 });
 
+// Aliases
+app.get('/api/aliases/map', async (c) => {
+  try {
+    const result = await brainAPI.getAllAliasMap();
+    return c.json(result);
+  } catch (err) {
+    loggerInstance.error({ err }, '获取别名映射失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+app.get('/api/aliases/conflicts', async (c) => {
+  try {
+    const result = await brainAPI.getAliasConflicts();
+    return c.json({ conflicts: result });
+  } catch (err) {
+    loggerInstance.error({ err }, '获取别名冲突失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+app.get('/api/aliases/resolve/:alias', async (c) => {
+  try {
+    const alias = c.req.param('alias');
+    const result = await brainAPI.resolveAlias(alias);
+    return c.json(result);
+  } catch (err) {
+    loggerInstance.error({ err }, '别名解析失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
 export default app;

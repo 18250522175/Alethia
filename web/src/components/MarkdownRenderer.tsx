@@ -11,6 +11,7 @@ interface MarkdownRendererProps {
   evidenceSpans?: EvidenceSpan[] | Partial<EvidenceSpan>[];
   showFrontmatter?: boolean;
   onEvidenceClick?: (spanId: string) => void;
+  aliasMap?: Record<string, string>;
 }
 
 /* ----------------------------- helpers ----------------------------- */
@@ -249,11 +250,41 @@ interface RenderedSection {
   bodyHtml: string;
 }
 
+/**
+ * 解析 wikilink `[[target]]` 或 `[[target|display]]`
+ * 使用 aliasMap 将别名映射到规范 slug
+ */
+function resolveWikilinks(text: string, aliasMap: Record<string, string>): string {
+  if (!aliasMap || Object.keys(aliasMap).length === 0) return text;
+
+  return text.replace(/\[\[([^\]]+)\]\]/g, (match, inner) => {
+    const parts = inner.split('|').map((s: string) => s.trim());
+    const target = parts[0];
+    const display = parts[1] || target;
+
+    // 优先精确匹配
+    let slug = aliasMap[target];
+    if (!slug) {
+      // 大小写不敏感匹配
+      const lowerTarget = target.toLowerCase();
+      slug = aliasMap[lowerTarget];
+    }
+
+    if (slug) {
+      return `[${display}](/wiki/${encodeURIComponent(slug)})`;
+    }
+
+    // 未匹配到，渲染为普通文本（带样式提示）
+    return `<span class="wikilink-unresolved" title="未找到目标实体">${display}</span>`;
+  });
+}
+
 export default function MarkdownRenderer({
   content,
   evidenceSpans,
   showFrontmatter = false,
-  onEvidenceClick
+  onEvidenceClick,
+  aliasMap
 }: MarkdownRendererProps) {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -281,6 +312,12 @@ export default function MarkdownRenderer({
       data = {};
       body = content;
     }
+
+    // 解析 wikilink 别名
+    if (aliasMap && Object.keys(aliasMap).length > 0) {
+      body = resolveWikilinks(body, aliasMap);
+    }
+
     const stripped = stripFootnoteDefs(body);
     const sections = splitSections(stripped);
     const rendered = sections.map(s => {
@@ -294,7 +331,7 @@ export default function MarkdownRenderer({
       };
     });
     return { frontmatter: data, renderedSections: rendered };
-  }, [content, env]);
+  }, [content, env, aliasMap]);
 
   useEffect(() => {
     const el = containerRef.current;

@@ -286,6 +286,7 @@ export const api = {
         title: string;
         type: string;
         contexts: string[];
+        aliases: string[];
         rawMd: string;
         contentMd: string;
         hash: string;
@@ -302,6 +303,18 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify({ content })
     });
+  },
+
+  getAliasMap() {
+    return request<Record<string, string>>('/aliases/map');
+  },
+
+  getAliasConflicts() {
+    return request<{ conflicts: Array<{ alias: string; slugs: string[] }> }>('/aliases/conflicts');
+  },
+
+  resolveAlias(alias: string) {
+    return request<{ slug: string | null; aliases: string[] }>(`/aliases/resolve/${encodeURIComponent(alias)}`);
   },
 
   getChangeLog(params?: { limit?: number; op?: string }) {

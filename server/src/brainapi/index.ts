@@ -651,6 +651,7 @@ ${relationsBlock}
       title: string;
       type: string;
       contexts: string[];
+      aliases: string[];
       rawMd: string;
       contentMd: string;
       hash: string;
@@ -661,7 +662,27 @@ ${relationsBlock}
     links: { incoming: any[]; outgoing: any[] };
   }> {
     const wikiPath = storage.getWikiPath();
-    const targetFile = join(wikiPath, `${slug}.md`);
+    let targetFile = join(wikiPath, `${slug}.md`);
+    let resolvedSlug = slug;
+
+    // 如果文件不存在，尝试通过别名查找
+    if (!existsSync(targetFile)) {
+      const pool = getPool();
+      const aliasResult = await pool.query(
+        `SELECT slug FROM pages
+         WHERE slug = $1
+            OR EXISTS (
+              SELECT 1 FROM unnest(aliases) AS a
+              WHERE LOWER(a) = LOWER($1)
+            )
+         LIMIT 1`,
+        [slug]
+      );
+      if (aliasResult.rows.length > 0) {
+        resolvedSlug = aliasResult.rows[0].slug;
+        targetFile = join(wikiPath, `${resolvedSlug}.md`);
+      }
+    }
 
     if (!existsSync(targetFile)) {
       throw new Error(`页面 ${slug} 不存在`);
@@ -674,7 +695,7 @@ ${relationsBlock}
     const pool = getPool();
     const evidenceResult = await pool.query(
       'SELECT span_id, source_file_hash, span_text, source_type, confidence FROM evidence_spans WHERE slug = $1',
-      [slug]
+      [resolvedSlug]
     );
 
     // 查询关联链接
@@ -683,29 +704,37 @@ ${relationsBlock}
         `SELECT l.*, p.title as target_title FROM links l
          LEFT JOIN pages p ON p.slug = l.source_slug
          WHERE l.target_slug = $1`,
-        [slug]
+        [resolvedSlug]
       ),
       pool.query(
         `SELECT l.*, p.title as target_title FROM links l
          LEFT JOIN pages p ON p.slug = l.target_slug
          WHERE l.source_slug = $1`,
-        [slug]
+        [resolvedSlug]
       )
     ]);
 
-    // 查询版本号
-    const versionResult = await pool.query(
-      'SELECT MAX(version) as max_version FROM knowledge_versions WHERE slug = $1',
-      [slug]
-    );
+    // 查询版本号和数据库中的别名
+    const [versionResult, dbPageResult] = await Promise.all([
+      pool.query(
+        'SELECT MAX(version) as max_version FROM knowledge_versions WHERE slug = $1',
+        [resolvedSlug]
+      ),
+      pool.query(
+        'SELECT aliases FROM pages WHERE slug = $1',
+        [resolvedSlug]
+      )
+    ]);
     const version = versionResult.rows[0]?.max_version || 1;
+    const dbAliases = dbPageResult.rows[0]?.aliases || [];
 
     return {
       page: {
-        slug: parsed.slug || slug,
-        title: parsed.title || slug,
+        slug: parsed.slug || resolvedSlug,
+        title: parsed.title || resolvedSlug,
         type: parsed.type || 'concept',
         contexts: parsed.contexts || [],
+        aliases: dbAliases.length > 0 ? dbAliases : (parsed.aliases || []),
         rawMd,
         contentMd: parsed.contentMd || '',
         hash: storage.getFileHash(targetFile),
@@ -737,6 +766,66 @@ ${relationsBlock}
     logger.info({ slug, hash }, 'Wiki 页面已更新');
 
     return { success: true, hash };
+  }
+
+  /**
+   * 别名解析：将别名映射到规范 slug
+   */
+  async resolveAlias(alias: string): Promise<{ slug: string | null; aliases: string[] }> {
+    const pool = getPool();
+    const result = await pool.query(
+      `SELECT slug, aliases FROM pages
+       WHERE slug = $1
+          OR EXISTS (
+            SELECT 1 FROM unnest(aliases) AS a
+            WHERE LOWER(a) = LOWER($1)
+          )
+       LIMIT 1`,
+      [alias]
+    );
+    if (result.rows.length === 0) {
+      return { slug: null, aliases: [] };
+    }
+    return { slug: result.rows[0].slug, aliases: result.rows[0].aliases || [] };
+  }
+
+  /**
+   * 获取所有别名映射表（用于前端 wikilink 解析）
+   */
+  async getAllAliasMap(): Promise<Record<string, string>> {
+    const pool = getPool();
+    const result = await pool.query(
+      `SELECT slug, aliases FROM pages
+       WHERE aliases IS NOT NULL AND array_length(aliases, 1) > 0`
+    );
+    const map: Record<string, string> = {};
+    for (const row of result.rows) {
+      for (const alias of row.aliases || []) {
+        const key = alias.toLowerCase();
+        if (!map[key]) {
+          map[key] = row.slug;
+        }
+      }
+    }
+    return map;
+  }
+
+  /**
+   * 别名冲突检测：返回重复出现的别名及其关联的多个实体
+   */
+  async getAliasConflicts(): Promise<Array<{ alias: string; slugs: string[] }>> {
+    const pool = getPool();
+    const result = await pool.query(
+      `SELECT LOWER(a) AS alias, array_agg(DISTINCT slug) AS slugs, COUNT(DISTINCT slug) AS cnt
+       FROM pages, unnest(aliases) AS a
+       WHERE aliases IS NOT NULL AND array_length(aliases, 1) > 0
+       GROUP BY LOWER(a)
+       HAVING COUNT(DISTINCT slug) > 1`
+    );
+    return result.rows.map((r: any) => ({
+      alias: r.alias,
+      slugs: r.slugs
+    }));
   }
 
   async generateStaticSite(options?: any): Promise<any> {

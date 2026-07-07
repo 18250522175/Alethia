@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams, Link as RouterLink, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import matter from 'gray-matter';
 import {
   ArrowLeft,
   ArrowRight,
@@ -20,10 +21,13 @@ import {
   Clock,
   GitBranch,
   Brain,
-  ChatCircleDots
+  ChatCircleDots,
+  Plus,
+  Trash
 } from '@phosphor-icons/react';
 import api from '../lib/api';
 import MarkdownRenderer from '../components/MarkdownRenderer';
+import MarkdownEditor from '../components/MarkdownEditor';
 import EvidencePopover from '../blocks/EvidencePopover';
 import MiniKnowledgeGraph from '../components/MiniKnowledgeGraph';
 import EntryTimeline from '../components/EntryTimeline';
@@ -64,6 +68,8 @@ export default function WikiEntryPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('split');
   const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState('');
+  const [editAliases, setEditAliases] = useState<string[]>([]);
+  const [newAliasInput, setNewAliasInput] = useState('');
   const [activeEvidenceId, setActiveEvidenceId] = useState<string | null>(null);
 
   const pageQuery = useQuery({
@@ -71,6 +77,12 @@ export default function WikiEntryPage() {
     queryFn: () => api.getWikiPage(slug),
     enabled: !!slug,
     staleTime: 30_000
+  });
+
+  const aliasMapQuery = useQuery({
+    queryKey: ['alias-map'],
+    queryFn: () => api.getAliasMap(),
+    staleTime: 300_000
   });
 
   const saveMutation = useMutation({
@@ -88,8 +100,11 @@ export default function WikiEntryPage() {
 
   // Sync the editor draft whenever the stored page content changes (load / refetch).
   useEffect(() => {
-    if (page) setDraft(page.rawMd);
-  }, [page?.rawMd, page?.hash]);
+    if (page) {
+      setDraft(page.rawMd);
+      setEditAliases(page.aliases || []);
+    }
+  }, [page?.rawMd, page?.hash, page?.aliases]);
 
   const activeEvidence = useMemo(
     () => evidenceSpans.find(e => e.span_id === activeEvidenceId) ?? null,
@@ -107,16 +122,49 @@ export default function WikiEntryPage() {
   };
 
   const handleCancelEdit = () => {
-    if (page) setDraft(page.rawMd);
+    if (page) {
+      setDraft(page.rawMd);
+      setEditAliases(page.aliases || []);
+    }
     setIsEditing(false);
   };
 
   const handleSave = () => {
-    if (!isDirty) return;
-    saveMutation.mutate(draft);
+    if (!isDirty && JSON.stringify(editAliases) === JSON.stringify(page?.aliases || [])) return;
+
+    let contentToSave = draft;
+
+    // 如果别名有变化，更新 frontmatter 中的 aliases
+    if (page && JSON.stringify(editAliases) !== JSON.stringify(page.aliases || [])) {
+      try {
+        const parsed = matter(draft);
+        parsed.data.aliases = editAliases;
+        const yamlLines: string[] = [];
+        for (const [k, v] of Object.entries(parsed.data)) {
+          if (Array.isArray(v)) {
+            yamlLines.push(`${k}:`);
+            for (const item of v) {
+              yamlLines.push(`  - ${item}`);
+            }
+          } else if (typeof v === 'string') {
+            yamlLines.push(`${k}: ${v}`);
+          } else {
+            yamlLines.push(`${k}: ${v}`);
+          }
+        }
+        contentToSave = `---\n${yamlLines.join('\n')}\n---\n${parsed.content}`;
+      } catch {
+        // 如果解析失败，直接保存原内容
+        contentToSave = draft;
+      }
+    }
+
+    saveMutation.mutate(contentToSave);
   };
 
-  const isDirty = page ? draft !== page.rawMd : false;
+  const isDirty = page
+    ? draft !== page.rawMd || JSON.stringify(editAliases) !== JSON.stringify(page.aliases || [])
+    : false;
 
   if (pageQuery.isLoading) {
     return (
@@ -172,8 +220,18 @@ export default function WikiEntryPage() {
               <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">
                 {page.title}
               </h1>
-              {page.contexts.length > 0 && (
+              {page.aliases && page.aliases.length > 0 && (
                 <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
+                  <span className="text-slate-400">别名:</span>
+                  {page.aliases.map(alias => (
+                    <span key={alias} className="badge badge-yellow cursor-pointer" onClick={() => navigate(`/wiki/${encodeURIComponent(alias)}`)}>
+                      {alias}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {page.contexts.length > 0 && (
+                <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs">
                   {page.contexts.map(ctx => (
                     <span key={ctx} className="badge badge-blue">
                       <Tag size={10} className="mr-1" />
@@ -324,12 +382,13 @@ export default function WikiEntryPage() {
               content={page.contentMd}
               evidenceSpans={evidenceSpans}
               onEvidenceClick={handleEvidenceClick}
+              aliasMap={aliasMapQuery.data}
             />
           </section>
         )}
 
         {showSource && (
-          <section className="card p-5">
+          <section className="card p-5" data-source-section>
             <div className="mb-3 flex items-center justify-between gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
               <span className="inline-flex items-center gap-1.5">
                 <Code size={12} />
@@ -344,13 +403,62 @@ export default function WikiEntryPage() {
                 </span>
               )}
             </div>
+            {isEditing && (
+              <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800">
+                <div className="mb-2 text-xs font-medium text-slate-600 dark:text-slate-300">别名管理</div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {editAliases.map((alias, idx) => (
+                    <span
+                      key={idx}
+                      className="inline-flex items-center gap-1 rounded-md bg-white px-2 py-1 text-xs shadow-sm dark:bg-slate-700"
+                    >
+                      {alias}
+                      <button
+                        type="button"
+                        onClick={() => setEditAliases(prev => prev.filter((_, i) => i !== idx))}
+                        className="rounded p-0.5 text-slate-400 hover:bg-red-100 hover:text-red-500 dark:hover:bg-red-900/30"
+                      >
+                        <Trash size={10} />
+                      </button>
+                    </span>
+                  ))}
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="text"
+                      value={newAliasInput}
+                      onChange={e => setNewAliasInput(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' && newAliasInput.trim()) {
+                          e.preventDefault();
+                          const val = newAliasInput.trim();
+                          if (!editAliases.includes(val)) {
+                            setEditAliases(prev => [...prev, val]);
+                          }
+                          setNewAliasInput('');
+                        }
+                      }}
+                      placeholder="添加别名..."
+                      className="input h-7 w-32 text-xs py-0.5"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const val = newAliasInput.trim();
+                        if (val && !editAliases.includes(val)) {
+                          setEditAliases(prev => [...prev, val]);
+                          setNewAliasInput('');
+                        }
+                      }}
+                      className="rounded p-1 text-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/30"
+                    >
+                      <Plus size={14} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
             {isEditing ? (
-              <textarea
-                value={draft}
-                onChange={e => setDraft(e.target.value)}
-                spellCheck={false}
-                className="input h-[60vh] resize-none font-mono text-sm leading-6"
-              />
+              <MarkdownEditor value={draft} onChange={setDraft} />
             ) : (
               <pre className="h-[60vh] overflow-auto rounded-lg bg-slate-50 p-4 font-mono text-sm leading-6 text-slate-700 dark:bg-slate-900/50 dark:text-slate-300">
                 {page.rawMd}

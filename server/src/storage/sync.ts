@@ -94,7 +94,8 @@ export class SyncEngine {
     const pageResult = await client.query('SELECT id FROM pages WHERE slug = $1', [parsed.slug]);
     const pageId = pageResult.rows[0].id;
 
-    const sourceText = `${parsed.title}\n${parsed.state}\n${parsed.assessment}\n${parsed.contentMd}`;
+    const aliasText = parsed.aliases.length > 0 ? parsed.aliases.join(' ') : '';
+    const sourceText = `${parsed.title}\n${parsed.state}\n${parsed.assessment}\n${parsed.contentMd}\n${aliasText}`;
     await client.query(`
       INSERT INTO page_fts (page_id, tsv, source_text)
       VALUES ($1, to_tsvector('simple', $2), $2)
