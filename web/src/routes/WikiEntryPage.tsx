@@ -27,6 +27,7 @@ import {
   Link
 } from '@phosphor-icons/react';
 import api from '../lib/api';
+import { useNotification } from '../contexts/NotificationContext';
 import MarkdownRenderer from '../components/MarkdownRenderer';
 import MarkdownEditor from '../components/MarkdownEditor';
 import EvidencePopover from '../blocks/EvidencePopover';
@@ -65,6 +66,7 @@ export default function WikiEntryPage() {
   const { slug = '' } = useParams<{ slug: string }>();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const { addNotification } = useNotification();
 
   const [viewMode, setViewMode] = useState<ViewMode>('split');
   const [isEditing, setIsEditing] = useState(false);
@@ -105,6 +107,18 @@ export default function WikiEntryPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['wiki-page', slug] });
       setIsEditing(false);
+      addNotification({
+        type: 'system',
+        title: t('wiki.saveSuccess', '保存成功'),
+        description: t('wiki.saveSuccessDesc', '页面内容已保存')
+      });
+    },
+    onError: (error: Error) => {
+      addNotification({
+        type: 'system',
+        title: t('wiki.saveError', '保存失败'),
+        description: error.message || t('wiki.saveErrorDesc', '保存页面时发生错误')
+      });
     }
   });
 

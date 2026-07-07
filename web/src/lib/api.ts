@@ -683,7 +683,7 @@ export const api = {
         updatedAt: string;
         changeSummary: string;
       }>;
-    }>(`/archive-versions?slug=${encodeURIComponent(slug)}`);
+    }>(`/pages/${encodeURIComponent(slug)}/versions`);
   },
 
   cleanGhostRelations() {

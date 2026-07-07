@@ -122,7 +122,13 @@ export default function TimelineFullPage() {
     return () => observer.disconnect();
   }, [hasMore, timelineQuery]);
 
-  const handleApplySlug = () => setSlug(slugInput.trim());
+  const [applyFlash, setApplyFlash] = useState(false);
+
+  const handleApplySlug = () => {
+    setSlug(slugInput.trim());
+    setApplyFlash(true);
+    setTimeout(() => setApplyFlash(false), 300);
+  };
   const handleClearSlug = () => {
     setSlugInput('');
     setSlug('');
@@ -189,7 +195,10 @@ export default function TimelineFullPage() {
             </button>
           )}
         </div>
-        <button onClick={handleApplySlug} className="btn btn-primary text-sm">
+        <button
+          onClick={handleApplySlug}
+          className={`btn btn-primary text-sm transition-transform ${applyFlash ? 'scale-105' : ''}`}
+        >
           {t('common.apply', '应用')}
         </button>
         <div className="ml-auto flex items-center gap-2">

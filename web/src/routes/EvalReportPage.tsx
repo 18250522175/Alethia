@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ChartLine,
@@ -16,7 +17,8 @@ import {
   Funnel,
   Clock,
   TrendUp,
-  WarningOctagon
+  WarningOctagon,
+  X
 } from '@phosphor-icons/react';
 import api from '../lib/api';
 
@@ -71,10 +73,12 @@ interface RunEvalResult {
 
 export default function EvalReportPage() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [anomaliesCollapsed, setAnomaliesCollapsed] = useState(false);
+  const [showEvalResult, setShowEvalResult] = useState(false);
 
   const evalQuery = useQuery<EvalReport>({
     queryKey: ['eval-report'],
@@ -86,6 +90,7 @@ export default function EvalReportPage() {
     mutationFn: () => api.runShadowEval() as Promise<RunEvalResult>,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['eval-report'] });
+      setShowEvalResult(true);
     }
   });
 
@@ -328,7 +333,16 @@ export default function EvalReportPage() {
                             <span className="badge badge-blue">{bench.type}</span>
                           </td>
                           <td className="px-4 py-3">
-                            {bench.slug || <span className="text-slate-400">-</span>}
+                            {bench.slug ? (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); navigate(`/wiki/${bench.slug}`); }}
+                                className="text-primary-600 hover:text-primary-700 hover:underline font-mono text-xs dark:text-primary-400 dark:hover:text-primary-300"
+                              >
+                                {bench.slug}
+                              </button>
+                            ) : (
+                              <span className="text-slate-400">-</span>
+                            )}
                           </td>
                           <td className="px-4 py-3 max-w-xs truncate">
                             {bench.sourceText}
@@ -396,13 +410,14 @@ export default function EvalReportPage() {
             </div>
           </section>
 
-          {runMutation.data && (
+          {runMutation.data && showEvalResult && (
             <div className={`card border p-4 text-sm ${
               runMutation.data.passed
                 ? 'border-green-300 bg-green-50 dark:border-green-700 dark:bg-green-900/20'
                 : 'border-red-300 bg-red-50 dark:border-red-700 dark:bg-red-900/20'
             }`}>
-              <div className="flex items-center gap-2 font-semibold">
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-2 font-semibold">
                 {runMutation.data.passed ? (
                   <><CheckCircle size={18} className="text-green-500" /> 评估通过</>
                 ) : (
@@ -435,6 +450,14 @@ export default function EvalReportPage() {
                   </ul>
                 </div>
               )}
+              </div>
+              <button
+                onClick={() => setShowEvalResult(false)}
+                className="rounded p-1 text-slate-400 hover:bg-white/50 hover:text-slate-600 dark:hover:bg-slate-700/50 dark:hover:text-slate-200"
+                title="关闭"
+              >
+                <X size={16} />
+              </button>
             </div>
           )}
         </>

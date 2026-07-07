@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { CheckCircle, XCircle, Ghost, Warning, Info } from '@phosphor-icons/react';
 import type { PendingDiff } from '@shared/diff';
 
@@ -24,6 +25,7 @@ export default function DiffCard({
   rejecting = false
 }: DiffCardProps) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const tierMeta = TIERS.find(tier => tier.id === diff.tier) || TIERS[0];
   const impactMeta =
     diff.impact === 'high'
@@ -46,7 +48,13 @@ export default function DiffCard({
             </span>
           )}
           <span className="text-xs text-slate-500 dark:text-slate-400">
-            实体：<span className="font-mono text-primary-600 dark:text-primary-400">{diff.slug}</span>
+            实体：
+            <button
+              onClick={() => navigate(`/wiki/${diff.slug}`)}
+              className="font-mono text-primary-600 hover:underline dark:text-primary-400"
+            >
+              {diff.slug}
+            </button>
           </span>
           <span className="text-xs text-slate-500 dark:text-slate-400">
             类型：{diff.type}

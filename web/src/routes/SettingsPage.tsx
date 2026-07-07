@@ -27,6 +27,7 @@ import { useSettings } from '../store/SettingsContext';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../lib/api';
 import { useTheme } from '../store/ThemeContext';
+import { useNotification } from '../contexts/NotificationContext';
 
 const sections = [
   { id: 'appearance', icon: Palette, label: '外观' },
@@ -729,6 +730,30 @@ function NLISettings({ settings, onChange }: SettingsSectionProps) {
 }
 
 function DataSettings({ settings, onChange }: SettingsSectionProps) {
+  const [cleaningGhost, setCleaningGhost] = useState(false);
+  const { addNotification } = useNotification();
+  const handleCleanGhost = async () => {
+    if (!confirm('确定要清理孤立关系吗？此操作将移除指向已删除条目的链接，不可恢复。')) {
+      return;
+    }
+    setCleaningGhost(true);
+    try {
+      await api.cleanGhostRelations();
+      addNotification({
+        type: 'system',
+        title: '清理完成',
+        description: '孤立关系已成功清理'
+      });
+    } catch (err: any) {
+      addNotification({
+        type: 'system',
+        title: '清理失败',
+        description: err.message || '清理孤立关系时发生错误'
+      });
+    } finally {
+      setCleaningGhost(false);
+    }
+  };
   return (
     <div className="card p-6">
       <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold">
@@ -792,15 +817,12 @@ function DataSettings({ settings, onChange }: SettingsSectionProps) {
             清理孤立关系，移除指向已删除条目的链接。
           </p>
           <button
-            onClick={() => {
-              if (confirm('确定要清理孤立关系吗？此操作将移除指向已删除条目的链接，不可恢复。')) {
-                api.cleanGhostRelations();
-              }
-            }}
-            className="mt-3 btn bg-amber-600 text-white hover:bg-amber-700 text-xs"
+            onClick={handleCleanGhost}
+            disabled={cleaningGhost}
+            className="mt-3 btn bg-amber-600 text-white hover:bg-amber-700 text-xs disabled:opacity-50"
           >
-            <Trash size={14} className="mr-1.5" />
-            清理孤立关系
+            <Trash size={14} className={`mr-1.5 ${cleaningGhost ? 'animate-spin' : ''}`} />
+            {cleaningGhost ? '清理中...' : '清理孤立关系'}
           </button>
         </div>
       </div>

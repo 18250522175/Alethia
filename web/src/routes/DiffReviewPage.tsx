@@ -96,12 +96,23 @@ export default function DiffReviewPage() {
 
   const handleBatchApply = async () => {
     const items = allDiffsQuery.data?.items || [];
-    for (const item of items) {
-      if (item.tier === 'green') {
+    const greenItems = items.filter(item => item.tier === 'green');
+    let successCount = 0;
+    let failCount = 0;
+    for (const item of greenItems) {
+      try {
         await api.applyDiff(item.id);
+        successCount++;
+      } catch {
+        failCount++;
       }
     }
     queryClient.invalidateQueries({ queryKey: ['diffs'] });
+    addNotification({
+      type: 'system',
+      title: t('review.batchApplyComplete', '批量应用完成'),
+      description: t('review.batchApplyResult', '成功 {{success}} 个，失败 {{fail}} 个', { success: successCount, fail: failCount })
+    });
   };
 
   useEffect(() => {

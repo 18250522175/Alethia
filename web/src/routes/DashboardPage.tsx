@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
+import { useNotification } from '../contexts/NotificationContext';
 import {
   Gauge,
   Database,
@@ -48,6 +49,7 @@ export default function DashboardPage() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const { addNotification } = useNotification();
 
   const healthQuery = useQuery({
     queryKey: ['health-dashboard'],
@@ -60,8 +62,26 @@ export default function DashboardPage() {
     mutationFn: () => api.rebuildStruct(),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['health-dashboard'] });
+      addNotification({
+        type: 'system',
+        title: t('health.rebuildSuccess', '结构重建完成'),
+        description: t('health.rebuildSuccessDesc', '知识库结构已成功重建')
+      });
+    },
+    onError: (error: Error) => {
+      addNotification({
+        type: 'system',
+        title: t('health.rebuildFailed', '结构重建失败'),
+        description: error.message || t('health.rebuildFailedDesc', '重建结构时发生错误')
+      });
     }
   });
+
+  const handleRebuild = () => {
+    if (confirm('确定要重建知识库结构吗？此操作将重新计算所有实体关系和索引，可能需要一段时间。')) {
+      rebuildMutation.mutate();
+    }
+  };
 
   const data = healthQuery.data;
   const isLoading = healthQuery.isLoading;
@@ -182,7 +202,7 @@ export default function DashboardPage() {
           </p>
         </div>
         <button
-          onClick={() => rebuildMutation.mutate()}
+          onClick={handleRebuild}
           disabled={rebuildMutation.isPending}
           className="btn btn-primary"
         >

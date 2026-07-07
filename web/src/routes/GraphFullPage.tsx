@@ -14,6 +14,7 @@ import {
   Warning,
   Clock,
   Download,
+  FileCode,
   ShareNetwork,
   X,
   Info,
@@ -484,6 +485,20 @@ export default function GraphFullPage() {
     link.click();
   }, []);
 
+  const handleExportJson = useCallback(() => {
+    const cy = cyInstanceRef.current;
+    if (!cy) return;
+    const elements = cy.json().elements;
+    const jsonData = JSON.stringify(elements, null, 2);
+    const blob = new Blob([jsonData], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `knowledge-graph-${Date.now()}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }, []);
+
   const handleClusterHighlight = (clusterType: string) => {
     const cy = cyInstanceRef.current;
     if (!cy) return;
@@ -585,6 +600,15 @@ export default function GraphFullPage() {
         >
           <Download size={14} />
           导出图片
+        </button>
+
+        <button
+          onClick={handleExportJson}
+          className="btn btn-secondary gap-1.5 text-xs"
+          title="导出 JSON 数据"
+        >
+          <FileCode size={14} />
+          导出 JSON
         </button>
 
         <div className="ml-auto flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
