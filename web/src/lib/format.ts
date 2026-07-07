@@ -64,7 +64,7 @@ export function formatNumber(num: number): string {
   return String(num);
 }
 
-export function formatCurrency(amount: number, currency: string = 'USD'): string {
+export function formatCurrency(amount: number, currency: string = 'CNY'): string {
   if (amount === undefined || amount === null) return '—';
   return new Intl.NumberFormat('zh-CN', {
     style: 'currency',

@@ -115,6 +115,27 @@ export default function DiffReviewPage() {
     });
   };
 
+  const handleBatchReject = async () => {
+    const items = allDiffsQuery.data?.items || [];
+    const redItems = items.filter(item => item.tier === 'red');
+    let successCount = 0;
+    let failCount = 0;
+    for (const item of redItems) {
+      try {
+        await api.rejectDiff(item.id);
+        successCount++;
+      } catch {
+        failCount++;
+      }
+    }
+    queryClient.invalidateQueries({ queryKey: ['diffs'] });
+    addNotification({
+      type: 'system',
+      title: t('review.batchRejectComplete', '批量拒绝完成'),
+      description: t('review.batchRejectResult', '成功拒绝 {{success}} 个，失败 {{fail}} 个', { success: successCount, fail: failCount })
+    });
+  };
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (diffs.length === 0) return;
@@ -236,7 +257,17 @@ export default function DiffReviewPage() {
               className="btn btn-primary"
             >
               <CheckCircle size={16} className="mr-1.5" />
-              {t('review.batchApply')} ({diffs.length})
+              {t('review.batchApply')} ({tierCounts.green})
+            </button>
+          )}
+          {activeTier === 'red' && diffs.length > 0 && (
+            <button
+              onClick={handleBatchReject}
+              disabled={rejectMutation.isPending}
+              className="btn bg-red-600 text-white hover:bg-red-700"
+            >
+              <XCircle size={16} className="mr-1.5" />
+              {t('review.batchReject', '批量拒绝')} ({tierCounts.red})
             </button>
           )}
         </div>

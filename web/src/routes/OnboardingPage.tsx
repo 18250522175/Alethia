@@ -92,11 +92,30 @@ const STEPS: OnboardingStep[] = [
 ];
 
 const STORAGE_KEY = 'onboarding_completed';
+const STEP_KEY = 'onboarding_step';
 
 export default function OnboardingPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const [current, setCurrent] = useState(0);
+  // 从 localStorage 恢复进度
+  const [current, setCurrent] = useState(() => {
+    try {
+      const saved = localStorage.getItem(STEP_KEY);
+      const step = saved ? parseInt(saved, 10) : 0;
+      return step >= 0 && step < STEPS.length ? step : 0;
+    } catch {
+      return 0;
+    }
+  });
+
+  // 保存当前步骤进度
+  const saveProgress = (step: number) => {
+    try {
+      localStorage.setItem(STEP_KEY, String(step));
+    } catch {
+      // localStorage may be unavailable (private mode)
+    }
+  };
 
   const total = STEPS.length;
   const step = STEPS[current];
@@ -108,6 +127,7 @@ export default function OnboardingPage() {
   const finish = () => {
     try {
       localStorage.setItem(STORAGE_KEY, 'true');
+      localStorage.removeItem(STEP_KEY); // 清除进度
     } catch {
       // localStorage may be unavailable (private mode); proceed anyway
     }
@@ -119,11 +139,17 @@ export default function OnboardingPage() {
       finish();
       return;
     }
-    setCurrent((c) => c + 1);
+    const nextStep = current + 1;
+    setCurrent(nextStep);
+    saveProgress(nextStep);
   };
 
   const handlePrev = () => {
-    if (!isFirst) setCurrent((c) => c - 1);
+    if (!isFirst) {
+      const prevStep = current - 1;
+      setCurrent(prevStep);
+      saveProgress(prevStep);
+    }
   };
 
   return (

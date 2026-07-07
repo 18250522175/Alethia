@@ -3,12 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext';
 import { useTranslation } from 'react-i18next';
 import { Gauge, Eye, EyeSlash } from '@phosphor-icons/react';
+import api from '../lib/api';
 
 export default function LoginPage() {
   const [apiKey, setApiKey] = useState('');
   const [remember, setRemember] = useState(true);
   const [showKey, setShowKey] = useState(false);
   const [error, setError] = useState('');
+  const [errorCode, setErrorCode] = useState('');
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -17,13 +19,20 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setErrorCode('');
     setLoading(true);
 
     try {
       await login(apiKey, remember);
       navigate('/');
     } catch (err: any) {
-      setError(err.message || t('login.errorInvalidKey'));
+      // 尝试从 ApiError 获取更多信息
+      if (err instanceof api.ApiError) {
+        setErrorCode(err.code);
+        setError(err.message || t('login.errorInvalidKey'));
+      } else {
+        setError(err.message || t('login.errorInvalidKey'));
+      }
     } finally {
       setLoading(false);
     }
@@ -67,6 +76,9 @@ export default function LoginPage() {
 
             {error && (
               <div className="rounded-lg bg-red-50 p-3 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">
+                {errorCode && (
+                  <span className="mr-1 font-mono text-xs opacity-70">[{errorCode}]</span>
+                )}
                 {error}
               </div>
             )}

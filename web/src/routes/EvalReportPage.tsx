@@ -136,7 +136,11 @@ export default function EvalReportPage() {
           </p>
         </div>
         <button
-          onClick={() => runMutation.mutate()}
+          onClick={() => {
+            if (confirm('确定要运行回归评估吗？此操作将消耗 AI 预算，可能需要数分钟完成。')) {
+              runMutation.mutate();
+            }
+          }}
           disabled={runMutation.isPending}
           className="btn btn-primary"
         >
