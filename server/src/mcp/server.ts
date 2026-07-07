@@ -16,7 +16,7 @@
  */
 
 import { Hono } from 'hono';
-import { bearerAuth } from '../auth/bearer';
+import { bearerAuth, getApiKeys } from '../auth/bearer';
 import { brainAPI } from '../brainapi';
 import { llmRouter } from '../llm/router';
 import { ingestFile } from '../ingest/pipeline';
@@ -706,10 +706,13 @@ const TOOLS: ToolEntry[] = [
         const settings = result.rows.length > 0
           ? JSON.parse(result.rows[0].value)
           : defaultSettings;
+        settings.security.apiKey = getApiKeys().join(',') ?? '';
         return jsonTextResult({ settings });
       } catch (err) {
         logger.warn({ err }, 'MCP 获取设置失败，返回默认值');
-        return jsonTextResult({ settings: defaultSettings });
+        const settings = { ...defaultSettings };
+        settings.security.apiKey = getApiKeys().join(',') ?? '';
+        return jsonTextResult({ settings });
       }
     }
   },
@@ -738,6 +741,11 @@ const TOOLS: ToolEntry[] = [
         return errorResult(`settings 缺少必要字段: ${missingKeys.join(', ')}`);
       }
 
+      // API 密钥由环境变量 BRAIN_API_KEY 统一管理，避免与 settings 重复存储
+      if (settings.security) {
+        settings.security.apiKey = '';
+      }
+
       const pool = getPool();
       await pool.query(
         `INSERT INTO settings (key, value, updated_at)
@@ -747,6 +755,7 @@ const TOOLS: ToolEntry[] = [
            updated_at = NOW()`,
         [JSON.stringify(settings)]
       );
+      settings.security.apiKey = getApiKeys().join(',') ?? '';
       return jsonTextResult({ success: true, settings });
     }
   },

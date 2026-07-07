@@ -337,36 +337,40 @@ class BrainAPI {
 
   async applyDiff(diffId: string, approved: boolean): Promise<ApplyResult> {
     const pool = getPool();
+    const client = await pool.connect();
 
-    const diffResult = await pool.query(
-      'SELECT * FROM pending_diffs WHERE id = $1 AND resolved = false',
-      [diffId]
-    );
-
-    if (diffResult.rows.length === 0) {
-      throw new Error(`待审核变更 ${diffId} 不存在或已处理`);
-    }
-
-    const diff = diffResult.rows[0];
-    await pool.query(
-      'UPDATE pending_diffs SET resolved = true, approved = $1, resolved_at = NOW() WHERE id = $2',
-      [approved, diffId]
-    );
-
-    if (!approved) {
-      logger.info({ diffId }, '变更被拒绝');
-      return {
-        diffId,
-        applied: false,
-        newVersion: 0,
-        modifiedFiles: []
-      };
-    }
-
-    logger.info({ diffId, slug: diff.slug }, '变更已通过审核，正在应用');
-
-    // 实际写入：读取当前 wiki 页面 → 应用 payload 变更 → 写回文件 → 重新同步
     try {
+      await client.query('BEGIN');
+
+      const diffResult = await client.query(
+        'SELECT * FROM pending_diffs WHERE id = $1 AND resolved = false',
+        [diffId]
+      );
+
+      if (diffResult.rows.length === 0) {
+        await client.query('ROLLBACK');
+        throw new Error(`待审核变更 ${diffId} 不存在或已处理`);
+      }
+
+      const diff = diffResult.rows[0];
+      await client.query(
+        'UPDATE pending_diffs SET resolved = true, approved = $1, resolved_at = NOW() WHERE id = $2',
+        [approved, diffId]
+      );
+
+      if (!approved) {
+        await client.query('COMMIT');
+        logger.info({ diffId }, '变更被拒绝');
+        return {
+          diffId,
+          applied: false,
+          newVersion: 0,
+          modifiedFiles: []
+        };
+      }
+
+      logger.info({ diffId, slug: diff.slug }, '变更已通过审核，正在应用');
+
       const wikiPath = storage.getWikiPath();
       const targetFile = join(wikiPath, `${diff.slug}.md`);
       const modifiedFiles: string[] = [];
@@ -375,25 +379,21 @@ class BrainAPI {
         const currentContent = storage.readFile(targetFile);
         const payload = diff.payload || {};
 
-        // 根据变更类型处理内容
         const newContent = applyContentChange(currentContent, payload, diff.type);
         if (newContent !== currentContent) {
           storage.atomicWrite(targetFile, newContent);
           modifiedFiles.push(`${diff.slug}.md`);
 
-          // 记录版本历史
           const versionId = randomUUID();
-          await pool.query(
+          await client.query(
             `INSERT INTO knowledge_versions (id, slug, version, content, batch_id, created_at)
              VALUES ($1, $2, $3, $4, $5, NOW())`,
             [versionId, diff.slug, 1, newContent.slice(0, 5000), `diff-${diffId}`]
           );
 
-          // 触发重新同步
           await syncEngine.syncAll();
         }
       } else {
-        // 页面不存在时，创建新页面
         const payload = diff.payload || {};
         let newContent = `---\nslug: ${diff.slug}\ntype: ${diff.type || 'concept'}\n---\n\n`;
         if (payload.content) {
@@ -405,6 +405,7 @@ class BrainAPI {
         await syncEngine.syncAll();
       }
 
+      await client.query('COMMIT');
       logger.info({ diffId, modifiedFiles }, '变更已成功应用');
       return {
         diffId,
@@ -413,13 +414,11 @@ class BrainAPI {
         modifiedFiles
       };
     } catch (err) {
+      await client.query('ROLLBACK').catch(() => {});
       logger.error({ err, diffId }, '应用变更失败');
-      // 回滚 resolved 标记
-      await pool.query(
-        'UPDATE pending_diffs SET resolved = false, approved = NULL, resolved_at = NULL WHERE id = $1',
-        [diffId]
-      );
       throw new Error(`应用变更失败: ${(err as Error).message}`);
+    } finally {
+      client.release();
     }
   }
 

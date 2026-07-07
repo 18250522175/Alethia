@@ -19,6 +19,14 @@ function extractBearerToken(authHeader: string | null): string | null {
   return match ? match[1].trim() : null;
 }
 
+export function getApiKeys(): string[] {
+  const env = loadEnv();
+  return env.BRAIN_API_KEY
+    .split(',')
+    .map(k => k.trim())
+    .filter(k => k.length > 0);
+}
+
 export async function bearerAuth(c: Context, next: Next) {
   const path = c.req.path;
   const method = c.req.method;
@@ -29,12 +37,7 @@ export async function bearerAuth(c: Context, next: Next) {
 
   const authHeader = c.req.header('Authorization') || null;
   const token = extractBearerToken(authHeader);
-  const env = loadEnv();
-
-  const validKeys = env.BRAIN_API_KEY
-    .split(',')
-    .map(k => k.trim())
-    .filter(k => k.length > 0);
+  const validKeys = getApiKeys();
 
   if (!token || !validKeys.includes(token)) {
     logger.warn({ path, method }, '认证失败：缺失或无效的 API 密钥');
@@ -50,10 +53,9 @@ export async function bearerAuth(c: Context, next: Next) {
 }
 
 export function validateApiKeyOnStartup(): void {
-  const env = loadEnv();
-  const hasKey = env.BRAIN_API_KEY && env.BRAIN_API_KEY.trim().length > 0;
+  const validKeys = getApiKeys();
 
-  if (!hasKey) {
+  if (validKeys.length === 0) {
     if (isProduction()) {
       logger.fatal('未配置 BRAIN_API_KEY，生产模式下无法启动');
       process.exit(1);
