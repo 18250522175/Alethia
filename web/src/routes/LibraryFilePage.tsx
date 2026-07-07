@@ -135,11 +135,11 @@ export default function LibraryFilePage() {
     return (
       <div className="card flex flex-col items-center justify-center py-16 text-center animate-fade-in">
         <Warning size={48} className="mb-3 text-yellow-400" />
-        <p className="text-slate-700 dark:text-slate-200">缺少文件 hash 参数</p>
-        <p className="mt-1 text-xs text-slate-400">请在 URL 中提供 ?hash=&lt;file_hash&gt;</p>
+        <p className="text-slate-700 dark:text-slate-200">{t('libraryFile.missingHash')}</p>
+        <p className="mt-1 text-xs text-slate-400">{t('libraryFile.missingHashHint')}</p>
         <RouterLink to="/" className="btn btn-secondary mt-4">
           <ArrowLeft size={14} className="mr-1" />
-          返回首页
+          {t('common.returnHome')}
         </RouterLink>
       </div>
     );
@@ -158,12 +158,12 @@ export default function LibraryFilePage() {
     return (
       <div className="card flex flex-col items-center justify-center py-16 text-center animate-fade-in">
         <Warning size={48} className="mb-3 text-red-400" />
-        <p className="text-slate-700 dark:text-slate-200">无法加载文件信息</p>
+        <p className="text-slate-700 dark:text-slate-200">{t('libraryFile.loadError')}</p>
         <p className="mt-1 font-mono text-xs text-slate-500 dark:text-slate-400">{hash}</p>
-        <p className="mt-1 text-xs text-slate-400">请检查后端 /api/library-files/:hash 路由是否已实现</p>
+        <p className="mt-1 text-xs text-slate-400">{t('libraryFile.loadErrorHint')}</p>
         <RouterLink to="/" className="btn btn-secondary mt-4">
           <ArrowLeft size={14} className="mr-1" />
-          {t('common.back', '返回')}
+          {t('common.back')}
         </RouterLink>
       </div>
     );
@@ -185,7 +185,7 @@ export default function LibraryFilePage() {
         <section className="card p-5">
           <div className="mb-3 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
             <FileText size={12} />
-            文件预览
+            {t('libraryFile.filePreview')}
           </div>
           <FilePreview
             category={category}
@@ -201,12 +201,12 @@ export default function LibraryFilePage() {
           <section className="card p-4">
             <div className="mb-3 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
               <FileIcon size={12} />
-              文件元信息
+              {t('libraryFile.fileMeta')}
             </div>
             <dl className="space-y-2 text-xs">
-              <MetaRow label="文件名" value={file.originalName} mono />
+              <MetaRow label={t('libraryFile.fileName')} value={file.originalName} mono />
               <MetaRow
-                label="MIME 类型"
+                label={t('libraryFile.mimeType')}
                 value={file.mime}
                 mono
                 badge={{
@@ -214,17 +214,17 @@ export default function LibraryFilePage() {
                   label: category.toUpperCase()
                 }}
               />
-              <MetaRow label="大小" value={formatFileSize(file.size)} />
+              <MetaRow label={t('libraryFile.fileSize')} value={formatFileSize(file.size)} />
               <MetaRow
-                label="状态"
+                label={t('libraryFile.fileStatus')}
                 value={file.status}
-                badge={statusBadgeInfo(file.status)}
+                badge={statusBadgeInfo(file.status, t)}
               />
               <MetaRow
-                label="上传时间"
+                label={t('libraryFile.uploadTime')}
                 value={formatDateTime(file.ingestedAt)}
               />
-              <MetaRow label="哈希" value={file.hash} mono />
+              <MetaRow label={t('libraryFile.fileHash')} value={file.hash} mono />
             </dl>
           </section>
 
@@ -232,7 +232,7 @@ export default function LibraryFilePage() {
             <section className="card p-4">
               <div className="mb-3 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
                 <ListBullets size={12} />
-                时间码跳转
+                {t('libraryFile.timecodeJump')}
               </div>
               <ul className="space-y-1.5">
                 {timecodes.map(tc => (
@@ -256,7 +256,7 @@ export default function LibraryFilePage() {
               </ul>
               {(category === 'audio' || category === 'video') && (
                 <div className="mt-2 border-t border-slate-200 pt-2 text-[11px] text-slate-500 dark:border-slate-700 dark:text-slate-400">
-                  当前时间：<span className="font-mono font-medium">{formatTimecode(currentTime)}</span>
+                  {t('libraryFile.currentTime')}: <span className="font-mono font-medium">{formatTimecode(currentTime)}</span>
                 </div>
               )}
             </section>
@@ -266,7 +266,7 @@ export default function LibraryFilePage() {
             <section className="card p-4">
               <div className="mb-3 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
                 <FileText size={12} />
-                证据片段（{evidenceSpans.length}）
+                {t('libraryFile.evidenceSnippets', { count: evidenceSpans.length })}
               </div>
               <ul className="space-y-2">
                 {evidenceSpans.slice(0, 12).map(span => (
@@ -292,7 +292,7 @@ export default function LibraryFilePage() {
                 ))}
                 {evidenceSpans.length > 12 && (
                   <li className="text-center text-[11px] text-slate-400">
-                    + 其余 {evidenceSpans.length - 12} 条
+                    {t('libraryFile.moreSnippets', { count: evidenceSpans.length - 12 })}
                   </li>
                 )}
               </ul>
@@ -313,7 +313,8 @@ function FileMetaHeader({
   category: ReturnType<typeof detectCategory>;
   contentUrl: string;
 }) {
-  const { Icon, label, color } = categoryIcon(category);
+  const { t } = useTranslation();
+  const { Icon, label, color } = categoryIcon(category, t);
   return (
     <header className="card overflow-hidden p-0">
       <div className={`border-l-4 ${color === 'primary' ? 'border-primary-500' : 'border-slate-400'} p-5`}>
@@ -343,7 +344,7 @@ function FileMetaHeader({
               className="btn btn-secondary text-sm"
             >
               <Download size={14} className="mr-1" />
-              下载
+              {t('libraryFile.download')}
             </a>
           )}
         </div>
@@ -352,33 +353,39 @@ function FileMetaHeader({
   );
 }
 
-function categoryIcon(category: ReturnType<typeof detectCategory>): {
+function categoryIcon(
+  category: ReturnType<typeof detectCategory>,
+  t: (key: string) => string
+): {
   Icon: typeof FileIcon;
   label: string;
   color: 'primary' | 'muted';
 } {
   switch (category) {
     case 'pdf':
-      return { Icon: FileText, label: 'PDF', color: 'primary' };
+      return { Icon: FileText, label: t('libraryFile.categoryPdf'), color: 'primary' };
     case 'audio':
-      return { Icon: SpeakerHigh, label: '音频', color: 'primary' };
+      return { Icon: SpeakerHigh, label: t('libraryFile.categoryAudio'), color: 'primary' };
     case 'video':
-      return { Icon: FilmSlate, label: '视频', color: 'primary' };
+      return { Icon: FilmSlate, label: t('libraryFile.categoryVideo'), color: 'primary' };
     case 'image':
-      return { Icon: ImageIcon, label: '图片', color: 'primary' };
+      return { Icon: ImageIcon, label: t('libraryFile.categoryImage'), color: 'primary' };
     case 'text':
-      return { Icon: Code, label: '文本', color: 'primary' };
+      return { Icon: Code, label: t('libraryFile.categoryText'), color: 'primary' };
     default:
-      return { Icon: FileIcon, label: '文件', color: 'muted' };
+      return { Icon: FileIcon, label: t('libraryFile.categoryFile'), color: 'muted' };
   }
 }
 
-function statusBadgeInfo(status: string): { className: string; label: string } {
+function statusBadgeInfo(
+  status: string,
+  t: (key: string) => string
+): { className: string; label: string } {
   const s = (status || '').toLowerCase();
-  if (s === 'ready' || s === 'processed' || s === 'active') return { className: 'badge-green', label: '已就绪' };
-  if (s === 'pending' || s === 'processing' || s === 'queued') return { className: 'badge-yellow', label: '处理中' };
-  if (s === 'failed' || s === 'error' || s === 'rejected') return { className: 'badge-red', label: '失败' };
-  return { className: 'badge-blue', label: status || '未知' };
+  if (s === 'ready' || s === 'processed' || s === 'active') return { className: 'badge-green', label: t('libraryFile.statusReady') };
+  if (s === 'pending' || s === 'processing' || s === 'queued') return { className: 'badge-yellow', label: t('libraryFile.statusProcessing') };
+  if (s === 'failed' || s === 'error' || s === 'rejected') return { className: 'badge-red', label: t('libraryFile.statusFailed') };
+  return { className: 'badge-blue', label: status || t('libraryFile.statusUnknown') };
 }
 
 function MetaRow({
@@ -424,10 +431,12 @@ function FilePreview({
   videoRef: React.MutableRefObject<HTMLVideoElement | null>;
   onTimeUpdate: (t: number) => void;
 }) {
+  const { t } = useTranslation();
+
   if (!contentUrl) {
     return (
       <div className="flex h-48 items-center justify-center text-sm text-slate-400">
-        暂无可预览的内容 URL
+        {t('libraryFile.noPreviewUrl')}
       </div>
     );
   }
@@ -452,7 +461,7 @@ function FilePreview({
           onTimeUpdate={e => onTimeUpdate((e.target as HTMLAudioElement).currentTime)}
           className="w-full"
         >
-          您的浏览器不支持音频播放。
+          {t('libraryFile.audioNotSupported')}
         </audio>
       </div>
     );
@@ -467,7 +476,7 @@ function FilePreview({
         onTimeUpdate={e => onTimeUpdate((e.target as HTMLVideoElement).currentTime)}
         className="max-h-[70vh] w-full rounded-lg bg-black"
       >
-        您的浏览器不支持视频播放。
+        {t('libraryFile.videoNotSupported')}
       </video>
     );
   }
@@ -491,10 +500,10 @@ function FilePreview({
   return (
     <div className="flex flex-col items-center justify-center gap-3 py-12 text-center text-slate-500 dark:text-slate-400">
       <FileIcon size={48} className="text-slate-300 dark:text-slate-600" />
-      <p className="text-sm">该文件类型（{file.mime || '未知'}）暂不支持在线预览</p>
+      <p className="text-sm">{t('libraryFile.previewNotSupported', { mime: file.mime || t('common.unknown') })}</p>
       <a href={contentUrl} download={file.originalName} className="btn btn-secondary text-sm">
         <Download size={14} className="mr-1" />
-        下载文件查看
+        {t('libraryFile.downloadToView')}
       </a>
     </div>
   );
@@ -525,10 +534,10 @@ function TextPreview({ contentUrl, mime }: { contentUrl: string; mime: string })
     return (
       <div className="flex flex-col items-center justify-center gap-2 py-12 text-center text-slate-500">
         <Warning size={32} className="text-red-400" />
-        <p className="text-sm">无法加载文本内容</p>
+        <p className="text-sm">{t('libraryFile.textLoadError')}</p>
         <a href={contentUrl} download className="btn btn-secondary text-xs">
           <Download size={12} className="mr-1" />
-          下载查看
+          {t('libraryFile.downloadView')}
         </a>
       </div>
     );

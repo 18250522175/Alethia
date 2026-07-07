@@ -14,7 +14,7 @@ function classifyIntent(query: string): { intent: Intent; tier: Tier } {
   const lower = query.toLowerCase().trim();
   const length = query.length;
 
-  if (length < 10 && /是什么|是什么|定义|概念/.test(query)) {
+  if (length < 10 && /是什么|什么是|定义|概念/.test(query)) {
     return { intent: 'factual', tier: 'T0' };
   }
 
@@ -107,13 +107,20 @@ export async function executeQuery(params: QueryParams): Promise<QueryResult> {
     logger.debug({ count: items.length }, '重排序完成');
   }
 
-  // 图谱扩展：将遍历到的邻居节点合并到检索结果中
+  // 图谱扩展：将遍历到的邻居节点合并到检索结果中（取 top-3 避免单一节点偏差）
   if (withGraph && items.length > 0) {
-    const graphLinks = await graphTraverse(items[0].slug, 2);
-    logger.debug({ graphLinks: graphLinks.length }, '图谱扩展完成');
+    const topSlugs = items.slice(0, 3).map(i => i.slug);
     const existingSlugs = new Set(items.map(i => i.slug));
-    for (const link of graphLinks) {
-      const neighborSlug = link.sourceSlug === items[0].slug ? link.targetSlug : link.sourceSlug;
+    const allLinks: Awaited<ReturnType<typeof graphTraverse>> = [];
+    for (const slug of topSlugs) {
+      const links = await graphTraverse(slug, 2);
+      allLinks.push(...links);
+    }
+    logger.debug({ graphLinks: allLinks.length }, '图谱扩展完成');
+    for (const link of allLinks) {
+      const seedSlug = topSlugs.find(s => s === link.sourceSlug || s === link.targetSlug);
+      if (!seedSlug) continue;
+      const neighborSlug = link.sourceSlug === seedSlug ? link.targetSlug : link.sourceSlug;
       if (!existingSlugs.has(neighborSlug)) {
         const snippet = snippetMap.get(neighborSlug) || '';
         items.push({
@@ -127,31 +134,34 @@ export async function executeQuery(params: QueryParams): Promise<QueryResult> {
     }
   }
 
-  // 按 contexts 过滤：只保留匹配指定上下文的页面
+  // 按 contexts 过滤：只保留匹配指定上下文的页面（批量查询，避免 N+1）
   if (contexts && contexts.length > 0) {
     const contextSet = new Set(contexts);
+    const slugList = items.map(i => i.slug).filter(Boolean);
     const filteredItems: QueryResultItem[] = [];
-    for (const item of items) {
-      try {
-        const { getPool } = await import('../db/pool');
-        const pool = getPool();
-        const pageResult = await pool.query(
-          'SELECT contexts FROM pages WHERE slug = $1',
-          [item.slug]
-        );
-        if (pageResult.rows.length > 0) {
-          const pageContexts: string[] = pageResult.rows[0].contexts || [];
-          if (pageContexts.some(c => contextSet.has(c))) {
-            filteredItems.push(item);
-          }
-        }
-      } catch {
-        // 查询失败时保留该条目
-        filteredItems.push(item);
+    try {
+      const { getPool } = await import('../db/pool');
+      const pool = getPool();
+      const pageResult = await pool.query(
+        'SELECT slug, contexts FROM pages WHERE slug = ANY($1::text[])',
+        [slugList]
+      );
+      const slugToContexts = new Map<string, string[]>();
+      for (const row of pageResult.rows) {
+        slugToContexts.set(row.slug, row.contexts || []);
       }
+      for (const item of items) {
+        const pageContexts = slugToContexts.get(item.slug) || [];
+        if (pageContexts.some(c => contextSet.has(c))) {
+          filteredItems.push(item);
+        }
+      }
+      items = filteredItems;
+    } catch {
+      // 查询失败时保留所有条目
+      filteredItems.push(...items);
     }
-    items = filteredItems;
-    logger.debug({ before: items.length, after: filteredItems.length }, 'contexts 过滤完成');
+    logger.debug({ after: items.length }, 'contexts 过滤完成');
   }
 
   const durationMs = Date.now() - startTime;

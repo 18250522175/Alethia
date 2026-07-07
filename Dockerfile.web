@@ -1,12 +1,9 @@
 # Alethia Web 前端 Dockerfile
-# 多阶段构建：node 构建 → nginx 静态服务
+# 多阶段构建：bun 构建 → nginx 静态服务
 
 # === 阶段 1：构建 ===
-FROM node:20-alpine AS builder
+FROM oven/bun:1.1 AS builder
 WORKDIR /app
-
-# 安装 Bun 用于复用 bun.lock
-RUN npm install -g bun
 
 COPY package.json bun.lock tsconfig.base.json ./
 COPY shared/package.json ./shared/package.json

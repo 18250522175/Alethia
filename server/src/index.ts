@@ -5,7 +5,7 @@ import { HTTPException } from 'hono/http-exception';
 import { loadEnv } from './config/loader';
 import loggerInstance from './i18n/logger';
 import { getErrorMessage } from './i18n/errors.zh-CN';
-import { bearerAuth, validateApiKeyOnStartup } from './auth/bearer';
+import { bearerAuth, validateApiKeyOnStartup, getApiKeys } from './auth/bearer';
 import { rateLimiter } from './middleware/rate-limit';
 import { waitForDatabase, getPool } from './db/pool';
 import llmRoutes from './routes/llm';
@@ -97,12 +97,7 @@ app.post('/api/auth/login', async (c) => {
   try {
     const body = await c.req.json().catch(() => ({}));
     const { apiKey } = body as { apiKey?: string };
-    const env = loadEnv();
-
-    const validKeys = env.BRAIN_API_KEY
-      .split(',')
-      .map(k => k.trim())
-      .filter(k => k.length > 0);
+    const validKeys = getApiKeys();
 
     if (!apiKey || !validKeys.includes(apiKey.trim())) {
       return c.json({

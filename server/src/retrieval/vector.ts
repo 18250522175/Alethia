@@ -18,7 +18,10 @@ export async function vectorSearch(query: string, k: number = 10): Promise<Vecto
     }
 
     const pool = getPool();
-    const vectorStr = `[${embedding.join(',')}]`;
+    if (!embedding.every(v => typeof v === 'number' && Number.isFinite(v))) {
+      throw new Error('嵌入向量包含非法值');
+    }
+    const vectorStr = JSON.stringify(embedding);
     const result = await pool.query(
       `SELECT p.id AS page_id, p.slug, p.title,
               1 - (pe.embedding <=> $1::vector) AS score

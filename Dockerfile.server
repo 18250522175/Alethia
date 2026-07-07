@@ -41,6 +41,10 @@ COPY --from=builder /app/server/skills /app/server/skills
 COPY --from=builder /app/server/src/db/migrations /app/server/src/db/migrations
 COPY --from=builder /app/wiki /app/wiki
 
+# 拷贝初始化脚本（init 容器入口）
+COPY init.sh /app/init.sh
+RUN chmod +x /app/init.sh
+
 # 默认环境变量（DB 密钥不再硬编码，由 compose/.env 强制注入）
 ENV NODE_ENV=production
 ENV BRAIN_PORT=3000
@@ -59,9 +63,9 @@ USER app
 WORKDIR /app/server
 EXPOSE 3000
 
-# 健康检查：每 30s 探测 /health
+# 健康检查：每 30s 探测 /health（oven/bun 镜像无 curl，用 wget）
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD curl -fs http://localhost:3000/health || exit 1
+  CMD wget -q -O- http://localhost:3000/health > /dev/null 2>&1 || exit 1
 
-# 启动编译产物
-CMD ["bun", "run", "dist/index.js"]
+# 启动编译产物（bun build 保留源目录结构：src/index.ts → dist/src/index.js）
+CMD ["bun", "run", "dist/src/index.js"]

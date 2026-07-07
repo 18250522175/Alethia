@@ -39,7 +39,7 @@ class LLMRouter {
     ];
 
     for (const config of adapterConfigs) {
-      const apiKey = (process.env[config.apiKeyEnv] as string) || '';
+      const apiKey = (env as any)[config.apiKeyEnv] || '';
       const adapter = new config.cls(apiKey, config.defaultModel);
       this.adapters.set(config.id, adapter);
     }
@@ -84,7 +84,7 @@ class LLMRouter {
 
     for (const [id, adapter] of this.adapters.entries()) {
       const envKey = `${id.toUpperCase()}_API_KEY`;
-      const apiKey = (process.env[envKey] as string) || '';
+      const apiKey = (env as any)[envKey] || '';
       const isConfigured = apiKey.trim().length > 0;
 
       statuses.push({

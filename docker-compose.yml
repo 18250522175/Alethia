@@ -28,12 +28,17 @@ services:
       timeout: 5s
       retries: 10
       start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - backend
     deploy:
       resources:
         limits:
-          memory: 512M
+          memory: 1G
           cpus: "1.0"
 
   # === Brain API 后端服务 ===
@@ -44,6 +49,8 @@ services:
     container_name: alethia-server
     restart: unless-stopped
     depends_on:
+      init:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
     environment:
@@ -79,13 +86,20 @@ services:
       - changelog_data:/app/server/data/changelog
       - raw_data:/app/server/data/raw
       - summaries_data:/app/server/data/summaries
-    ports:
-      - "3000:3000"
+    # 3000 端口不直接暴露，统一通过 nginx (80) 访问
+    # 如需直连调试，取消下方注释
+    # ports:
+    #   - "3000:3000"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - frontend
       - backend
     healthcheck:
-      test: ["CMD-SHELL", "curl -fs http://localhost:3000/health || exit 1"]
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:3000/health > /dev/null 2>&1 || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -109,6 +123,11 @@ services:
     ports:
       - "80:80"
       # 如需 HTTPS，请使用反向代理（如 Traefik/Caddy）或在此处挂载证书
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - frontend
     healthcheck:
@@ -137,11 +156,15 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER:-alethia}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD 必须在 .env 中设置}@postgres:5432/${POSTGRES_DB:-alethia}
       LANGUAGE: zh-CN
       NODE_ENV: production
-    entrypoint: ["/bin/sh", "/app/init.sh"]
+    entrypoint: ["/app/init.sh"]
     volumes:
-      - ./init.sh:/app/init.sh:ro
       - wiki_data:/app/wiki
     restart: "no"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - backend
     deploy:
