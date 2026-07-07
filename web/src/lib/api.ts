@@ -647,15 +647,13 @@ export const api = {
     );
   },
 
-  generateDraft(slug: string, prompt?: string) {
+  generateDraft(title: string, type?: string, contexts?: string[]) {
     return request<{
       slug: string;
-      draftMd: string;
-      sources: string[];
-      tokensUsed: number;
+      content: string;
     }>('/generate-draft', {
       method: 'POST',
-      body: JSON.stringify({ slug, prompt }),
+      body: JSON.stringify({ title, type, contexts }),
       timeout: 120_000
     });
   },

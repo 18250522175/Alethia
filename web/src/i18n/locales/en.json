@@ -51,6 +51,7 @@
     "timeline": "Timeline",
     "changelog": "Changelog",
     "settings": "Settings",
+    "observedFiles": "Observed Files",
     "logout": "Logout"
   },
   "login": {
@@ -87,7 +88,34 @@
     "quickActions": "⚡ Quick Actions",
     "randomWalk": "Random Walk",
     "knowledgeGaps": "Knowledge Gaps",
-    "todayQA": "Today's Q&A"
+    "todayQA": "Today's Q&A",
+    "newPage": "New Entry",
+    "newPageWizard": "New Entry Wizard",
+    "draftTitle": "Title",
+    "draftTitlePlaceholder": "e.g. Information Entropy",
+    "draftType": "Type",
+    "draftTypeConcept": "Concept",
+    "draftTypeProcess": "Process",
+    "draftTypePerson": "Person",
+    "draftTypeEvent": "Event",
+    "draftTypeTool": "Tool",
+    "draftTypeOther": "Other",
+    "draftContext": "Context (optional)",
+    "draftContextPlaceholder": "Provide background info to help AI generate a more accurate draft...",
+    "generateDraft": "Generate Draft",
+    "generating": "Generating...",
+    "draftError": "Draft generation failed, please try again",
+    "draftGenerated": "Draft generated. You can preview it before creating the entry or regenerate.",
+    "regenerate": "Regenerate",
+    "createPage": "Create Entry",
+    "portalType": {
+      "concept": "Core Concepts",
+      "process": "Processes",
+      "person": "People & Orgs",
+      "event": "Events",
+      "tool": "Tools & Tech",
+      "other": "Other"
+    }
   },
   "health": {
     "title": "Health Dashboard",
@@ -351,6 +379,31 @@
     "filterAll": "All Time",
     "empty": "No timeline records"
   },
+  "observed": {
+    "title": "Observed Files",
+    "desc": "Files referenced in the knowledge base but not yet extracted",
+    "file": "File",
+    "size": "Size",
+    "modified": "Modified",
+    "status": "Status",
+    "action": "Action",
+    "extract": "Extract",
+    "extractAll": "Extract All",
+    "pending": "Pending",
+    "extracting": "Extracting",
+    "extracted": "Extracted",
+    "failed": "Failed",
+    "empty": "No observed files",
+    "loadError": "Failed to load observed files"
+  },
+  "aliases": {
+    "title": "Alias Conflict Management",
+    "desc": "Detect cases where multiple entities share the same alias, helping maintain link accuracy in the knowledge graph.",
+    "loadError": "Failed to load alias conflicts",
+    "noConflicts": "No alias conflicts",
+    "conflictCount": "{{count}} alias conflicts",
+    "sharedBy": "Shared by {{count}} pages"
+  },
   "evidence": {
     "title": "Evidence Source",
     "pin": "Pin",
@@ -476,5 +529,25 @@
     "imageError": "Image load failed: {{label}}",
     "mediaError": "Media load failed: {{label}}. Check if the file exists or format is supported.",
     "playError": "Playback failed, check browser permissions or file format."
+  },
+  "wiki": {
+    "saveSuccess": "Saved",
+    "saveSuccessDesc": "Page content saved",
+    "saveError": "Save failed",
+    "saveErrorDesc": "Error saving page",
+    "loadError": "Cannot load this entry",
+    "preview": "Preview",
+    "split": "Split",
+    "source": "Source",
+    "editSource": "Edit Source",
+    "version": "Version",
+    "unsaved": "Unsaved",
+    "relatedEntities": "Related Entities",
+    "incomingLinks": "Incoming Links",
+    "outgoingLinks": "Outgoing Links",
+    "noIncoming": "No incoming links",
+    "noOutgoing": "No outgoing links",
+    "revertChanges": "Revert Changes",
+    "newPageHint": "New entry. Edit and save to create."
   }
 }

@@ -51,6 +51,7 @@
     "timeline": "时间线",
     "changelog": "变更记录",
     "settings": "设置",
+    "observedFiles": "观察文件",
     "logout": "退出登录"
   },
   "login": {
@@ -87,7 +88,34 @@
     "quickActions": "⚡ 快捷操作",
     "randomWalk": "随机漫步",
     "knowledgeGaps": "知识缺口",
-    "todayQA": "今日问答"
+    "todayQA": "今日问答",
+    "newPage": "新建条目",
+    "newPageWizard": "新建条目向导",
+    "draftTitle": "标题",
+    "draftTitlePlaceholder": "例如：信息熵",
+    "draftType": "类型",
+    "draftTypeConcept": "概念",
+    "draftTypeProcess": "流程",
+    "draftTypePerson": "人物",
+    "draftTypeEvent": "事件",
+    "draftTypeTool": "工具",
+    "draftTypeOther": "其他",
+    "draftContext": "上下文（可选）",
+    "draftContextPlaceholder": "提供一些背景信息帮助 AI 生成更准确的草稿...",
+    "generateDraft": "生成草稿",
+    "generating": "生成中...",
+    "draftError": "草稿生成失败，请重试",
+    "draftGenerated": "草稿已生成，您可以预览后创建条目或重新生成。",
+    "regenerate": "重新生成",
+    "createPage": "创建条目",
+    "portalType": {
+      "concept": "核心概念",
+      "process": "流程方法",
+      "person": "人物组织",
+      "event": "事件时间线",
+      "tool": "工具技术",
+      "other": "其他条目"
+    }
   },
   "health": {
     "title": "健康仪表盘",
@@ -351,6 +379,31 @@
     "filterAll": "全部时间",
     "empty": "暂无时间线记录"
   },
+  "observed": {
+    "title": "观察文件",
+    "desc": "被引用于知识库但尚未提取内容的文件",
+    "file": "文件",
+    "size": "大小",
+    "modified": "修改时间",
+    "status": "状态",
+    "action": "操作",
+    "extract": "提取",
+    "extractAll": "提取全部",
+    "pending": "待提取",
+    "extracting": "提取中",
+    "extracted": "已提取",
+    "failed": "失败",
+    "empty": "没有观察文件",
+    "loadError": "加载观察文件列表失败"
+  },
+  "aliases": {
+    "title": "别名冲突管理",
+    "desc": "检测多个实体共享同一别名的情况，帮助维护知识图谱的链接准确性。",
+    "loadError": "加载别名冲突列表失败",
+    "noConflicts": "没有别名冲突",
+    "conflictCount": "共 {{count}} 个别名冲突",
+    "sharedBy": "被 {{count}} 个页面共享"
+  },
   "evidence": {
     "title": "证据来源",
     "pin": "钉住",
@@ -476,5 +529,25 @@
     "imageError": "图片加载失败：{{label}}",
     "mediaError": "媒体加载失败：{{label}}。请检查文件是否存在或格式是否支持。",
     "playError": "播放失败，请检查浏览器权限或文件格式。"
+  },
+  "wiki": {
+    "saveSuccess": "保存成功",
+    "saveSuccessDesc": "页面内容已保存",
+    "saveError": "保存失败",
+    "saveErrorDesc": "保存页面时发生错误",
+    "loadError": "无法加载此条目",
+    "preview": "预览",
+    "split": "双栏",
+    "source": "源码",
+    "editSource": "编辑源码",
+    "version": "版本",
+    "unsaved": "未保存",
+    "relatedEntities": "关联实体",
+    "incomingLinks": "入链",
+    "outgoingLinks": "出链",
+    "noIncoming": "暂无入链",
+    "noOutgoing": "暂无出链",
+    "revertChanges": "撤销更改",
+    "newPageHint": "新建条目，编辑内容后保存即可创建。"
   }
 }

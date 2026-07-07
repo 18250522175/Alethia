@@ -1,4 +1,4 @@
-import { House, Graph, CheckCircle, ChatsCircle, Gauge, Clock, ClockCounterClockwise, Gear, BookOpen, Brain, Bell, User, CaretDown, CaretRight, Ghost } from '@phosphor-icons/react';
+import { House, Graph, CheckCircle, ChatsCircle, Gauge, Clock, ClockCounterClockwise, Gear, BookOpen, Brain, CaretDown, CaretRight, Ghost, Eye } from '@phosphor-icons/react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
@@ -178,7 +178,8 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
     { path: '/dashboard', icon: Gauge, label: t('nav.dashboard') },
     { path: '/timeline', icon: Clock, label: t('nav.timeline') },
     { path: '/changelog', icon: ClockCounterClockwise, label: t('nav.changelog') },
-    { path: '/settings', icon: Gear, label: t('nav.settings') }
+    { path: '/settings', icon: Gear, label: t('nav.settings') },
+    { path: '/observed-files', icon: Eye, label: t('nav.observedFiles', '观察文件') }
   ];
 
   const healthQuery = useQuery({

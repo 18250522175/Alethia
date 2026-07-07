@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams, Link as RouterLink, useNavigate } from 'react-router-dom';
+import { useParams, useSearchParams, Link as RouterLink, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import matter from 'gray-matter';
 import {
@@ -20,7 +20,6 @@ import {
   Tag,
   Clock,
   GitBranch,
-  Brain,
   ChatCircleDots,
   Plus,
   Trash,
@@ -64,16 +63,20 @@ function formatDate(iso: string): string {
 export default function WikiEntryPage() {
   const { t } = useTranslation();
   const { slug = '' } = useParams<{ slug: string }>();
+  const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { addNotification } = useNotification();
 
+  const isNewPage = searchParams.get('new') === 'true';
+
   const [viewMode, setViewMode] = useState<ViewMode>('split');
-  const [isEditing, setIsEditing] = useState(false);
+  const [isEditing, setIsEditing] = useState(isNewPage);
   const [draft, setDraft] = useState('');
   const [editAliases, setEditAliases] = useState<string[]>([]);
   const [newAliasInput, setNewAliasInput] = useState('');
   const [activeEvidenceId, setActiveEvidenceId] = useState<string | null>(null);
+  const [newPageTitle, setNewPageTitle] = useState('');
 
   const pageQuery = useQuery({
     queryKey: ['wiki-page', slug],
@@ -103,10 +106,22 @@ export default function WikiEntryPage() {
   });
 
   const saveMutation = useMutation({
-    mutationFn: (content: string) => api.updateWikiPage(slug, content),
+    mutationFn: async (content: string) => {
+      if (isNewPage) {
+        // Create the page first, then update with content
+        const savedTitle = newPageTitle || slug;
+        const createResult = await api.createPage(savedTitle, 'concept', [], []);
+        return api.updateWikiPage(createResult.slug, content);
+      }
+      return api.updateWikiPage(slug, content);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['wiki-page', slug] });
       setIsEditing(false);
+      // Clean up URL for new pages
+      if (isNewPage) {
+        navigate(`/wiki/${encodeURIComponent(slug)}`, { replace: true });
+      }
       addNotification({
         type: 'system',
         title: t('wiki.saveSuccess', '保存成功'),
@@ -135,6 +150,25 @@ export default function WikiEntryPage() {
     }
   }, [page?.rawMd, page?.hash, page?.aliases]);
 
+  // Load draft from sessionStorage for new pages
+  useEffect(() => {
+    if (isNewPage) {
+      const savedDraft = sessionStorage.getItem('new_page_draft');
+      const savedTitle = sessionStorage.getItem('new_page_title');
+      if (savedDraft) {
+        setDraft(savedDraft);
+        // Clean up after loading
+        sessionStorage.removeItem('new_page_draft');
+        sessionStorage.removeItem('new_page_title');
+      }
+      if (savedTitle) {
+        setNewPageTitle(savedTitle);
+      }
+      // Ensure source view is visible for editing
+      if (viewMode === 'preview') setViewMode('split');
+    }
+  }, [isNewPage]);
+
   const activeEvidence = useMemo(
     () => evidenceSpans.find(e => e.span_id === activeEvidenceId) ?? null,
     [evidenceSpans, activeEvidenceId]
@@ -159,7 +193,8 @@ export default function WikiEntryPage() {
   };
 
   const handleSave = () => {
-    if (!isDirty && JSON.stringify(editAliases) === JSON.stringify(page?.aliases || [])) return;
+    if (!isNewPage && !isDirty && JSON.stringify(editAliases) === JSON.stringify(page?.aliases || [])) return;
+    if (isNewPage && !draft.trim()) return;
 
     let contentToSave = draft;
 
@@ -204,7 +239,95 @@ export default function WikiEntryPage() {
     );
   }
 
+  // For new pages, show the editor even if the page doesn't exist yet
   if (pageQuery.isError || !page) {
+    if (isNewPage) {
+      // New page creation mode - show editor
+      const showPreview = viewMode !== 'source';
+      const showSource = viewMode !== 'preview';
+      const gridClass = viewMode === 'split' ? 'lg:grid-cols-[6fr_4fr]' : 'lg:grid-cols-1';
+      const viewModes: { id: ViewMode; icon: typeof Eye; label: string }[] = [
+        { id: 'preview', icon: Eye, label: t('wiki.preview', '预览') },
+        { id: 'split', icon: Columns, label: t('wiki.split', '双栏') },
+        { id: 'source', icon: Code, label: t('wiki.source', '源码') }
+      ];
+      return (
+        <div className="space-y-5 animate-fade-in">
+          <header className="card overflow-hidden p-0">
+            <div className="border-l-4 border-primary-500 p-5">
+              <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+                {newPageTitle || slug}
+              </h1>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                {t('wiki.newPageHint', '新建条目，编辑内容后保存即可创建。')}
+              </p>
+            </div>
+          </header>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="inline-flex rounded-lg border border-slate-200 bg-slate-100 p-1 dark:border-slate-700 dark:bg-slate-800">
+              {viewModes.map(mode => {
+                const Icon = mode.icon;
+                const active = viewMode === mode.id;
+                return (
+                  <button
+                    key={mode.id}
+                    type="button"
+                    onClick={() => setViewMode(mode.id)}
+                    className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all ${
+                      active
+                        ? 'bg-white text-primary-600 shadow-sm dark:bg-slate-700 dark:text-primary-300'
+                        : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    <Icon size={14} />
+                    {mode.label}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={() => navigate('/')} className="btn btn-secondary">
+                <X size={14} className="mr-1" />
+                {t('common.cancel', '取消')}
+              </button>
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={!draft.trim() || saveMutation.isPending}
+                className="btn btn-primary"
+              >
+                {saveMutation.isPending ? (
+                  <Spinner size={14} className="mr-1 animate-spin" />
+                ) : (
+                  <FloppyDisk size={14} className="mr-1" />
+                )}
+                {t('common.save', '保存')}
+              </button>
+            </div>
+          </div>
+          <div className={`grid grid-cols-1 gap-5 ${gridClass}`}>
+            {showSource && (
+              <section className="card p-5">
+                <div className="mb-3 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  <Code size={12} />
+                  {t('wiki.editSource', '编辑源码')}
+                </div>
+                <MarkdownEditor value={draft} onChange={setDraft} />
+              </section>
+            )}
+            {showPreview && (
+              <section className="card p-5">
+                <div className="mb-3 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  <Eye size={12} />
+                  {t('wiki.preview', '预览')}
+                </div>
+                <MarkdownRenderer content={draft} />
+              </section>
+            )}
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="card flex flex-col items-center justify-center py-16 text-center animate-fade-in">
         <Warning size={48} className="mb-3 text-red-400" />

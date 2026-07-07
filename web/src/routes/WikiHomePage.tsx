@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../store/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import api from '../lib/api';
 import { formatRelativeTime } from '../lib/format';
@@ -11,10 +11,13 @@ import {
   ChatsCircle,
   Gauge,
   Shuffle,
-  Question,
   Clock,
   Lightbulb,
-  MagnifyingGlass
+  MagnifyingGlass,
+  Plus,
+  PencilLine,
+  Spinner,
+  X
 } from '@phosphor-icons/react';
 
 const PORTAL_COLORS = [
@@ -30,6 +33,11 @@ export default function WikiHomePage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
+  const [showDraftWizard, setShowDraftWizard] = useState(false);
+  const [draftTitle, setDraftTitle] = useState('');
+  const [draftType, setDraftType] = useState('concept');
+  const [draftContext, setDraftContext] = useState('');
+  const [generatedDraft, setGeneratedDraft] = useState<string | null>(null);
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -67,16 +75,16 @@ export default function WikiHomePage() {
       typeMap.set(type, (typeMap.get(type) || 0) + 1);
     });
     const typeDescriptions: Record<string, string> = {
-      concept: '核心概念与理论知识',
-      process: '流程与方法论',
-      person: '人物与组织',
-      event: '事件与时间线',
-      tool: '工具与技术栈',
-      other: '其他条目'
+      concept: t('home.portalType.concept', '核心概念与理论知识'),
+      process: t('home.portalType.process', '流程与方法论'),
+      person: t('home.portalType.person', '人物与组织'),
+      event: t('home.portalType.event', '事件与时间线'),
+      tool: t('home.portalType.tool', '工具与技术栈'),
+      other: t('home.portalType.other', '其他条目')
     };
     return Array.from(typeMap.entries()).slice(0, 6).map(([type, count], i) => ({
       id: type,
-      name: typeDescriptions[type] ? t(`home.portalType.${type}`) : type,
+      name: typeDescriptions[type] || type,
       description: typeDescriptions[type] || `${type} 类型条目`,
       count,
       color: PORTAL_COLORS[i % PORTAL_COLORS.length]
@@ -123,6 +131,38 @@ export default function WikiHomePage() {
     navigate('/qa');
   };
 
+  const draftMutation = useMutation({
+    mutationFn: () => {
+      const contexts = draftContext.trim() ? [draftContext.trim()] : [];
+      return api.generateDraft(draftTitle.trim(), draftType, contexts);
+    },
+    onSuccess: (data) => {
+      setGeneratedDraft(data.content);
+    }
+  });
+
+  const handleOpenDraftWizard = () => {
+    setDraftTitle('');
+    setDraftType('concept');
+    setDraftContext('');
+    setGeneratedDraft(null);
+    draftMutation.reset();
+    setShowDraftWizard(true);
+  };
+
+  const handleCreateFromDraft = () => {
+    const slug = draftTitle.trim()
+      .toLowerCase()
+      .replace(/[^\w\u4e00-\u9fa5]+/g, '-')
+      .replace(/^-|-$/g, '');
+    // 将草稿内容通过 sessionStorage 传递给创建页面
+    if (generatedDraft) {
+      sessionStorage.setItem('new_page_draft', generatedDraft);
+      sessionStorage.setItem('new_page_title', draftTitle.trim());
+    }
+    navigate(`/wiki/${encodeURIComponent(slug)}?new=true`);
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
       <section className="rounded-2xl bg-gradient-to-r from-primary-600 to-knowledge-600 p-8 text-white">
@@ -155,6 +195,14 @@ export default function WikiHomePage() {
           >
             <ChatsCircle size={18} className="mr-1.5" />
             {t('home.askAI')}
+          </button>
+          <button
+            type="button"
+            onClick={handleOpenDraftWizard}
+            className="btn border border-white/30 text-white hover:bg-white/10"
+          >
+            <Plus size={18} className="mr-1.5" />
+            {t('home.newPage', '新建条目')}
           </button>
         </form>
       </section>
@@ -308,6 +356,127 @@ export default function WikiHomePage() {
           </section>
         </div>
       </div>
+
+      {showDraftWizard && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-xl dark:bg-slate-800">
+            <div className="mb-5 flex items-center justify-between">
+              <h2 className="flex items-center gap-2 text-lg font-semibold">
+                <PencilLine size={20} className="text-primary-500" />
+                {t('home.newPageWizard', '新建条目向导')}
+              </h2>
+              <button
+                onClick={() => setShowDraftWizard(false)}
+                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {!generatedDraft && (
+              <div className="space-y-4">
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium">{t('home.draftTitle', '标题')}</label>
+                  <input
+                    type="text"
+                    value={draftTitle}
+                    onChange={e => setDraftTitle(e.target.value)}
+                    placeholder={t('home.draftTitlePlaceholder', '例如：信息熵')}
+                    className="input w-full"
+                    autoFocus
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium">{t('home.draftType', '类型')}</label>
+                  <select
+                    value={draftType}
+                    onChange={e => setDraftType(e.target.value)}
+                    className="input w-full"
+                  >
+                    <option value="concept">{t('home.draftTypeConcept', '概念')}</option>
+                    <option value="process">{t('home.draftTypeProcess', '流程')}</option>
+                    <option value="person">{t('home.draftTypePerson', '人物')}</option>
+                    <option value="event">{t('home.draftTypeEvent', '事件')}</option>
+                    <option value="tool">{t('home.draftTypeTool', '工具')}</option>
+                    <option value="other">{t('home.draftTypeOther', '其他')}</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium">{t('home.draftContext', '上下文（可选）')}</label>
+                  <textarea
+                    value={draftContext}
+                    onChange={e => setDraftContext(e.target.value)}
+                    placeholder={t('home.draftContextPlaceholder', '提供一些背景信息帮助 AI 生成更准确的草稿...')}
+                    className="input w-full min-h-[80px] resize-y"
+                    rows={3}
+                  />
+                </div>
+                <div className="flex justify-end gap-3 pt-2">
+                  <button
+                    onClick={() => setShowDraftWizard(false)}
+                    className="btn btn-secondary"
+                  >
+                    {t('common.cancel')}
+                  </button>
+                  <button
+                    onClick={() => draftMutation.mutate()}
+                    disabled={!draftTitle.trim() || draftMutation.isPending}
+                    className="btn btn-primary flex items-center gap-2"
+                  >
+                    {draftMutation.isPending ? (
+                      <>
+                        <Spinner size={16} className="animate-spin" />
+                        {t('home.generating', '生成中...')}
+                      </>
+                    ) : (
+                      <>
+                        <PencilLine size={16} />
+                        {t('home.generateDraft', '生成草稿')}
+                      </>
+                    )}
+                  </button>
+                </div>
+                {draftMutation.isError && (
+                  <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400">
+                    {t('home.draftError', '草稿生成失败，请重试')}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {generatedDraft && (
+              <div className="space-y-4">
+                <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-700 dark:border-green-800 dark:bg-green-900/20 dark:text-green-400">
+                  {t('home.draftGenerated', '草稿已生成，您可以预览后创建条目或重新生成。')}
+                </div>
+                <div className="max-h-96 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900">
+                  <pre className="whitespace-pre-wrap font-sans text-sm text-slate-700 dark:text-slate-300">
+                    {generatedDraft}
+                  </pre>
+                </div>
+                <div className="flex justify-end gap-3 pt-2">
+                  <button
+                    onClick={() => {
+                      setGeneratedDraft(null);
+                      draftMutation.reset();
+                    }}
+                    className="btn btn-secondary"
+                  >
+                    {t('home.regenerate', '重新生成')}
+                  </button>
+                  <button
+                    onClick={handleCreateFromDraft}
+                    className="btn btn-primary flex items-center gap-2"
+                  >
+                    <BookOpen size={16} />
+                    {t('home.createPage', '创建条目')}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
