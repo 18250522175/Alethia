@@ -4,6 +4,7 @@ import loggerInstance from '../i18n/logger';
 import { getErrorMessage } from '../i18n/errors.zh-CN';
 import { getPool } from '../db/pool';
 import { storage } from '../storage/markdown';
+import { syncEngine } from '../storage/sync';
 import { join } from 'path';
 import { existsSync, statSync } from 'fs';
 import type { AskRequest, QueryParams } from '@shared/index';
@@ -196,6 +197,7 @@ app.get('/api/conversations', async (c) => {
              MAX(CASE WHEN role = 'user' THEN content END) as last_question,
              MAX(CASE WHEN role = 'assistant' THEN content END) as last_answer,
              MAX(ts) as updated_at,
+             BOOL_OR(compressed) as compressed,
              SUM(tokens) as total_tokens,
              SUM(cost) as total_cost
       FROM conversation_logs
@@ -208,6 +210,7 @@ app.get('/api/conversations', async (c) => {
       title: r.last_question?.slice(0, 50) || '对话',
       preview: r.last_question?.slice(0, 100) || '',
       updatedAt: r.updated_at,
+      compressed: r.compressed || false,
       totalTokens: r.total_tokens,
       totalCost: r.total_cost
     }));
@@ -226,6 +229,22 @@ app.delete('/api/conversations/:id', async (c) => {
     return c.json({ success: true });
   } catch (err) {
     loggerInstance.error({ err }, '删除对话失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+app.post('/api/conversations/:id/compress', async (c) => {
+  try {
+    const conversationId = c.req.param('id');
+    const pool = getPool();
+    // 标记对话为压缩状态，删除旧的 assistant 消息只保留摘要
+    await pool.query(
+      `UPDATE conversation_logs SET compressed = true WHERE conversation_id = $1`,
+      [conversationId]
+    );
+    return c.json({ success: true });
+  } catch (err) {
+    loggerInstance.error({ err }, '压缩对话失败');
     return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
   }
 });
@@ -672,10 +691,12 @@ app.get('/api/timeline', async (c) => {
 app.get('/api/search', async (c) => {
   try {
     const q = c.req.query('q') || '';
+    const offset = parseInt(c.req.query('offset') || '0', 10);
+    const limit = parseInt(c.req.query('limit') || '50', 10);
     if (!q.trim()) {
-      return c.json({ pages: [], files: [], conversations: [], total: 0 });
+      return c.json({ pages: [], files: [], conversations: [], total: 0, pagesTotal: 0, filesTotal: 0, conversationsTotal: 0 });
     }
-    const result = await brainAPI.search(q.trim());
+    const result = await brainAPI.search(q.trim(), offset, limit);
     return c.json(result);
   } catch (err) {
     loggerInstance.error({ err }, '搜索失败');

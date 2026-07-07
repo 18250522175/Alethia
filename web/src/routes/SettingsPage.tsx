@@ -400,13 +400,13 @@ function BudgetSettings({ settings, onChange }: SettingsSectionProps) {
               <div>
                 <p className="text-xs text-slate-500">今日已用</p>
                 <p className="text-lg font-bold text-amber-600 dark:text-amber-400">
-                  ${budgetQuery.data.dailyUsed?.toFixed(2) ?? '0.00'}
+                  ${((budgetQuery.data.dailyLimit ?? 0) - (budgetQuery.data.daily ?? 0)).toFixed(2)}
                 </p>
               </div>
               <div>
                 <p className="text-xs text-slate-500">总预算</p>
                 <p className="text-lg font-bold">
-                  ${(budgetQuery.data.daily + budgetQuery.data.dailyUsed)?.toFixed(2) ?? '0.00'}
+                  ${budgetQuery.data.dailyLimit?.toFixed(2) ?? '0.00'}
                 </p>
               </div>
             </div>
@@ -581,7 +581,7 @@ function ModelAllocationSettings({ settings, onChange }: SettingsSectionProps) {
                   <option value="">自动选择</option>
                   {adapters.map((adapter: any) => (
                     <option key={adapter.id} value={adapter.id}>
-                      {adapter.name}
+                      {adapter.displayName}
                     </option>
                   ))}
                 </select>

@@ -194,7 +194,7 @@ export const api = {
   },
 
   getLlmAdapters() {
-    return request<{ adapters: Array<{ id: string; name: string; enabled: boolean; models: string[] }> }>('/llm/adapters');
+    return request<{ adapters: Array<{ id: string; displayName: string; enabled: boolean; apiKeyConfigured: boolean; defaultModel: string }> }>('/llm/adapters');
   },
 
   testLlmAdapter(adapterId: string) {
@@ -206,26 +206,17 @@ export const api = {
 
   rebuildStruct() {
     return request<{
-      success: boolean;
-      triggered: boolean;
-      estimatedDurationMs: number;
-      pages?: number;
-      links?: number;
-      ghostCount?: number;
-      durationMs?: number;
+      pages: number;
+      links: number;
+      ghostCount: number;
+      durationMs: number;
     }>('/rebuild-struct', {
       method: 'POST'
     });
   },
 
   getHealth() {
-    return request<{
-      status: 'ok' | 'degraded' | 'error';
-      version: string;
-      lastSync?: string;
-      uptimeMs: number;
-      components: { name: string; status: 'ok' | 'degraded' | 'error'; latencyMs?: number }[];
-    }>('/health-dashboard');
+    return request<HealthDashboard>('/health-dashboard');
   },
 
   getHealthDashboard() {
@@ -669,25 +660,25 @@ export const api = {
 
   getExtractPending() {
     return request<{
-      pending: number;
-      items: Array<{
-        hash: string;
-        originalName: string;
-        addedAt: string;
-        priority: number;
+      processed: number;
+      pendingDiffsCreated: number;
+      errors: Array<{
+        filePath: string;
+        message: string;
       }>;
-    }>('/extract-pending');
+    }>('/extract-pending', { method: 'POST' });
   },
 
   getArchiveVersions(slug: string) {
     return request<{
-      versions: Array<{
+      items: Array<{
         version: number;
         hash: string;
         updatedAt: string;
         changeSummary: string;
         author?: string;
       }>;
+      total: number;
     }>(`/pages/${encodeURIComponent(slug)}/versions`);
   },
 
@@ -703,21 +694,22 @@ export const api = {
     return request<{
       daily: number;
       monthly: number;
-      dailyUsed: number;
-      monthlyUsed: number;
+      dailyLimit: number;
+      monthlyLimit: number;
+      tripped: boolean;
     }>('/budget/remaining');
   },
 
   getBudgetAlerts() {
     return request<{
-      alerts: Array<{
-        id: string;
-        level: 'info' | 'warning' | 'critical';
-        message: string;
+      items: Array<{
+        metric: string;
         threshold: number;
-        current: number;
+        actual: number;
+        message: string;
         ts: string;
       }>;
+      total: number;
     }>('/budget/alerts');
   },
 
@@ -728,6 +720,7 @@ export const api = {
         title: string;
         preview: string;
         updatedAt: string;
+        compressed?: boolean;
         totalTokens?: number;
         totalCost?: number;
       }>;

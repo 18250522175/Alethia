@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { MagnifyingGlass, X, ArrowRight, Calendar, FileText } from '@phosphor-icons/react';
 import api from '../lib/api';
+import HighlightText from './HighlightText';
 
 interface Snippet {
   name: string;
@@ -368,23 +369,3 @@ export default function CommandPalette({ isOpen, onClose, onInsert, triggerStart
   );
 }
 
-function HighlightText({ text, keyword }: { text: string; keyword: string }) {
-  if (!keyword) return <>{text}</>;
-  
-  const regex = new RegExp(`(${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
-  const parts = text.split(regex);
-  
-  return (
-    <>
-      {parts.map((part, idx) => 
-        regex.test(part) ? (
-          <mark key={idx} className="bg-primary-100 text-primary-700 rounded dark:bg-primary-900/50 dark:text-primary-300">
-            {part}
-          </mark>
-        ) : (
-          <span key={idx}>{part}</span>
-        )
-      )}
-    </>
-  );
-}

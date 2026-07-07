@@ -97,10 +97,10 @@ export default function TopBar({ onToggleSidebar }: TopBarProps) {
 
   const budgetData = {
     daily: budgetQuery.data
-      ? { used: budgetQuery.data.dailyUsed, total: budgetQuery.data.dailyUsed + budgetQuery.data.daily }
+      ? { used: budgetQuery.data.dailyLimit - budgetQuery.data.daily, total: budgetQuery.data.dailyLimit }
       : { used: 2.35, total: 5 },
     monthly: budgetQuery.data
-      ? { used: budgetQuery.data.monthlyUsed, total: budgetQuery.data.monthlyUsed + budgetQuery.data.monthly }
+      ? { used: budgetQuery.data.monthlyLimit - budgetQuery.data.monthly, total: budgetQuery.data.monthlyLimit }
       : { used: 45.8, total: 100 }
   };
 

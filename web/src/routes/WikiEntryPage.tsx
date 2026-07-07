@@ -595,7 +595,7 @@ export default function WikiEntryPage() {
       {/* entry timeline */}
       <EntryTimeline
         events={(() => {
-          const versions = archiveVersionsQuery.data?.versions || [];
+          const versions = archiveVersionsQuery.data?.items || [];
           if (versions.length > 0) {
             const events: Array<{ id: string; type: 'create' | 'edit'; title: string; description: string; timestamp: string; version: string; author: string }> = [];
             versions.forEach((v, i) => {

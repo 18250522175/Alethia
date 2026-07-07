@@ -1058,33 +1058,47 @@ ${relationsBlock}
   }
 
   // Search
-  async search(query: string): Promise<{ pages: any[]; files: any[]; conversations: any[]; total: number }> {
+  async search(query: string, offset: number = 0, limit: number = 50): Promise<{ pages: any[]; files: any[]; conversations: any[]; total: number; pagesTotal: number; filesTotal: number; conversationsTotal: number }> {
     try {
       const pool = getPool();
       const queryString = `%${query}%`;
 
-      const [pageResult, fileResult, convResult] = await Promise.all([
+      const [pageResult, fileResult, convResult, pageCount, fileCount, convCount] = await Promise.all([
         pool.query(
           `SELECT slug, title, type,
                   LEFT(content_md, 200) as snippet
            FROM pages
            WHERE title ILIKE $1 OR content_md ILIKE $1 OR slug ILIKE $1
-           LIMIT 10`,
-          [queryString]
+           ORDER BY title
+           OFFSET $2 LIMIT $3`,
+          [queryString, offset, limit]
         ),
         pool.query(
           `SELECT hash, mime, original_name, size, status
            FROM library_files
            WHERE original_name ILIKE $1 OR hash ILIKE $1
-           LIMIT 10`,
-          [queryString]
+           ORDER BY original_name
+           OFFSET $2 LIMIT $3`,
+          [queryString, offset, limit]
         ),
         pool.query(
           `SELECT conversation_id, content, ts, role
            FROM conversation_logs
            WHERE content ILIKE $1
            ORDER BY ts DESC
-           LIMIT 10`,
+           OFFSET $2 LIMIT $3`,
+          [queryString, offset, limit]
+        ),
+        pool.query(
+          `SELECT COUNT(*) as count FROM pages WHERE title ILIKE $1 OR content_md ILIKE $1 OR slug ILIKE $1`,
+          [queryString]
+        ),
+        pool.query(
+          `SELECT COUNT(*) as count FROM library_files WHERE original_name ILIKE $1 OR hash ILIKE $1`,
+          [queryString]
+        ),
+        pool.query(
+          `SELECT COUNT(*) as count FROM conversation_logs WHERE content ILIKE $1 AND role = 'user'`,
           [queryString]
         )
       ]);
@@ -1099,13 +1113,18 @@ ${relationsBlock}
         id: r.conversation_id, question: r.content, answer: '', ts: r.ts
       }));
 
+      const pagesTotal = parseInt(pageCount.rows[0]?.count || '0', 10);
+      const filesTotal = parseInt(fileCount.rows[0]?.count || '0', 10);
+      const conversationsTotal = parseInt(convCount.rows[0]?.count || '0', 10);
+
       return {
         pages, files, conversations,
-        total: pages.length + files.length + conversations.length
+        total: pages.length + files.length + conversations.length,
+        pagesTotal, filesTotal, conversationsTotal
       };
     } catch (err) {
       logger.warn({ err }, '搜索失败');
-      return { pages: [], files: [], conversations: [], total: 0 };
+      return { pages: [], files: [], conversations: [], total: 0, pagesTotal: 0, filesTotal: 0, conversationsTotal: 0 };
     }
   }
 
