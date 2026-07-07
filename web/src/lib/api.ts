@@ -396,11 +396,12 @@ export const api = {
     }>('/shadow-eval', { method: 'POST' });
   },
 
-  getTimeline(params?: { slug?: string; limit?: number; offset?: number }) {
+  getTimeline(params?: { slug?: string; limit?: number; offset?: number; range?: string }) {
     const query = new URLSearchParams();
     if (params?.slug) query.set('slug', params.slug);
     if (params?.limit) query.set('limit', String(params.limit));
     if (params?.offset) query.set('offset', String(params.offset));
+    if (params?.range && params.range !== 'all') query.set('range', params.range);
     return request<{
       items: Array<{
         id: number;
@@ -415,13 +416,16 @@ export const api = {
     }>(`/timeline?${query.toString()}`);
   },
 
-  search(query: string) {
+  search(query: string, offset: number = 0, limit: number = 50) {
     return request<{
       pages: { slug: string; title: string; snippet: string; type: string }[];
       files: { hash: string; originalName: string; mime: string; size: number; status: string }[];
       conversations: { id: string; question: string; answer: string; ts: string }[];
       total: number;
-    }>(`/search?q=${encodeURIComponent(query)}`);
+      pagesTotal: number;
+      filesTotal: number;
+      conversationsTotal: number;
+    }>(`/search?q=${encodeURIComponent(query)}&offset=${offset}&limit=${limit}`);
   },
 
   searchEntities(query: string, limit?: number) {
@@ -682,6 +686,7 @@ export const api = {
         hash: string;
         updatedAt: string;
         changeSummary: string;
+        author?: string;
       }>;
     }>(`/pages/${encodeURIComponent(slug)}/versions`);
   },
@@ -696,11 +701,10 @@ export const api = {
 
   getBudgetRemaining() {
     return request<{
-      remaining: number;
-      total: number;
-      used: number;
-      period: string;
-      currency: string;
+      daily: number;
+      monthly: number;
+      dailyUsed: number;
+      monthlyUsed: number;
     }>('/budget/remaining');
   },
 
@@ -729,6 +733,10 @@ export const api = {
       }>;
       total: number;
     }>('/conversations');
+  },
+
+  compressConversation(conversationId: string) {
+    return request(`/conversations/${conversationId}/compress`, { method: 'POST' });
   },
 
   deleteConversation(conversationId: string) {

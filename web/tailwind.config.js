@@ -62,16 +62,16 @@ export default {
       }),
       colors: {
         primary: {
-          50: '#f0f9ff',
-          100: '#e0f2fe',
-          200: '#bae6fd',
-          300: '#7dd3fc',
-          400: '#38bdf8',
-          500: '#0ea5e9',
-          600: '#0284c7',
-          700: '#0369a1',
-          800: '#075985',
-          900: '#0c4a6e'
+          50: 'color-mix(in srgb, var(--accent-color, #6366f1) 10%, white)',
+          100: 'color-mix(in srgb, var(--accent-color, #6366f1) 20%, white)',
+          200: 'color-mix(in srgb, var(--accent-color, #6366f1) 30%, white)',
+          300: 'color-mix(in srgb, var(--accent-color, #6366f1) 50%, white)',
+          400: 'color-mix(in srgb, var(--accent-color, #6366f1) 70%, white)',
+          500: 'var(--accent-color, #6366f1)',
+          600: 'color-mix(in srgb, var(--accent-color, #6366f1) 90%, black)',
+          700: 'color-mix(in srgb, var(--accent-color, #6366f1) 80%, black)',
+          800: 'color-mix(in srgb, var(--accent-color, #6366f1) 60%, black)',
+          900: 'color-mix(in srgb, var(--accent-color, #6366f1) 40%, black)'
         },
         knowledge: {
           50: '#f0fdf4',

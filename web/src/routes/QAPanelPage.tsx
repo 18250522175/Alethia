@@ -234,6 +234,13 @@ export default function QAPanelPage() {
 
   const toggleCompressConversation = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    api.compressConversation(id)
+      .then(() => {
+        queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      })
+      .catch((err) => {
+        console.error('Failed to compress conversation:', err);
+      });
   };
 
   useEffect(() => {

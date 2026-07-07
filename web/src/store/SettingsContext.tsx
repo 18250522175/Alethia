@@ -25,6 +25,38 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     staleTime: 5 * 60 * 1000
   });
 
+  useEffect(() => {
+    if (!data) return;
+    const root = document.documentElement;
+    const fontSize = data.appearance?.fontSize || 'medium';
+    const density = data.appearance?.density || 'comfortable';
+    const accentColor = data.appearance?.accentColor || 'blue';
+
+    const fontSizeMap: Record<string, string> = {
+      small: '0.9rem',
+      medium: '1rem',
+      large: '1.1rem'
+    };
+
+    const densityMap: Record<string, string> = {
+      compact: '0.875',
+      comfortable: '1',
+      spacious: '1.125'
+    };
+
+    const accentColorMap: Record<string, string> = {
+      blue: '#6366f1',
+      purple: '#a855f7',
+      green: '#22c55e',
+      orange: '#f97316',
+      pink: '#ec4899'
+    };
+
+    root.style.setProperty('--font-size-base', fontSizeMap[fontSize]);
+    root.style.setProperty('--density', densityMap[density]);
+    root.style.setProperty('--accent-color', accentColorMap[accentColor]);
+  }, [data]);
+
   const mutation = useMutation({
     mutationFn: async (newSettings: Partial<Settings>) => {
       const result = await api.updateSettings(newSettings);

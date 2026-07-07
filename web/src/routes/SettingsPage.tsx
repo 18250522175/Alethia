@@ -394,19 +394,19 @@ function BudgetSettings({ settings, onChange }: SettingsSectionProps) {
               <div>
                 <p className="text-xs text-slate-500">今日剩余</p>
                 <p className="text-lg font-bold text-green-600 dark:text-green-400">
-                  ${budgetQuery.data.remaining?.toFixed(2) ?? '0.00'}
+                  ${budgetQuery.data.daily?.toFixed(2) ?? '0.00'}
                 </p>
               </div>
               <div>
                 <p className="text-xs text-slate-500">今日已用</p>
                 <p className="text-lg font-bold text-amber-600 dark:text-amber-400">
-                  ${budgetQuery.data.used?.toFixed(2) ?? '0.00'}
+                  ${budgetQuery.data.dailyUsed?.toFixed(2) ?? '0.00'}
                 </p>
               </div>
               <div>
                 <p className="text-xs text-slate-500">总预算</p>
                 <p className="text-lg font-bold">
-                  ${budgetQuery.data.total?.toFixed(2) ?? '0.00'}
+                  ${(budgetQuery.data.daily + budgetQuery.data.dailyUsed)?.toFixed(2) ?? '0.00'}
                 </p>
               </div>
             </div>

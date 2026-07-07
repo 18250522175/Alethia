@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import {
   CheckCircle,
   XCircle,
@@ -25,6 +26,7 @@ export default function DiffReviewPage() {
   const [activeTier, setActiveTier] = useState<string>('yellow');
   const [activeIndex, setActiveIndex] = useState<number>(0);
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   const TIERS = [
     { id: 'green', label: t('review.tierGreen', '🟢 低风险'), desc: t('review.tierGreenDesc', '可直接应用'), color: 'badge-green' },
@@ -299,6 +301,7 @@ export default function DiffReviewPage() {
               applying={applyMutation.isPending && applyMutation.variables === diff.id}
               rejecting={rejectMutation.isPending && rejectMutation.variables === diff.id}
               isActive={index === activeIndex}
+              navigate={navigate}
             />
           ))}
         </div>
@@ -314,9 +317,10 @@ interface DiffCardProps {
   applying: boolean;
   rejecting: boolean;
   isActive: boolean;
+  navigate: (path: string) => void;
 }
 
-function DiffCard({ diff, onApply, onReject, applying, rejecting, isActive }: DiffCardProps) {
+function DiffCard({ diff, onApply, onReject, applying, rejecting, isActive, navigate }: DiffCardProps) {
   const { t } = useTranslation();
   const TIERS = [
     { id: 'green', label: t('review.tierGreen', '🟢 低风险'), desc: t('review.tierGreenDesc', '可直接应用'), color: 'badge-green' },
@@ -348,7 +352,13 @@ function DiffCard({ diff, onApply, onReject, applying, rejecting, isActive }: Di
             </span>
           )}
           <span className="text-xs text-slate-500 dark:text-slate-400">
-            {t('review.entity', '实体：')}<span className="font-mono text-primary-600 dark:text-primary-400">{diff.slug}</span>
+            {t('review.entity', '实体：')}
+            <button
+              onClick={() => navigate(`/wiki/${diff.slug}`)}
+              className="font-mono text-primary-600 underline dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+            >
+              {diff.slug}
+            </button>
           </span>
           <span className="text-xs text-slate-500 dark:text-slate-400">
             {t('review.type', '类型：')}{diff.type}

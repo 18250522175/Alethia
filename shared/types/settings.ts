@@ -5,6 +5,8 @@ export type Language = 'zh-CN' | 'en' | 'ja';
 export interface AppearanceSettings {
   theme: ThemeMode;
   fontSize: FontSize;
+  density?: 'compact' | 'comfortable' | 'spacious';
+  accentColor?: 'blue' | 'purple' | 'green' | 'orange' | 'pink';
 }
 
 export interface GeneralSettings {

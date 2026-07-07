@@ -13,6 +13,7 @@ import {
   CaretUp,
   Archive,
   ArrowClockwise,
+  X,
   FilePlus,
   Pencil,
   FileX
@@ -59,6 +60,13 @@ export default function ChangelogPage() {
       queryClient.invalidateQueries({ queryKey: ['changelog'] });
     }
   });
+
+  const handleRollback = (batchId: string) => {
+    if (!confirm('确定要回滚此批次吗？此操作将恢复已变更的文件，可能触发知识库结构重建。')) {
+      return;
+    }
+    rollbackMutation.mutate(batchId);
+  };
 
   const handleCopy = async (batchId: string) => {
     await copyToClipboard(batchId);
@@ -156,7 +164,7 @@ export default function ChangelogPage() {
                     copied={copiedId === batch.batchId}
                     onCopy={() => handleCopy(batch.batchId)}
                     onToggle={() => toggleTargets(batch.batchId)}
-                    onRollback={() => rollbackMutation.mutate(batch.batchId)}
+                    onRollback={() => handleRollback(batch.batchId)}
                     rollingBack={rollbackMutation.isPending && rollbackMutation.variables === batch.batchId}
                   />
                 ))}
@@ -198,9 +206,19 @@ export default function ChangelogPage() {
 
       {rollbackMutation.data && (
         <div className="card border-green-300 bg-green-50 p-4 text-sm dark:border-green-700 dark:bg-green-900/20">
-          <strong>回滚成功：</strong>
-          已恢复 {rollbackMutation.data.restoredFiles.length} 个文件
-          {rollbackMutation.data.rebuildTriggered && ' · 已触发结构重建'}
+          <div className="flex items-start justify-between">
+            <div>
+              <strong>回滚成功：</strong>
+              已恢复 {rollbackMutation.data.restoredFiles.length} 个文件
+              {rollbackMutation.data.rebuildTriggered && ' · 已触发结构重建'}
+            </div>
+            <button
+              onClick={() => rollbackMutation.reset()}
+              className="ml-3 rounded p-1 text-slate-400 hover:bg-white/50 hover:text-slate-600 dark:hover:bg-slate-700/50 dark:hover:text-slate-200"
+            >
+              <X size={16} />
+            </button>
+          </div>
         </div>
       )}
     </div>

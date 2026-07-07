@@ -93,7 +93,8 @@ export default function GraphFullPage() {
   const graphQuery = useQuery({
     queryKey: ['graph', timePeriod],
     queryFn: () => api.getGraphData(),
-    staleTime: 60_000
+    staleTime: 60_000,
+    refetchOnMount: true
   });
 
   const clusters = useMemo(() => {
@@ -911,7 +912,17 @@ export default function GraphFullPage() {
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500 dark:text-slate-400">关联度</span>
-                <span>高</span>
+                <span>
+                  {(() => {
+                    if (!cyInstanceRef.current) return '高';
+                    const node = cyInstanceRef.current.getElementById(selectedNode.id);
+                    const degree = node?.degree?.() || 0;
+                    if (degree >= 10) return '极高';
+                    if (degree >= 5) return '高';
+                    if (degree >= 2) return '中';
+                    return '低';
+                  })()}
+                </span>
               </div>
             </div>
             <button
@@ -939,7 +950,14 @@ export default function GraphFullPage() {
               </button>
             </div>
             <div className="mb-2 text-xs text-slate-500 dark:text-slate-400">
-              {pathStartNode} → {pathEndNode}
+              {(() => {
+                if (!cyInstanceRef.current) return `${pathStartNode} → ${pathEndNode}`;
+                const startNode = cyInstanceRef.current.getElementById(pathStartNode || '');
+                const endNode = cyInstanceRef.current.getElementById(pathEndNode || '');
+                const startLabel = startNode?.data('label') || pathStartNode;
+                const endLabel = endNode?.data('label') || pathEndNode;
+                return `${startLabel} → ${endLabel}`;
+              })()}
             </div>
             <div className="space-y-2">
               {highlightedPaths.map((path, i) => (

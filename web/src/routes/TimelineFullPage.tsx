@@ -69,19 +69,21 @@ export default function TimelineFullPage() {
   ];
 
   const timelineQuery = useInfiniteQuery({
-    queryKey: ['timeline', slug],
+    queryKey: ['timeline', slug, range],
     queryFn: ({ pageParam = 0 }) =>
       api.getTimeline({
         slug: slug || undefined,
         limit: PAGE_SIZE,
-        offset: pageParam
+        offset: pageParam,
+        range
       }),
     initialPageParam: 0,
     getNextPageParam: (last, allPages) => {
       const loaded = allPages.reduce((sum, p) => sum + (p.items?.length || 0), 0);
       return loaded < last.total ? loaded : undefined;
     },
-    staleTime: 30_000
+    staleTime: 30_000,
+    refetchOnMount: true
   });
 
   const allItems = useMemo<TimelineItem[]>(() => {

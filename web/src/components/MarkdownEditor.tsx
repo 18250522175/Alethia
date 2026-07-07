@@ -75,6 +75,7 @@ const ALLOWED_EXTENSIONS: string[] = [
 
 export default function MarkdownEditor({ value, onChange }: MarkdownEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { addNotification } = useNotification();
 
   const [isOpen, setIsOpen] = useState(false);
@@ -411,7 +412,7 @@ export default function MarkdownEditor({ value, onChange }: MarkdownEditorProps)
     { icon: Quotes, label: 'Quote', action: () => insertAtCursor('\n> ') },
     { icon: Code, label: 'Code', action: () => wrapSelection('`', '`') },
     { icon: LinkIcon, label: 'Link', action: () => wrapSelection('[', '](url)') },
-    { icon: Upload, label: 'Upload', action: () => {} }
+    { icon: Upload, label: 'Upload', action: () => fileInputRef.current?.click() }
   ];
 
   return (
@@ -433,6 +434,17 @@ export default function MarkdownEditor({ value, onChange }: MarkdownEditorProps)
           );
         })}
       </div>
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*,.pdf,.doc,.docx,.md,.txt,.json"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) handleFileUpload(file);
+        }}
+        className="hidden"
+      />
 
       {/* Textarea wrapper */}
       <div 

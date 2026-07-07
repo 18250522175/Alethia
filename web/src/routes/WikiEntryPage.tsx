@@ -594,42 +594,44 @@ export default function WikiEntryPage() {
 
       {/* entry timeline */}
       <EntryTimeline
-        events={archiveVersionsQuery.data?.versions?.map((v, i) => ({
-          id: String(i + 1),
-          type: i === 0 ? 'edit' : 'create',
-          title: i === 0 ? '内容更新' : `版本 v${v.version}`,
-          description: v.changeSummary || `版本 v${v.version} 更新`,
-          timestamp: v.updatedAt,
-          version: String(v.version),
-          author: '系统'
-        })) || [
-          {
-            id: '1',
-            type: 'edit',
-            title: '内容更新',
-            description: `版本 v${page.version} 更新`,
-            timestamp: page.updatedAt,
-            version: String(page.version),
-            author: 'AI 助手'
-          },
-          {
-            id: '2',
-            type: 'extract',
-            title: '知识提取',
-            description: '从源文档中自动提取知识',
-            timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24 * 3).toISOString(),
-            author: '系统'
-          },
-          {
-            id: '3',
-            type: 'create',
-            title: '条目创建',
-            description: '初始版本创建',
-            timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24 * 7).toISOString(),
-            version: '1',
-            author: '系统'
+        events={(() => {
+          const versions = archiveVersionsQuery.data?.versions || [];
+          if (versions.length > 0) {
+            const events: Array<{ id: string; type: 'create' | 'edit'; title: string; description: string; timestamp: string; version: string; author: string }> = [];
+            versions.forEach((v, i) => {
+              events.push({
+                id: String(v.version),
+                type: i === versions.length - 1 ? 'create' : 'edit',
+                title: i === versions.length - 1 ? '条目创建' : `版本 v${v.version} 更新`,
+                description: v.changeSummary || `版本 v${v.version} 更新`,
+                timestamp: v.updatedAt,
+                version: String(v.version),
+                author: v.author || '系统'
+              });
+            });
+            return events.reverse();
           }
-        ]}
+          return [
+            {
+              id: String(page.version),
+              type: 'edit' as const,
+              title: '内容更新',
+              description: `版本 v${page.version} 更新`,
+              timestamp: page.updatedAt,
+              version: String(page.version),
+              author: 'AI 助手'
+            },
+            {
+              id: '1',
+              type: 'create' as const,
+              title: '条目创建',
+              description: '初始版本创建',
+              timestamp: page.updatedAt,
+              version: '1',
+              author: '系统'
+            }
+          ];
+        })()}
       />
     </div>
   );

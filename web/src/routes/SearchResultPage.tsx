@@ -28,6 +28,7 @@ import { formatRelativeTime, formatFileSize, truncateText } from '../lib/format'
 import HighlightText from '../components/HighlightText';
 
 const PREVIEW_COUNT = 10;
+const PAGE_SIZE = 20;
 const HISTORY_STORAGE_KEY = 'search_history_v1';
 const HISTORY_MAX_ITEMS = 10;
 
@@ -159,6 +160,11 @@ export default function SearchResultPage() {
   const query = (searchParams.get('q') || '').trim();
   const [activeTab, setActiveTab] = useState<TabId>('pages');
   const [expandedGroups, setExpandedGroups] = useState<Set<TabId>>(new Set());
+  const [loadedCounts, setLoadedCounts] = useState<Record<TabId, number>>({
+    pages: PREVIEW_COUNT,
+    files: PREVIEW_COUNT,
+    conversations: PREVIEW_COUNT
+  });
 
   const tabs: { id: TabId; label: string; Icon: typeof FileText }[] = [
     { id: 'pages', label: t('search.pages', '条目'), Icon: FileText },
@@ -204,8 +210,14 @@ export default function SearchResultPage() {
       const next = new Set(prev);
       if (next.has(id)) {
         next.delete(id);
+        setLoadedCounts(p => ({ ...p, [id]: PREVIEW_COUNT }));
       } else {
         next.add(id);
+        const currentLoaded = loadedCounts[id];
+        const total = counts[id];
+        if (currentLoaded < total) {
+          setLoadedCounts(p => ({ ...p, [id]: Math.min(total, currentLoaded + PAGE_SIZE) }));
+        }
       }
       return next;
     });
@@ -438,6 +450,7 @@ export default function SearchResultPage() {
               expanded={activeTab === 'pages' || expandedGroups.has('pages')}
               onToggle={() => toggleGroup('pages')}
               t={t}
+              loadedCount={loadedCounts.pages}
             >
               {pages.map(p => (
                 <PageResultCard key={p.slug} page={p} query={query} filters={activeFilters} />
@@ -452,6 +465,7 @@ export default function SearchResultPage() {
               expanded={activeTab === 'files' || expandedGroups.has('files')}
               onToggle={() => toggleGroup('files')}
               t={t}
+              loadedCount={loadedCounts.files}
             >
               {files.map(f => (
                 <FileResultCard key={f.hash} file={f} query={query} filters={activeFilters} />
@@ -466,6 +480,7 @@ export default function SearchResultPage() {
               expanded={activeTab === 'conversations' || expandedGroups.has('conversations')}
               onToggle={() => toggleGroup('conversations')}
               t={t}
+              loadedCount={loadedCounts.conversations}
             >
               {conversations.map(c => (
                 <ConversationResultCard key={c.id} conv={c} query={query} filters={activeFilters} />
@@ -1207,7 +1222,8 @@ function ResultGroup({
   expanded,
   onToggle,
   children,
-  t
+  t,
+  loadedCount
 }: {
   id: TabId;
   title: string;
@@ -1217,6 +1233,7 @@ function ResultGroup({
   onToggle: () => void;
   children: React.ReactNode;
   t: any;
+  loadedCount: number;
 }) {
   if (total === 0) {
     return (
@@ -1230,9 +1247,10 @@ function ResultGroup({
     );
   }
 
-  const shownChildren = expanded ? children : (
+  const displayCount = expanded ? loadedCount : PREVIEW_COUNT;
+  const shownChildren = (
     <>
-      {Array.isArray(children) ? children.slice(0, PREVIEW_COUNT) : children}
+      {Array.isArray(children) ? children.slice(0, displayCount) : children}
     </>
   );
 

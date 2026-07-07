@@ -96,10 +96,12 @@ export default function TopBar({ onToggleSidebar }: TopBarProps) {
   });
 
   const budgetData = {
-    daily: budgetQuery.data?.period === 'daily' 
-      ? { used: budgetQuery.data.used, total: budgetQuery.data.total }
+    daily: budgetQuery.data
+      ? { used: budgetQuery.data.dailyUsed, total: budgetQuery.data.dailyUsed + budgetQuery.data.daily }
       : { used: 2.35, total: 5 },
-    monthly: { used: 45.8, total: 100 }
+    monthly: budgetQuery.data
+      ? { used: budgetQuery.data.monthlyUsed, total: budgetQuery.data.monthlyUsed + budgetQuery.data.monthly }
+      : { used: 45.8, total: 100 }
   };
 
   return (
