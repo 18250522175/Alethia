@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export const ThemeModeSchema = z.enum(['system', 'light', 'dark']);
 export const FontSizeSchema = z.enum(['small', 'medium', 'large']);
-export const LanguageSchema = z.enum(['zh-CN', 'en', 'ja']);
+export const LanguageSchema = z.enum(['zh-CN', 'en']);
 
 export const AppearanceSettingsSchema = z.object({
   theme: ThemeModeSchema,

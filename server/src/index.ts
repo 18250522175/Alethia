@@ -58,6 +58,8 @@ app.use('*', rateLimiter({
   max: 60
 }));
 
+// 轻量级存活检查：返回服务状态（DB/LLM/Embedding），用于 StatusBar 快速轮询
+// 完整仪表盘数据见 /api/health-dashboard（routes/health.ts）
 app.get('/health', async (c) => {
   let dbStatus: 'connected' | 'disconnected' = 'disconnected';
   try {

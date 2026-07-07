@@ -237,7 +237,8 @@ class BrainAPI {
     try {
       const pool = getPool();
 
-      const [nodesResult, edgesResult, pendingResult, ghostResult, versionsResult, observedResult] = await Promise.all([
+      const [nodesResult, edgesResult, pendingResult, ghostResult, versionsResult, observedResult,
+             brokenResult, orphanedResult, trendResult, evalResult] = await Promise.all([
         pool.query('SELECT COUNT(*) as count FROM pages'),
         pool.query('SELECT COUNT(*) as count FROM links'),
         pool.query(`SELECT
@@ -250,7 +251,18 @@ class BrainAPI {
                       COUNT(*) FILTER (WHERE archived = false) as active,
                       COUNT(*) FILTER (WHERE archived = true) as archived
                     FROM knowledge_versions`),
-        pool.query('SELECT COUNT(*) as count FROM observed_files')
+        pool.query('SELECT COUNT(*) as count FROM observed_files'),
+        pool.query('SELECT COUNT(*) as count FROM links WHERE orphaned = true'),
+        pool.query(`SELECT COUNT(*) as count FROM pages p
+                    WHERE NOT EXISTS (SELECT 1 FROM links WHERE source_slug = p.slug AND NOT orphaned)
+                      AND NOT EXISTS (SELECT 1 FROM links WHERE target_slug = p.slug AND NOT orphaned)`),
+        pool.query(`SELECT DATE(created_at) as day, COUNT(*) as cnt
+                    FROM auto_change_log
+                    WHERE created_at > NOW() - INTERVAL '7 days'
+                    GROUP BY DATE(created_at)
+                    ORDER BY day`),
+        pool.query(`SELECT COUNT(*) FILTER (WHERE passed = true) as passed, COUNT(*) as total
+                    FROM eval_results WHERE created_at > NOW() - INTERVAL '30 days'`)
       ]);
 
       const env = loadEnv();
@@ -259,12 +271,15 @@ class BrainAPI {
       const alerts = budgetManager.getAlerts();
       const budgetExceeded = alerts.some(a => a.metric === 'budget_exceeded');
 
+      const evalPassed = parseInt(evalResult.rows[0]?.passed || '0');
+      const evalTotal = parseInt(evalResult.rows[0]?.total || '0');
+
       return {
         scale: {
           nodes: parseInt(nodesResult.rows[0].count),
           edges: parseInt(edgesResult.rows[0].count),
           pages: parseInt(nodesResult.rows[0].count),
-          trend: []
+          trend: trendResult.rows.map((r: any) => ({ date: r.day, count: parseInt(r.cnt) }))
         },
         contextHeatmap: [],
         reviewBacklog: {
@@ -272,7 +287,10 @@ class BrainAPI {
           yellow: parseInt(pendingResult.rows[0].yellow || '0'),
           red: parseInt(pendingResult.rows[0].red || '0')
         },
-        aiQuality: { correctness: 0, trend: [] },
+        aiQuality: {
+          correctness: evalTotal > 0 ? evalPassed / evalTotal : 0,
+          trend: []
+        },
         budget: {
           daily: { spent: snapshot.dailyUsed, limit: snapshot.dailyBudget, exceeded: snapshot.remaining.daily <= 0 },
           monthly: { spent: snapshot.monthlyUsed, limit: snapshot.monthlyBudget, exceeded: snapshot.remaining.monthly <= 0 },
@@ -284,8 +302,8 @@ class BrainAPI {
           archivedVersions: parseInt(versionsResult.rows[0].archived || '0')
         },
         cacheHitRate: 0,
-        brokenEvidenceChains: 0,
-        orphanedFiles: 0,
+        brokenEvidenceChains: parseInt(brokenResult.rows[0].count || '0'),
+        orphanedFiles: parseInt(orphanedResult.rows[0].count || '0'),
         observedFiles: parseInt(observedResult.rows[0].count || '0'),
         lastUpdated: new Date().toISOString()
       };
@@ -938,11 +956,13 @@ ${relationsBlock}
             const targetFile = join(wikiPath, `${row.slug}.md`);
             if (existsSync(targetFile)) {
               const currentContent = storage.readFile(targetFile);
-              const similarity = currentContent.length > 0 && row.expected_output.length > 0
-                ? Math.min(currentContent.length, row.expected_output.length) /
-                  Math.max(currentContent.length, row.expected_output.length)
-                : 0;
-              passed = similarity >= 0.5;
+              // 使用词级 Jaccard 相似度替代简单的长度比
+              const currentWords = new Set(currentContent.toLowerCase().split(/\s+/).filter(w => w.length > 1));
+              const expectedWords = new Set(row.expected_output.toLowerCase().split(/\s+/).filter(w => w.length > 1));
+              const intersection = new Set([...currentWords].filter(w => expectedWords.has(w)));
+              const union = new Set([...currentWords, ...expectedWords]);
+              const similarity = union.size > 0 ? intersection.size / union.size : 0;
+              passed = similarity >= 0.3;
               score = similarity;
             }
           }

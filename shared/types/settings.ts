@@ -1,6 +1,7 @@
 export type ThemeMode = 'system' | 'light' | 'dark';
 export type FontSize = 'small' | 'medium' | 'large';
-export type Language = 'zh-CN' | 'en' | 'ja';
+/** 界面显示语言（UI locale），不同于 LanguageSettings（翻译/多语言处理配置） */
+export type Language = 'zh-CN' | 'en';
 
 export interface AppearanceSettings {
   theme: ThemeMode;
@@ -16,6 +17,7 @@ export interface GeneralSettings {
   timeFormat: '24h' | '12h';
 }
 
+/** 翻译与多语言处理配置，不同于 Settings.language（界面 UI 语言） */
 export interface LanguageSettings {
   translateEvidence: boolean;
   translationModel: string;
