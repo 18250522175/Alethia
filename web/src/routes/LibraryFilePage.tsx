@@ -272,7 +272,7 @@ export default function LibraryFilePage() {
                 {evidenceSpans.slice(0, 12).map(span => (
                   <li
                     key={span.spanId}
-                    className="rounded-md bg-slate-50 px-2 py-1.5 text-xs dark:bg-slate-700/40"
+                    className="cursor-pointer rounded-md bg-slate-50 px-2 py-1.5 text-xs transition-colors hover:bg-primary-50 dark:bg-slate-700/40 dark:hover:bg-primary-900/20"
                   >
                     <div className="mb-0.5 flex items-center justify-between gap-2">
                       <span className="font-mono text-[10px] text-slate-500 dark:text-slate-400">

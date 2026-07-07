@@ -86,8 +86,10 @@ export default function GraphFullPage() {
   useEffect(() => { pathStartNodeRef.current = pathStartNode; }, [pathStartNode]);
   useEffect(() => { pathEndNodeRef.current = pathEndNode; }, [pathEndNode]);
 
+  const [timeRange, setTimeRange] = useState({ min: 0, max: 100 });
+
   const graphQuery = useQuery({
-    queryKey: ['graph'],
+    queryKey: ['graph', timePeriod],
     queryFn: () => api.getGraphData(),
     staleTime: 60_000
   });
@@ -488,7 +490,22 @@ export default function GraphFullPage() {
     const clusterNodes = cy.nodes(`node[type="${clusterType}"]`);
     clusterNodes.addClass('highlighted');
     cy.nodes().not(clusterNodes).addClass('dimmed');
+    setTimeout(() => {
+      navigate(`/search?q=&type=${clusterType}`);
+    }, 500);
   };
+
+  const filterNodesByTimePeriod = useCallback(() => {
+    const cy = cyInstanceRef.current;
+    if (!cy) return;
+    cy.nodes().removeClass('dimmed');
+  }, []);
+
+  useEffect(() => {
+    if (timePeriod !== 'all') {
+      filterNodesByTimePeriod();
+    }
+  }, [timePeriod, filterNodesByTimePeriod]);
 
   const nodeCount = graphQuery.data?.nodes?.length || 0;
   const edgeCount = graphQuery.data?.edges?.length || 0;
@@ -604,7 +621,8 @@ export default function GraphFullPage() {
               type="range"
               min="0"
               max="100"
-              defaultValue="50"
+              value={timeRange.min}
+              onChange={(e) => setTimeRange(prev => ({ ...prev, min: parseInt(e.target.value) }))}
               className="w-full accent-primary-500"
             />
           </div>

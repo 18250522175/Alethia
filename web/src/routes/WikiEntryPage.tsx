@@ -80,6 +80,13 @@ export default function WikiEntryPage() {
     staleTime: 30_000
   });
 
+  const archiveVersionsQuery = useQuery({
+    queryKey: ['archive-versions', slug],
+    queryFn: () => api.getArchiveVersions(slug),
+    enabled: !!slug,
+    staleTime: 60_000
+  });
+
   const aliasMapQuery = useQuery({
     queryKey: ['alias-map'],
     queryFn: () => api.getAliasMap(),
@@ -248,10 +255,14 @@ export default function WikiEntryPage() {
               {page.contexts.length > 0 && (
                 <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs">
                   {page.contexts.map(ctx => (
-                    <span key={ctx} className="badge badge-blue">
+                    <button
+                      key={ctx}
+                      onClick={() => navigate(`/search?q=&context=${ctx}`)}
+                      className="badge badge-blue cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/30"
+                    >
                       <Tag size={10} className="mr-1" />
                       {ctx}
-                    </span>
+                    </button>
                   ))}
                 </div>
               )}
@@ -569,7 +580,15 @@ export default function WikiEntryPage() {
 
       {/* entry timeline */}
       <EntryTimeline
-        events={[
+        events={archiveVersionsQuery.data?.versions?.map((v, i) => ({
+          id: String(i + 1),
+          type: i === 0 ? 'edit' : 'create',
+          title: i === 0 ? '内容更新' : `版本 v${v.version}`,
+          description: v.changeSummary || `版本 v${v.version} 更新`,
+          timestamp: v.updatedAt,
+          version: String(v.version),
+          author: '系统'
+        })) || [
           {
             id: '1',
             type: 'edit',

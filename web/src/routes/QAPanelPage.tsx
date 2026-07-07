@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   PaperPlaneTilt,
@@ -18,7 +18,8 @@ import {
   Archive,
   ArrowsIn,
   ArrowsOut,
-  Clock
+  Clock,
+  Trash
 } from '@phosphor-icons/react';
 import api from '../lib/api';
 import MarkdownRenderer from '../components/MarkdownRenderer';
@@ -67,6 +68,7 @@ export default function QAPanelPage() {
   const { t } = useTranslation();
   const { conversationId: urlConvId } = useParams<{ conversationId?: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [conversationId, setConversationId] = useState<string | undefined>(urlConvId);
@@ -89,6 +91,31 @@ export default function QAPanelPage() {
     updatedAt: new Date(c.updatedAt).getTime(),
     compressed: false
   })) || [];
+
+  const conversationDetailQuery = useQuery({
+    queryKey: ['conversation', urlConvId],
+    queryFn: () => api.getConversation(urlConvId!),
+    enabled: !!urlConvId,
+    staleTime: 60_000
+  });
+
+  useEffect(() => {
+    if (conversationDetailQuery.data?.items && conversationDetailQuery.data.items.length > 0) {
+      const chatMessages: ChatMessage[] = conversationDetailQuery.data.items.map((msg: any) => ({
+        id: msg.id || String(Math.random()),
+        role: msg.role === 'user' ? 'user' : 'assistant',
+        content: msg.content || '',
+        sources: msg.sources || [],
+        confidence: msg.confidence,
+        relatedEntities: msg.relatedEntities,
+        tokensUsed: msg.tokensUsed,
+        estimatedCost: msg.estimatedCost,
+        conversationId: urlConvId,
+        ts: msg.createdAt ? new Date(msg.createdAt).getTime() : Date.now()
+      }));
+      setMessages(chatMessages);
+    }
+  }, [conversationDetailQuery.data, urlConvId]);
 
   const feedbackMutation = useMutation({
     mutationFn: ({ messageId, helpful }: { messageId: string; helpful: boolean }) =>
@@ -181,28 +208,28 @@ export default function QAPanelPage() {
 
   const handleSelectConversation = (id: string) => {
     setConversationId(id);
+    setMessages([]);
     navigate(`/qa/${id}`);
-    const found = conversations.find(c => c.id === id);
-    if (found) {
-      setMessages([
-        {
-          id: '1',
-          role: 'user',
-          content: found.preview,
-          ts: found.updatedAt
-        },
-        {
-          id: '2',
-          role: 'assistant',
-          content: '这是一个示例回答，展示对话历史记录的功能。实际应用中会从服务器加载历史消息。',
-          ts: found.updatedAt + 1000 * 60,
-          confidence: 0.85,
-          tokensUsed: 512,
-          estimatedCost: 0.0023
-        }
-      ]);
-    }
     setShowSidebar(false);
+  };
+
+  const deleteConversationMutation = useMutation({
+    mutationFn: (id: string) => api.deleteConversation(id),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      if (conversationId === variables) {
+        setConversationId(undefined);
+        setMessages([]);
+        navigate('/qa');
+      }
+    }
+  });
+
+  const handleDeleteConversation = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (confirm(t('qa.deleteConfirm', '确定删除此对话？'))) {
+      deleteConversationMutation.mutate(id);
+    }
   };
 
   const toggleCompressConversation = (id: string, e: React.MouseEvent) => {
@@ -287,13 +314,22 @@ export default function QAPanelPage() {
                           {formatConvTime(conv.updatedAt)}
                         </p>
                       </div>
-                      <button
-                        onClick={(e) => toggleCompressConversation(conv.id, e)}
-                        className="flex-shrink-0 rounded p-1 text-slate-400 opacity-0 transition-opacity hover:bg-slate-100 hover:text-amber-500 group-hover:opacity-100 dark:hover:bg-slate-700"
-                        title={conv.compressed ? t('qa.expandChat', '展开对话') : t('qa.compressChat', '压缩对话')}
-                      >
-                        {conv.compressed ? <ArrowsOut size={12} /> : <ArrowsIn size={12} />}
-                      </button>
+                      <div className="flex flex-col gap-1">
+                        <button
+                          onClick={(e) => toggleCompressConversation(conv.id, e)}
+                          className="flex-shrink-0 rounded p-1 text-slate-400 opacity-0 transition-opacity hover:bg-slate-100 hover:text-amber-500 group-hover:opacity-100 dark:hover:bg-slate-700"
+                          title={conv.compressed ? t('qa.expandChat', '展开对话') : t('qa.compressChat', '压缩对话')}
+                        >
+                          {conv.compressed ? <ArrowsOut size={12} /> : <ArrowsIn size={12} />}
+                        </button>
+                        <button
+                          onClick={(e) => handleDeleteConversation(conv.id, e)}
+                          className="flex-shrink-0 rounded p-1 text-slate-400 opacity-0 transition-opacity hover:bg-red-100 hover:text-red-500 group-hover:opacity-100 dark:hover:bg-red-900/30"
+                          title={t('qa.deleteChat', '删除对话')}
+                        >
+                          <Trash size={12} />
+                        </button>
+                      </div>
                     </button>
                   ))}
                 </div>
@@ -381,7 +417,7 @@ export default function QAPanelPage() {
           ) : (
             <div className="space-y-6">
               {messages.map(msg => (
-                <MessageBubble key={msg.id} message={msg} viewMode={viewMode} onEvidenceClick={handleEvidenceClick} onFeedback={handleSubmitFeedback} />
+                <MessageBubble key={msg.id} message={msg} viewMode={viewMode} onEvidenceClick={handleEvidenceClick} onFeedback={handleSubmitFeedback} navigate={navigate} />
               ))}
               {askMutation.isPending && (
                 <div className="flex items-center gap-2 text-sm text-slate-500">
@@ -418,7 +454,7 @@ export default function QAPanelPage() {
   );
 }
 
-function MessageBubble({ message, viewMode, onEvidenceClick, onFeedback }: { message: ChatMessage; viewMode: ViewMode; onEvidenceClick?: (spanId: string) => void; onFeedback?: (messageId: string, helpful: boolean) => void }) {
+function MessageBubble({ message, viewMode, onEvidenceClick, onFeedback, navigate }: { message: ChatMessage; viewMode: ViewMode; onEvidenceClick?: (spanId: string) => void; onFeedback?: (messageId: string, helpful: boolean) => void; navigate?: (to: string) => void }) {
   const { t } = useTranslation();
   const isUser = message.role === 'user';
   const confidenceColor =
@@ -496,12 +532,14 @@ function MessageBubble({ message, viewMode, onEvidenceClick, onFeedback }: { mes
               <div className="flex flex-wrap items-center gap-1">
                 <Tag size={12} />
                 {message.relatedEntities.slice(0, 3).map((e, i) => (
-                  <span
+                  <button
                     key={i}
-                    className="rounded bg-primary-100 px-1.5 py-0.5 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300"
+                    onClick={() => navigate?.(`/wiki/${e.slug}`)}
+                    className="rounded bg-primary-100 px-1.5 py-0.5 text-xs font-medium text-primary-700 transition-colors hover:bg-primary-200 dark:bg-primary-900/30 dark:text-primary-300 dark:hover:bg-primary-800/30"
+                    title={t('qa.goToEntity', '跳转到实体')}
                   >
                     {e.title}
-                  </span>
+                  </button>
                 ))}
               </div>
             )}

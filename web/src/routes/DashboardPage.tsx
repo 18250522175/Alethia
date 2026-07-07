@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import {
   Gauge,
   Database,
@@ -46,6 +47,7 @@ ChartJS.register(
 export default function DashboardPage() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   const healthQuery = useQuery({
     queryKey: ['health-dashboard'],
@@ -209,24 +211,28 @@ export default function DashboardPage() {
                 label="页面数"
                 value={data.scale.pages}
                 color="bg-blue-500"
+                onClick={() => navigate('/wiki')}
               />
               <StatCard
                 icon={<TrendUp size={20} />}
                 label="节点数"
                 value={data.scale.nodes}
                 color="bg-indigo-500"
+                onClick={() => navigate('/graph')}
               />
               <StatCard
                 icon={<LinkIcon size={20} />}
                 label="边数"
                 value={data.scale.edges}
                 color="bg-purple-500"
+                onClick={() => navigate('/graph')}
               />
               <StatCard
                 icon={<Archive size={20} />}
                 label={t('health.activeVersions')}
                 value={data.archiveStatus.activeVersions}
                 color="bg-green-500"
+                onClick={() => navigate('/wiki')}
               />
             </div>
           </section>
@@ -265,9 +271,9 @@ export default function DashboardPage() {
                 {t('health.reviewBacklog')}
               </h2>
               <div className="space-y-3">
-                <BacklogRow label="🟢 低风险" count={data.reviewBacklog.green} color="text-green-600" />
-                <BacklogRow label="🟡 待确认" count={data.reviewBacklog.yellow} color="text-yellow-600" />
-                <BacklogRow label="🔴 高风险" count={data.reviewBacklog.red} color="text-red-600" />
+                <BacklogRow label="🟢 低风险" count={data.reviewBacklog.green} color="text-green-600" onClick={() => navigate('/review?risk=low')} />
+                <BacklogRow label="🟡 待确认" count={data.reviewBacklog.yellow} color="text-yellow-600" onClick={() => navigate('/review?risk=medium')} />
+                <BacklogRow label="🔴 高风险" count={data.reviewBacklog.red} color="text-red-600" onClick={() => navigate('/review?risk=high')} />
               </div>
               <div className="mt-4 border-t border-slate-200 pt-3 text-xs text-slate-500 dark:border-slate-700 dark:text-slate-400">
                 总计：{data.reviewBacklog.green + data.reviewBacklog.yellow + data.reviewBacklog.red} 条待审核
@@ -341,18 +347,21 @@ export default function DashboardPage() {
               value={data.ghostRelations}
               color={data.ghostRelations > 0 ? 'bg-red-500' : 'bg-slate-400'}
               warning={data.ghostRelations > 0}
+              onClick={() => data.ghostRelations > 0 && navigate('/graph')}
             />
             <StatCard
               icon={<Archive size={20} />}
               label={t('health.archivedVersions')}
               value={data.archiveStatus.archivedVersions}
               color="bg-slate-500"
+              onClick={() => navigate('/wiki')}
             />
             <StatCard
               icon={<Files size={20} />}
               label="观察文件数"
               value={data.observedFiles}
               color="bg-cyan-500"
+              onClick={() => navigate('/library')}
             />
             <StatCard
               icon={<Warning size={20} />}
@@ -360,6 +369,7 @@ export default function DashboardPage() {
               value={data.brokenEvidenceChains}
               color={data.brokenEvidenceChains > 0 ? 'bg-red-500' : 'bg-green-500'}
               warning={data.brokenEvidenceChains > 0}
+              onClick={() => data.brokenEvidenceChains > 0 && navigate('/graph')}
             />
           </div>
 
@@ -386,16 +396,21 @@ function StatCard({
   label,
   value,
   color,
-  warning
+  warning,
+  onClick
 }: {
   icon: React.ReactNode;
   label: string;
   value: number;
   color: string;
   warning?: boolean;
+  onClick?: () => void;
 }) {
   return (
-    <div className={`card p-4 ${warning ? 'ring-2 ring-red-300' : ''}`}>
+    <button
+      onClick={onClick}
+      className={`card w-full p-4 text-left transition-all ${warning ? 'ring-2 ring-red-300' : ''} ${onClick ? 'cursor-pointer hover:shadow-md hover:-translate-y-0.5' : ''}`}
+    >
       <div className="flex items-center justify-between">
         <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${color} text-white`}>
           {icon}
@@ -403,16 +418,16 @@ function StatCard({
         <span className="text-2xl font-bold">{value.toLocaleString()}</span>
       </div>
       <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">{label}</div>
-    </div>
+    </button>
   );
 }
 
-function BacklogRow({ label, count, color }: { label: string; count: number; color: string }) {
+function BacklogRow({ label, count, color, onClick }: { label: string; count: number; color: string; onClick?: () => void }) {
   return (
-    <div className="flex items-center justify-between">
+    <button onClick={onClick} className={`flex w-full items-center justify-between transition-colors ${onClick ? 'cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 rounded p-1' : ''}`}>
       <span className={`text-sm ${color}`}>{label}</span>
       <span className="text-lg font-semibold">{count}</span>
-    </div>
+    </button>
   );
 }
 
