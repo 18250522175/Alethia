@@ -80,6 +80,7 @@ export default function MarkdownEditor({ value, onChange }: MarkdownEditorProps)
 
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [triggerStart, setTriggerStart] = useState(-1);
   const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0, lineHeight: 0 });
@@ -91,13 +92,13 @@ export default function MarkdownEditor({ value, onChange }: MarkdownEditorProps)
   const [paletteTriggerStart, setPaletteTriggerStart] = useState(-1);
 
   const { data: searchData, isFetching } = useQuery({
-    queryKey: ['entity-search', query],
-    queryFn: () => api.searchEntities(query, 8),
-    enabled: isOpen,
+    queryKey: ['entity-search', debouncedQuery],
+    queryFn: () => api.searchEntities(debouncedQuery, 8),
+    enabled: isOpen && debouncedQuery.length > 0,
     staleTime: 30_000
   });
 
-  const suggestions: SuggestionItem[] = searchData?.items ?? [];
+  const suggestions: SuggestionItem[] = debouncedQuery ? (searchData?.items ?? []) : [];
 
   const calculateSHA256 = useCallback(async (file: File): Promise<string> => {
     const arrayBuffer = await new Promise<ArrayBuffer>((resolve, reject) => {
@@ -231,6 +232,7 @@ export default function MarkdownEditor({ value, onChange }: MarkdownEditorProps)
   const closeAutocomplete = useCallback(() => {
     setIsOpen(false);
     setQuery('');
+    setDebouncedQuery('');
     setSelectedIndex(0);
     setTriggerStart(-1);
   }, []);
@@ -374,6 +376,13 @@ export default function MarkdownEditor({ value, onChange }: MarkdownEditorProps)
     textarea.addEventListener('scroll', handleScroll);
     return () => textarea.removeEventListener('scroll', handleScroll);
   }, [handleScroll]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedQuery(query);
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [query]);
 
   // Toolbar helpers
   const wrapSelection = useCallback((before: string, after: string = '') => {

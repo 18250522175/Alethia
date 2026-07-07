@@ -68,6 +68,16 @@ export default function GraphFullPage() {
     nodeId: '',
     nodeData: null
   });
+  const contextMenuStyle = useMemo(() => {
+    const menuWidth = 160;
+    const menuHeight = 120;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    return {
+      left: Math.max(0, Math.min(contextMenu.x, vw - menuWidth - 10)),
+      top: Math.max(0, Math.min(contextMenu.y, vh - menuHeight - 10))
+    };
+  }, [contextMenu.x, contextMenu.y]);
   const [selectedNode, setSelectedNode] = useState<{ id: string; data: any } | null>(null);
   const [focusNode, setFocusNode] = useState<string | null>(null);
   const [focusDegrees, setFocusDegrees] = useState<number>(2);
@@ -790,7 +800,7 @@ export default function GraphFullPage() {
         {contextMenu.visible && (
           <div
             className="absolute z-50 min-w-[160px] rounded-lg border border-slate-200 bg-white py-1 shadow-xl dark:border-slate-700 dark:bg-slate-800 animate-fade-in"
-            style={{ left: contextMenu.x, top: contextMenu.y }}
+            style={{ left: contextMenuStyle.left, top: contextMenuStyle.top }}
             onClick={(e) => e.stopPropagation()}
           >
             <button

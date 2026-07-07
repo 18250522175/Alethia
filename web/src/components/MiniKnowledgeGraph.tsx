@@ -114,7 +114,7 @@ export default function MiniKnowledgeGraph({
       const node = evt.target;
       const slug = node.data('id');
       if (slug !== currentSlug) {
-        navigate(`/wiki/${slug}`);
+        navigate(`/wiki/${encodeURIComponent(slug)}`);
       }
     });
 

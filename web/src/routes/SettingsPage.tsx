@@ -419,10 +419,11 @@ function BudgetSettings({ settings, onChange }: SettingsSectionProps) {
               type="number"
               value={settings.budget?.daily ?? 5}
               onChange={e => {
-                const val = parseFloat(e.target.value);
+                const val = Math.min(1000, Math.max(0, parseFloat(e.target.value) || 0));
                 onChange('budget.daily', val);
               }}
               min={0}
+              max={1000}
               step="0.1"
               className="input"
             />
@@ -432,8 +433,12 @@ function BudgetSettings({ settings, onChange }: SettingsSectionProps) {
             <input
               type="number"
               value={settings.budget?.monthly ?? 50}
-              onChange={e => onChange('budget.monthly', parseFloat(e.target.value))}
+              onChange={e => {
+                const val = Math.min(10000, Math.max(0, parseFloat(e.target.value) || 0));
+                onChange('budget.monthly', val);
+              }}
               min={0}
+              max={10000}
               step="1"
               className="input"
             />
@@ -443,8 +448,12 @@ function BudgetSettings({ settings, onChange }: SettingsSectionProps) {
             <input
               type="number"
               value={settings.budget?.perQuery ?? 0.5}
-              onChange={e => onChange('budget.perQuery', parseFloat(e.target.value))}
+              onChange={e => {
+                const val = Math.min(parseFloat(e.target.value) || 0, settings.budget?.daily ?? 5);
+                onChange('budget.perQuery', Math.max(0, val));
+              }}
               min={0}
+              max={settings.budget?.daily ?? 5}
               step="0.01"
               className="input"
             />

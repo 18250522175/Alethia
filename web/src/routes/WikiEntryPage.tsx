@@ -370,8 +370,15 @@ export default function WikiEntryPage() {
       </div>
 
       {saveMutation.isError && (
-        <div className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-700 dark:bg-red-900/30 dark:text-red-300">
-          {t('wiki.saveError', '保存失败，请稍后重试')}
+        <div className="flex items-center justify-between rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-700 dark:bg-red-900/30 dark:text-red-300">
+          <span>{t('wiki.saveError', '保存失败，请稍后重试')}</span>
+          <button
+            type="button"
+            onClick={handleCancelEdit}
+            className="ml-2 rounded px-2 py-0.5 text-xs text-red-700 underline hover:bg-red-100 dark:text-red-300 dark:hover:bg-red-900/50"
+          >
+            {t('wiki.revertChanges', '撤销更改')}
+          </button>
         </div>
       )}
 
@@ -385,7 +392,10 @@ export default function WikiEntryPage() {
           <span className="flex-shrink-0 text-xs font-medium text-slate-600 dark:text-slate-300">
             {t('evidence.title', '证据')}
           </span>
-          <EvidencePopover evidence={activeEvidence}>
+          <EvidencePopover
+            evidence={activeEvidence}
+            onNavigate={(fileHash) => navigate(`/library/${fileHash}`)}
+          >
             <button
               type="button"
               className="badge badge-yellow cursor-pointer font-mono hover:bg-yellow-200 dark:hover:bg-yellow-900/70"
@@ -594,6 +604,11 @@ export default function WikiEntryPage() {
 
       {/* entry timeline */}
       <EntryTimeline
+        onEventClick={(event) => {
+          if (event.version) {
+            navigate(`/wiki/${slug}/versions/${event.version}`);
+          }
+        }}
         events={(() => {
           const versions = archiveVersionsQuery.data?.items || [];
           if (versions.length > 0) {

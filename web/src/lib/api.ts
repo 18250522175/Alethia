@@ -10,20 +10,31 @@ const API_BASE = '/api';
 const DEFAULT_TIMEOUT = 30_000;
 
 function getToken(): string | null {
-  return localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token');
+  const token = localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token');
+  if (!token) return null;
+  const expiry = localStorage.getItem('auth_token_expiry') || sessionStorage.getItem('auth_token_expiry');
+  if (expiry && Date.now() > parseInt(expiry, 10)) {
+    clearToken();
+    return null;
+  }
+  return token;
 }
 
 function setToken(token: string, remember: boolean = true): void {
   if (remember) {
     localStorage.setItem('auth_token', token);
+    localStorage.setItem('auth_token_expiry', String(Date.now() + 7 * 24 * 60 * 60 * 1000));
   } else {
     sessionStorage.setItem('auth_token', token);
+    sessionStorage.setItem('auth_token_expiry', String(Date.now() + 7 * 24 * 60 * 60 * 1000));
   }
 }
 
 function clearToken(): void {
   localStorage.removeItem('auth_token');
+  localStorage.removeItem('auth_token_expiry');
   sessionStorage.removeItem('auth_token');
+  sessionStorage.removeItem('auth_token_expiry');
 }
 
 function isAuthenticated(): boolean {

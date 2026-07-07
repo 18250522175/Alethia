@@ -64,6 +64,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     },
     onSuccess: (newSettings) => {
       queryClient.setQueryData(['settings'], newSettings);
+      queryClient.invalidateQueries({ queryKey: ['budget'], exact: false });
     }
   });
 
