@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useParams } from 'react-router-dom';
 import {
   Palette,
   Gauge,
@@ -43,11 +44,19 @@ const sections = [
 
 export default function SettingsPage() {
   const { t } = useTranslation();
+  const { section } = useParams<{ section?: string }>();
   const { settings, isLoading, updateSettings } = useSettings();
-  const [activeSection, setActiveSection] = useState('appearance');
+  const [activeSection, setActiveSection] = useState(section || 'appearance');
   const [localSettings, setLocalSettings] = useState<any>({});
   const [isDirty, setIsDirty] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+
+  // 根据 URL section 参数设置活动标签页
+  useEffect(() => {
+    if (section && sections.find(s => s.id === section)) {
+      setActiveSection(section);
+    }
+  }, [section]);
 
   useEffect(() => {
     if (settings) {

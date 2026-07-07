@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from './lib/query';
 import { AuthProvider, useAuth } from './store/AuthContext';
@@ -25,11 +25,12 @@ import NotificationsPage from './routes/NotificationsPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();
+  const location = useLocation();
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
   const onboarded = localStorage.getItem('onboarding_completed');
-  if (!onboarded && window.location.pathname !== '/onboarding') {
+  if (!onboarded && location.pathname !== '/onboarding') {
     return <Navigate to="/onboarding" replace />;
   }
   return <>{children}</>;
