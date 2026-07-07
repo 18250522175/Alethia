@@ -44,6 +44,8 @@ services:
     container_name: alethia-server
     restart: unless-stopped
     depends_on:
+      init:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
     environment:
@@ -85,7 +87,7 @@ services:
       - frontend
       - backend
     healthcheck:
-      test: ["CMD-SHELL", "curl -fs http://localhost:3000/health || exit 1"]
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:3000/health > /dev/null 2>&1 || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
