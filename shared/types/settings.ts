@@ -116,7 +116,7 @@ export const RECOMMENDED_MODEL_ASSIGNMENT: ModelAssignment = {
 };
 
 export const defaultSettings: Settings = {
-  appearance: { theme: 'system', fontSize: 'medium' },
+  appearance: { theme: 'system', fontSize: 'medium', density: 'comfortable', accentColor: 'blue' },
   general: {
     knowledgeBaseName: '理想 AI 知识库',
     defaultHomePage: '/',
