@@ -23,7 +23,8 @@ import {
   Brain,
   ChatCircleDots,
   Plus,
-  Trash
+  Trash,
+  Link
 } from '@phosphor-icons/react';
 import api from '../lib/api';
 import MarkdownRenderer from '../components/MarkdownRenderer';
@@ -83,6 +84,13 @@ export default function WikiEntryPage() {
     queryKey: ['alias-map'],
     queryFn: () => api.getAliasMap(),
     staleTime: 300_000
+  });
+
+  const backlinksQuery = useQuery({
+    queryKey: ['wiki-backlinks', slug],
+    queryFn: () => api.getBacklinks(slug),
+    enabled: !!slug,
+    staleTime: 30_000
   });
 
   const saveMutation = useMutation({
@@ -204,12 +212,19 @@ export default function WikiEntryPage() {
   return (
     <div className="space-y-5 animate-fade-in">
       {/* breadcrumb */}
-      <nav className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+      <nav className="flex items-center gap-2 text-xs text-slate-400 dark:text-slate-500">
         <RouterLink to="/" className="hover:text-primary-600 dark:hover:text-primary-400">
-          {t('nav.wiki', '百科')}
+          知识百科
         </RouterLink>
         <span className="text-slate-300 dark:text-slate-600">/</span>
-        <span className="font-mono text-slate-700 dark:text-slate-200">{slug}</span>
+        <RouterLink
+          to={`/search?type=${encodeURIComponent(page.type)}`}
+          className="hover:text-primary-600 dark:hover:text-primary-400"
+        >
+          {page.type === 'concept' ? '概念' : page.type === 'person' ? '人物' : page.type === 'event' ? '事件' : page.type}
+        </RouterLink>
+        <span className="text-slate-300 dark:text-slate-600">/</span>
+        <span className="text-slate-600 dark:text-slate-300">{page.title}</span>
       </nav>
 
       {/* metadata header */}
@@ -370,143 +385,186 @@ export default function WikiEntryPage() {
         </div>
       )}
 
-      {/* main split view */}
-      <div className={`grid grid-cols-1 gap-5 ${gridClass}`}>
-        {showPreview && (
-          <section className="card p-5">
-            <div className="mb-3 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
-              <Eye size={12} />
-              {t('wiki.preview', '预览')}
-            </div>
-            <MarkdownRenderer
-              content={page.contentMd}
-              evidenceSpans={evidenceSpans}
-              onEvidenceClick={handleEvidenceClick}
-              aliasMap={aliasMapQuery.data}
-            />
-          </section>
-        )}
-
-        {showSource && (
-          <section className="card p-5" data-source-section>
-            <div className="mb-3 flex items-center justify-between gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-              <span className="inline-flex items-center gap-1.5">
-                <Code size={12} />
-                {isEditing
-                  ? t('wiki.editSource', '编辑源码')
-                  : t('wiki.source', '源码')}
-              </span>
-              {isEditing && isDirty && (
-                <span className="inline-flex items-center gap-1 text-yellow-500">
-                  <span className="h-1.5 w-1.5 rounded-full bg-yellow-500" />
-                  {t('wiki.unsaved', '未保存')}
-                </span>
-              )}
-            </div>
-            {isEditing && (
-              <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800">
-                <div className="mb-2 text-xs font-medium text-slate-600 dark:text-slate-300">别名管理</div>
-                <div className="flex flex-wrap items-center gap-2">
-                  {editAliases.map((alias, idx) => (
-                    <span
-                      key={idx}
-                      className="inline-flex items-center gap-1 rounded-md bg-white px-2 py-1 text-xs shadow-sm dark:bg-slate-700"
-                    >
-                      {alias}
-                      <button
-                        type="button"
-                        onClick={() => setEditAliases(prev => prev.filter((_, i) => i !== idx))}
-                        className="rounded p-0.5 text-slate-400 hover:bg-red-100 hover:text-red-500 dark:hover:bg-red-900/30"
-                      >
-                        <Trash size={10} />
-                      </button>
-                    </span>
-                  ))}
-                  <div className="flex items-center gap-1">
-                    <input
-                      type="text"
-                      value={newAliasInput}
-                      onChange={e => setNewAliasInput(e.target.value)}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter' && newAliasInput.trim()) {
-                          e.preventDefault();
-                          const val = newAliasInput.trim();
-                          if (!editAliases.includes(val)) {
-                            setEditAliases(prev => [...prev, val]);
-                          }
-                          setNewAliasInput('');
-                        }
-                      }}
-                      placeholder="添加别名..."
-                      className="input h-7 w-32 text-xs py-0.5"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const val = newAliasInput.trim();
-                        if (val && !editAliases.includes(val)) {
-                          setEditAliases(prev => [...prev, val]);
-                          setNewAliasInput('');
-                        }
-                      }}
-                      className="rounded p-1 text-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/30"
-                    >
-                      <Plus size={14} />
-                    </button>
-                  </div>
+      {/* main content with right sidebar */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_320px]">
+        <div className="space-y-5">
+          {/* main split view */}
+          <div className={`grid grid-cols-1 gap-5 ${gridClass}`}>
+            {showPreview && (
+              <section className="card p-5">
+                <div className="mb-3 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  <Eye size={12} />
+                  {t('wiki.preview', '预览')}
                 </div>
-              </div>
+                <MarkdownRenderer
+                  content={page.contentMd}
+                  evidenceSpans={evidenceSpans}
+                  onEvidenceClick={handleEvidenceClick}
+                  aliasMap={aliasMapQuery.data}
+                />
+              </section>
             )}
-            {isEditing ? (
-              <MarkdownEditor value={draft} onChange={setDraft} />
-            ) : (
-              <pre className="h-[60vh] overflow-auto rounded-lg bg-slate-50 p-4 font-mono text-sm leading-6 text-slate-700 dark:bg-slate-900/50 dark:text-slate-300">
-                {page.rawMd}
-              </pre>
-            )}
-          </section>
-        )}
-      </div>
 
-      {/* related entities & mini graph */}
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-        <section className="card p-5">
-          <h2 className="mb-4 flex items-center gap-2 text-base font-semibold">
-            <ArrowsLeftRight size={18} className="text-knowledge-500" />
-            {t('wiki.relatedEntities', '关联实体')}
-          </h2>
-          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-            <LinkList
-              title={t('wiki.incomingLinks', '入链')}
-              icon={<ArrowLeft size={12} />}
-              items={incomingLinks.map(link => ({
-                id: link.id,
-                slug: link.sourceSlug,
-                relation: link.relation
-              }))}
-              emptyText={t('wiki.noIncoming', '暂无入链')}
-            />
-            <LinkList
-              title={t('wiki.outgoingLinks', '出链')}
-              icon={<ArrowRight size={12} />}
-              items={outgoingLinks.map(link => ({
-                id: link.id,
-                slug: link.targetSlug,
-                relation: link.relation
-              }))}
-              emptyText={t('wiki.noOutgoing', '暂无出链')}
+            {showSource && (
+              <section className="card p-5" data-source-section>
+                <div className="mb-3 flex items-center justify-between gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  <span className="inline-flex items-center gap-1.5">
+                    <Code size={12} />
+                    {isEditing
+                      ? t('wiki.editSource', '编辑源码')
+                      : t('wiki.source', '源码')}
+                  </span>
+                  {isEditing && isDirty && (
+                    <span className="inline-flex items-center gap-1 text-yellow-500">
+                      <span className="h-1.5 w-1.5 rounded-full bg-yellow-500" />
+                      {t('wiki.unsaved', '未保存')}
+                    </span>
+                  )}
+                </div>
+                {isEditing && (
+                  <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800">
+                    <div className="mb-2 text-xs font-medium text-slate-600 dark:text-slate-300">别名管理</div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {editAliases.map((alias, idx) => (
+                        <span
+                          key={idx}
+                          className="inline-flex items-center gap-1 rounded-md bg-white px-2 py-1 text-xs shadow-sm dark:bg-slate-700"
+                        >
+                          {alias}
+                          <button
+                            type="button"
+                            onClick={() => setEditAliases(prev => prev.filter((_, i) => i !== idx))}
+                            className="rounded p-0.5 text-slate-400 hover:bg-red-100 hover:text-red-500 dark:hover:bg-red-900/30"
+                          >
+                            <Trash size={10} />
+                          </button>
+                        </span>
+                      ))}
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="text"
+                          value={newAliasInput}
+                          onChange={e => setNewAliasInput(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter' && newAliasInput.trim()) {
+                              e.preventDefault();
+                              const val = newAliasInput.trim();
+                              if (!editAliases.includes(val)) {
+                                setEditAliases(prev => [...prev, val]);
+                              }
+                              setNewAliasInput('');
+                            }
+                          }}
+                          placeholder="添加别名..."
+                          className="input h-7 w-32 text-xs py-0.5"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const val = newAliasInput.trim();
+                            if (val && !editAliases.includes(val)) {
+                              setEditAliases(prev => [...prev, val]);
+                              setNewAliasInput('');
+                            }
+                          }}
+                          className="rounded p-1 text-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/30"
+                        >
+                          <Plus size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {isEditing ? (
+                  <MarkdownEditor value={draft} onChange={setDraft} />
+                ) : (
+                  <pre className="h-[60vh] overflow-auto rounded-lg bg-slate-50 p-4 font-mono text-sm leading-6 text-slate-700 dark:bg-slate-900/50 dark:text-slate-300">
+                    {page.rawMd}
+                  </pre>
+                )}
+              </section>
+            )}
+          </div>
+
+          {/* related entities & mini graph */}
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+            <section className="card p-5">
+              <h2 className="mb-4 flex items-center gap-2 text-base font-semibold">
+                <ArrowsLeftRight size={18} className="text-knowledge-500" />
+                {t('wiki.relatedEntities', '关联实体')}
+              </h2>
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+                <LinkList
+                  title={t('wiki.incomingLinks', '入链')}
+                  icon={<ArrowLeft size={12} />}
+                  items={incomingLinks.map(link => ({
+                    id: link.id,
+                    slug: link.sourceSlug,
+                    relation: link.relation
+                  }))}
+                  emptyText={t('wiki.noIncoming', '暂无入链')}
+                />
+                <LinkList
+                  title={t('wiki.outgoingLinks', '出链')}
+                  icon={<ArrowRight size={12} />}
+                  items={outgoingLinks.map(link => ({
+                    id: link.id,
+                    slug: link.targetSlug,
+                    relation: link.relation
+                  }))}
+                  emptyText={t('wiki.noOutgoing', '暂无出链')}
+                />
+              </div>
+            </section>
+
+            <MiniKnowledgeGraph
+              currentSlug={slug}
+              currentTitle={page.title}
+              relatedEntities={[
+                ...incomingLinks.map(l => ({ slug: l.sourceSlug, title: l.sourceSlug, relation: l.relation })),
+                ...outgoingLinks.map(l => ({ slug: l.targetSlug, title: l.targetSlug, relation: l.relation }))
+              ].slice(0, 8)}
             />
           </div>
-        </section>
+        </div>
 
-        <MiniKnowledgeGraph
-          currentSlug={slug}
-          currentTitle={page.title}
-          relatedEntities={[
-            ...incomingLinks.map(l => ({ slug: l.sourceSlug, title: l.sourceSlug, relation: l.relation })),
-            ...outgoingLinks.map(l => ({ slug: l.targetSlug, title: l.targetSlug, relation: l.relation }))
-          ].slice(0, 8)}
-        />
+        <aside className="space-y-4">
+          <section className="card p-4">
+            <div className="mb-3 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
+              <Link size={12} />
+              反向链接
+            </div>
+            {backlinksQuery.isLoading ? (
+              <div className="flex items-center justify-center py-4 text-xs text-slate-400">
+                <Spinner size={16} className="mr-1 animate-spin" />
+                加载中...
+              </div>
+            ) : !backlinksQuery.data?.backlinks?.length ? (
+              <p className="text-xs text-slate-400 dark:text-slate-500">暂无反向链接</p>
+            ) : (
+              <ul className="space-y-3">
+                {backlinksQuery.data.backlinks.map((link, idx) => (
+                  <li key={idx} className="rounded-md bg-slate-50 p-2.5 dark:bg-slate-700/40">
+                    <div className="mb-1 flex items-center justify-between gap-2">
+                      <RouterLink
+                        to={`/wiki/${link.sourceSlug}`}
+                        className="text-sm font-medium text-primary-600 hover:underline dark:text-primary-400"
+                      >
+                        {link.sourceTitle}
+                      </RouterLink>
+                      {link.relationType && (
+                        <span className="badge badge-blue text-[10px]">{link.relationType}</span>
+                      )}
+                    </div>
+                    <p className="line-clamp-2 text-xs text-slate-500 dark:text-slate-400">
+                      {link.context}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </aside>
       </div>
 
       {/* entry timeline */}

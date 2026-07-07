@@ -410,6 +410,49 @@ export const api = {
     }>(`/search?q=${encodeURIComponent(query)}`);
   },
 
+  searchEntities(query: string, limit?: number) {
+    return request<{
+      items: Array<{
+        slug: string;
+        title: string;
+        aliases: string[];
+        namespace: string;
+        matchType: 'canonical' | 'alias' | 'fuzzy';
+      }>;
+    }>('/entities/search', { params: { q: query, limit: limit || 10 } });
+  },
+
+  getNodeNeighbors(slug: string, degrees?: number) {
+    return request<{
+      nodes: Array<{ slug: string; title: string; type: string; degree: number }>;
+      edges: Array<{ source: string; target: string; relation: string; weight: number }>;
+    }>(`/graph/neighbors/${encodeURIComponent(slug)}`, { params: { degrees: degrees || 2 } });
+  },
+
+  findShortestPaths(sourceSlug: string, targetSlug: string, maxPaths?: number, maxLength?: number) {
+    return request<{
+      paths: Array<{
+        nodes: string[];
+        edges: Array<{ source: string; target: string; relation: string }>;
+        length: number;
+      }>;
+    }>('/graph/paths', {
+      method: 'POST',
+      body: JSON.stringify({ sourceSlug, targetSlug, maxPaths, maxLength })
+    });
+  },
+
+  getBacklinks(slug: string, contextChars?: number) {
+    return request<{
+      backlinks: Array<{
+        sourceSlug: string;
+        sourceTitle: string;
+        context: string;
+        relationType?: string;
+      }>;
+    }>(`/pages/${encodeURIComponent(slug)}/backlinks`, { params: { contextChars: contextChars || 80 } });
+  },
+
   getLibraryFile(hash: string) {
     return request<{
       file: {

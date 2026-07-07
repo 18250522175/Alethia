@@ -1199,6 +1199,285 @@ ${relationsBlock}
     const alerts = budgetManager.getAlerts();
     return { items: alerts, total: alerts.length };
   }
+
+  /**
+   * 图谱焦点模式：获取节点的 N 度邻居
+   */
+  async getNodeNeighbors(slug: string, degrees: number = 2): Promise<{
+    nodes: Array<{ slug: string; title: string; type: string; degree: number }>;
+    edges: Array<{ source: string; target: string; relation: string; weight: number }>;
+  }> {
+    const pool = getPool();
+    const degreeLimit = Math.min(Math.max(degrees, 1), 5);
+
+    const nodeResult = await pool.query(
+      `WITH RECURSIVE neighbors AS (
+        SELECT target_slug AS slug, 1 AS degree
+        FROM links
+        WHERE source_slug = $1 AND NOT orphaned
+        UNION
+        SELECT l.target_slug, n.degree + 1
+        FROM links l
+        JOIN neighbors n ON l.source_slug = n.slug
+        WHERE n.degree < $2 AND NOT l.orphaned
+          AND l.target_slug NOT IN (SELECT slug FROM neighbors)
+      )
+      SELECT DISTINCT n.slug, n.degree, p.title, p.type
+      FROM neighbors n
+      LEFT JOIN pages p ON p.slug = n.slug
+      UNION
+      SELECT $1::varchar AS slug, 0 AS degree, p.title, p.type
+      FROM pages p WHERE p.slug = $1`,
+      [slug, degreeLimit]
+    );
+
+    const edgeResult = await pool.query(
+      `SELECT source_slug, target_slug, relation, weight
+       FROM links
+       WHERE source_slug IN (
+         SELECT target_slug FROM links WHERE source_slug = $1 AND NOT orphaned
+       ) OR source_slug = $1
+       AND NOT orphaned`,
+      [slug]
+    );
+
+    return {
+      nodes: nodeResult.rows.map((r: any) => ({
+        slug: r.slug,
+        title: r.title || r.slug,
+        type: r.type || 'concept',
+        degree: r.degree
+      })),
+      edges: edgeResult.rows.map((r: any) => ({
+        source: r.source_slug,
+        target: r.target_slug,
+        relation: r.relation,
+        weight: r.weight
+      }))
+    };
+  }
+
+  /**
+   * 图谱路径高亮：查找两个节点之间的最短路径
+   */
+  async findShortestPaths(
+    sourceSlug: string,
+    targetSlug: string,
+    maxPaths: number = 3,
+    maxLength: number = 6
+  ): Promise<Array<{
+    nodes: string[];
+    edges: Array<{ source: string; target: string; relation: string }>;
+    length: number;
+  }>>> {
+    const pool = getPool();
+
+    const result = await pool.query(
+      `WITH RECURSIVE paths AS (
+        SELECT
+          ARRAY[source_slug] AS node_path,
+          ARRAY[source_slug || ':' || target_slug] AS edge_path,
+          target_slug AS last_node,
+          1 AS depth
+        FROM links
+        WHERE source_slug = $1 AND NOT orphaned
+        UNION ALL
+        SELECT
+          p.node_path || l.target_slug,
+          p.edge_path || (l.source_slug || ':' || l.target_slug),
+          l.target_slug,
+          p.depth + 1
+        FROM paths p
+        JOIN links l ON l.source_slug = p.last_node
+        WHERE p.depth < $3
+          AND l.target_slug <> ALL(p.node_path)
+          AND NOT l.orphaned
+      )
+      SELECT node_path, edge_path, depth
+      FROM paths
+      WHERE last_node = $2
+      ORDER BY depth ASC
+      LIMIT $4`,
+      [sourceSlug, targetSlug, maxLength, maxPaths]
+    );
+
+    if (result.rows.length === 0) {
+      return [];
+    }
+
+    const paths = [];
+    for (const row of result.rows) {
+      const nodePath: string[] = row.node_path;
+      const edgeKeys: string[] = row.edge_path;
+      const edges = [];
+      for (let i = 0; i < nodePath.length - 1; i++) {
+        const s = nodePath[i];
+        const t = nodePath[i + 1];
+        const edgeRes = await pool.query(
+          `SELECT relation FROM links
+           WHERE source_slug = $1 AND target_slug = $2
+           LIMIT 1`,
+          [s, t]
+        );
+        edges.push({
+          source: s,
+          target: t,
+          relation: edgeRes.rows[0]?.relation || 'related'
+        });
+      }
+      paths.push({
+        nodes: nodePath,
+        edges,
+        length: row.depth
+      });
+    }
+
+    return paths;
+  }
+
+  /**
+   * 反向链接预览：查找引用当前实体的所有页面及上下文
+   */
+  async getBacklinks(
+    slug: string,
+    contextChars: number = 80
+  ): Promise<Array<{
+    sourceSlug: string;
+    sourceTitle: string;
+    context: string;
+    relationType?: string;
+  }>>> {
+    const pool = getPool();
+
+    const [linkResult, aliasResult] = await Promise.all([
+      pool.query(
+        `SELECT l.source_slug, l.relation, p.title
+         FROM links l
+         LEFT JOIN pages p ON p.slug = l.source_slug
+         WHERE l.target_slug = $1 AND NOT l.orphaned
+         ORDER BY l.created_at DESC`,
+        [slug]
+      ),
+      pool.query(
+        `SELECT slug FROM pages WHERE slug = $1`,
+        [slug]
+      )
+    ]);
+
+    const sourceSlugs = linkResult.rows.map((r: any) => r.source_slug);
+    if (sourceSlugs.length === 0) return [];
+
+    const contentResult = await pool.query(
+      `SELECT slug, content_md FROM pages WHERE slug = ANY($1)`,
+      [sourceSlugs]
+    );
+    const contentMap = new Map<string, string>();
+    for (const r of contentResult.rows) {
+      contentMap.set(r.slug, r.content_md || '');
+    }
+
+    return linkResult.rows.map((r: any) => {
+      const content = contentMap.get(r.source_slug) || '';
+      const wikilinkPattern = new RegExp(
+        `\\[\\[([^\\]]*${slug.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}[^\\]]*)\\]\\]`,
+        'i'
+      );
+      const match = content.match(wikilinkPattern);
+      let context = '';
+      if (match && match.index !== undefined) {
+        const start = Math.max(0, match.index - contextChars);
+        const end = Math.min(content.length, match.index + match[0].length + contextChars);
+        context = content.slice(start, end).replace(/\n+/g, ' ').trim();
+      } else {
+        context = content.slice(0, contextChars * 2).replace(/\n+/g, ' ').trim();
+      }
+      return {
+        sourceSlug: r.source_slug,
+        sourceTitle: r.title || r.source_slug,
+        context: context.length > contextChars * 2 + 50 ? context.slice(0, contextChars * 2 + 50) + '...' : context,
+        relationType: r.relation
+      };
+    });
+  }
+
+  /**
+   * 实体搜索自动补全：匹配规范名称、别名、拼音首字母
+   */
+  async searchEntities(
+    query: string,
+    limit: number = 10
+  ): Promise<Array<{
+    slug: string;
+    title: string;
+    aliases: string[];
+    namespace: string;
+    matchType: 'canonical' | 'alias' | 'fuzzy';
+  }>> {
+    const pool = getPool();
+    const normalized = query.trim().toLowerCase();
+    if (!normalized) return [];
+
+    const [exactResult, aliasResult, fuzzyResult] = await Promise.all([
+      pool.query(
+        `SELECT slug, title, type, aliases, path
+         FROM pages
+         WHERE LOWER(title) = $1 OR LOWER(slug) = $1
+         ORDER BY title ASC
+         LIMIT $2`,
+        [normalized, limit]
+      ),
+      pool.query(
+        `SELECT slug, title, type, aliases, path
+         FROM pages
+         WHERE EXISTS (
+           SELECT 1 FROM unnest(aliases) AS a
+           WHERE LOWER(a) = $1
+         )
+         AND LOWER(title) <> $1
+         ORDER BY title ASC
+         LIMIT $2`,
+        [normalized, limit]
+      ),
+      pool.query(
+        `SELECT slug, title, type, aliases, path
+         FROM pages
+         WHERE title ILIKE $1 OR slug ILIKE $1
+           OR EXISTS (
+             SELECT 1 FROM unnest(aliases) AS a
+             WHERE a ILIKE $1
+           )
+         ORDER BY title ASC
+         LIMIT $2`,
+        [`%${normalized}%`, limit]
+      )
+    ]);
+
+    const seen = new Set<string>();
+    const results: Array<{
+      slug: string; title: string; aliases: string[];
+      namespace: string; matchType: 'canonical' | 'alias' | 'fuzzy';
+    }> = [];
+
+    const addRow = (r: any, matchType: 'canonical' | 'alias' | 'fuzzy') => {
+      if (seen.has(r.slug)) return;
+      seen.add(r.slug);
+      const pathParts = (r.path || '').split('/');
+      const namespace = pathParts.length > 1 ? pathParts[pathParts.length - 2] : 'wiki';
+      results.push({
+        slug: r.slug,
+        title: r.title || r.slug,
+        aliases: r.aliases || [],
+        namespace,
+        matchType
+      });
+    };
+
+    exactResult.rows.forEach((r: any) => addRow(r, 'canonical'));
+    aliasResult.rows.forEach((r: any) => addRow(r, 'alias'));
+    fuzzyResult.rows.forEach((r: any) => addRow(r, 'fuzzy'));
+
+    return results.slice(0, limit);
+  }
 }
 
 /**

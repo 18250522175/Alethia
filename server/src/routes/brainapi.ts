@@ -746,4 +746,66 @@ app.get('/api/aliases/resolve/:alias', async (c) => {
   }
 });
 
+// Graph focus mode
+app.get('/api/graph/neighbors/:slug', async (c) => {
+  try {
+    const slug = c.req.param('slug');
+    const degrees = parseInt(c.req.query('degrees') || '2', 10);
+    const result = await brainAPI.getNodeNeighbors(slug, degrees);
+    return c.json(result);
+  } catch (err) {
+    loggerInstance.error({ err }, '获取节点邻居失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+// Graph path highlighting
+app.post('/api/graph/paths', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { sourceSlug, targetSlug, maxPaths, maxLength } = body;
+    if (!sourceSlug || !targetSlug) {
+      return c.json({ error: { code: 'BAD_REQUEST', message: '缺少 sourceSlug 或 targetSlug' } }, 400);
+    }
+    const result = await brainAPI.findShortestPaths(
+      sourceSlug, targetSlug,
+      maxPaths ? parseInt(maxPaths, 10) : 3,
+      maxLength ? parseInt(maxLength, 10) : 6
+    );
+    return c.json({ paths: result });
+  } catch (err) {
+    loggerInstance.error({ err }, '查找最短路径失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+// Backlinks
+app.get('/api/pages/:slug/backlinks', async (c) => {
+  try {
+    const slug = c.req.param('slug');
+    const contextChars = parseInt(c.req.query('contextChars') || '80', 10);
+    const result = await brainAPI.getBacklinks(slug, contextChars);
+    return c.json({ backlinks: result });
+  } catch (err) {
+    loggerInstance.error({ err }, '获取反向链接失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+// Entity search autocomplete
+app.get('/api/entities/search', async (c) => {
+  try {
+    const q = c.req.query('q') || '';
+    const limit = parseInt(c.req.query('limit') || '10', 10);
+    if (!q.trim()) {
+      return c.json({ items: [] });
+    }
+    const result = await brainAPI.searchEntities(q.trim(), limit);
+    return c.json({ items: result });
+  } catch (err) {
+    loggerInstance.error({ err }, '实体搜索失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
 export default app;
