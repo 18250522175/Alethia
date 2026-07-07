@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
 import type { ComponentType } from 'react';
 import { useNotification } from '../contexts/NotificationContext';
+import { useQuery } from '@tanstack/react-query';
 import api from '../lib/api';
 
 interface SidebarProps {
@@ -180,7 +181,14 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
     { path: '/settings', icon: Gear, label: t('nav.settings') }
   ];
 
-  const ghostCount = 2;
+  const healthQuery = useQuery({
+    queryKey: ['health-dashboard'],
+    queryFn: () => api.getHealthDashboard(),
+    staleTime: 60_000,
+    retry: 1
+  });
+
+  const ghostCount = healthQuery.data?.ghostRelations ?? 2;
 
   const handleRebuild = async () => {
     try {
@@ -233,15 +241,16 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
 
         {ghostCount > 0 && (
           <div className={`mt-2 ${open ? 'px-3' : 'flex justify-center'}`}>
-            <div
-              className={`flex items-center gap-2 rounded-lg bg-red-50 px-2 py-1.5 text-xs text-red-600 dark:bg-red-900/20 dark:text-red-400 ${
+            <button
+              onClick={() => navigate('/settings#cleanup')}
+              className={`flex items-center gap-2 rounded-lg bg-red-50 px-2 py-1.5 text-xs text-red-600 transition-colors hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-800/20 ${
                 open ? '' : 'justify-center w-8'
               }`}
-              title={t('sidebar.ghostRelationsTitle', '{{count}} 条幽灵关系待处理', { count: ghostCount })}
+              title={t('sidebar.ghostRelationsTitle', '{{count}} 条幽灵关系待处理，点击查看', { count: ghostCount })}
             >
               <Ghost size={14} />
               {open && <span>{t('sidebar.ghostRelations', '{{count}} 幽灵关系', { count: ghostCount })}</span>}
-            </div>
+            </button>
           </div>
         )}
       </nav>

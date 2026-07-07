@@ -564,6 +564,15 @@ function SearchInput({ value, onChange, onSubmit, history, onPickHistory, onClea
         { value: 'this-month', description: t('thisMonth', '本月') }
       ];
     }
+    if (key === 'lang') {
+      return ((data as any).languages || ['zh', 'en', 'ja', 'fr']).map((v: string) => ({ value: v, description: '语言' }));
+    }
+    if (key === 'author') {
+      return ((data as any).authors || []).map((v: string) => ({ value: v, description: '作者' }));
+    }
+    if (key === 'status') {
+      return ((data as any).statuses || ['draft', 'published', 'archived']).map((v: string) => ({ value: v, description: '状态' }));
+    }
     return [];
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentTokenInfo, completionsQuery.data]);
@@ -1322,7 +1331,7 @@ function FileResultCard({ file, query, filters }: { file: FileResult; query: str
 
   return (
     <RouterLink
-      to={`/library?hash=${encodeURIComponent(file.hash)}`}
+      to={`/library/${encodeURIComponent(file.hash)}`}
       className="block px-4 py-3 transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/50"
     >
       <div className="flex items-center justify-between gap-2">

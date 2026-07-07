@@ -67,7 +67,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   });
 
   const serverNotifications = data || [];
-  const notifications = [...localNotifications, ...serverNotifications];
+  const notifications = [...localNotifications, ...serverNotifications].filter((n, index, self) => 
+    index === self.findIndex(t => t.id === n.id)
+  );
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   const addNotification = useCallback(
@@ -200,6 +202,11 @@ export function NotificationCenter({ isOpen, onClose }: NotificationCenterProps)
 
   const handleNotificationClick = (id: string) => {
     markAsRead(id);
+    const notification = notifications.find(n => n.id === id);
+    if (notification?.actionUrl) {
+      navigate(notification.actionUrl);
+      onClose();
+    }
   };
 
   const getUnreadByType = (type: TabType): number => {

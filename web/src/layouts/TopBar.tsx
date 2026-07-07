@@ -7,6 +7,8 @@ import { useTranslation } from 'react-i18next';
 import { useNotification, NotificationCenter } from '../contexts/NotificationContext';
 import SearchCombobox from '../blocks/SearchCombobox';
 import { Popover, PopoverButton, PopoverPanel } from '@headlessui/react';
+import { useQuery } from '@tanstack/react-query';
+import api from '../lib/api';
 
 interface TopBarProps {
   onToggleSidebar: () => void;
@@ -86,8 +88,17 @@ export default function TopBar({ onToggleSidebar }: TopBarProps) {
     navigate('/login');
   };
 
+  const budgetQuery = useQuery({
+    queryKey: ['budget-remaining'],
+    queryFn: () => api.getBudgetRemaining(),
+    staleTime: 60_000,
+    retry: 1
+  });
+
   const budgetData = {
-    daily: { used: 2.35, total: 5 },
+    daily: budgetQuery.data?.period === 'daily' 
+      ? { used: budgetQuery.data.used, total: budgetQuery.data.total }
+      : { used: 2.35, total: 5 },
     monthly: { used: 45.8, total: 100 }
   };
 

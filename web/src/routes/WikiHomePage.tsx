@@ -40,7 +40,7 @@ export default function WikiHomePage() {
 
   const featuredQuery = useQuery({
     queryKey: ['featured-articles'],
-    queryFn: () => api.queryKnowledge('featured', { topK: 4 }),
+    queryFn: () => api.queryKnowledge('', { topK: 4 }),
     staleTime: 60_000
   });
 
@@ -185,7 +185,7 @@ export default function WikiHomePage() {
                       {item.snippet || '点击查看详情'}
                     </p>
                     <div className="mt-3 flex items-center gap-2 text-xs text-slate-400">
-                      <span className="badge badge-blue">概念</span>
+                      <span className="badge badge-blue">{item.type || '概念'}</span>
                       <span>相关度 {(item.score * 100).toFixed(0)}%</span>
                     </div>
                   </div>

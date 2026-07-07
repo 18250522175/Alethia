@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import cytoscape, { Core, ElementDefinition, NodeSingular } from 'cytoscape';
 import {
   MagnifyingGlass,
@@ -52,11 +52,12 @@ interface NodeContextMenuState {
 export default function GraphFullPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const cyRef = useRef<HTMLDivElement>(null);
   const cyInstanceRef = useRef<Core | null>(null);
   const [layout, setLayout] = useState<string>('cose');
   const [search, setSearch] = useState('');
-  const [filterType, setFilterType] = useState<string>('all');
+  const [filterType, setFilterType] = useState<string>(searchParams.get('type') || 'all');
   const [timePeriod, setTimePeriod] = useState<string>('all');
   const [showClusters, setShowClusters] = useState<boolean>(false);
   const [contextMenu, setContextMenu] = useState<NodeContextMenuState>({

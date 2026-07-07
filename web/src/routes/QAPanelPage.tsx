@@ -391,41 +391,88 @@ export default function QAPanelPage() {
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-800">
-          {messages.length === 0 ? (
-            <div className="flex h-full flex-col items-center justify-center text-center">
-              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary-100 dark:bg-primary-900/30">
-                <ChatCircleDots size={32} className="text-primary-500" />
-              </div>
-              <h2 className="mb-2 text-lg font-semibold">{t('qa.welcomeTitle', '向你的知识库提问')}</h2>
-              <p className="mb-6 max-w-md text-sm text-slate-500 dark:text-slate-400">
-                {t('qa.welcomeSubtitle', 'AI 将基于知识库中已提取的内容进行多轮反思问答，并标注每条结论的来源。')}
-              </p>
-              <div className="grid w-full max-w-2xl grid-cols-1 gap-3 sm:grid-cols-2">
-                {SUGGESTED_QUESTIONS.map((q, i) => (
-                  <button
-                    key={i}
-                    onClick={() => handleSend(q)}
-                    className="rounded-lg border border-slate-200 p-3 text-left text-sm transition-all hover:border-primary-300 hover:bg-primary-50 dark:border-slate-700 dark:hover:border-primary-600 dark:hover:bg-slate-700"
-                  >
-                    <Sparkle size={16} className="mb-1.5 text-primary-500" />
-                    {q}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-6">
-              {messages.map(msg => (
-                <MessageBubble key={msg.id} message={msg} viewMode={viewMode} onEvidenceClick={handleEvidenceClick} onFeedback={handleSubmitFeedback} navigate={navigate} />
-              ))}
-              {askMutation.isPending && (
-                <div className="flex items-center gap-2 text-sm text-slate-500">
-                  <Brain size={16} className="animate-pulse text-primary-500" />
-                  {t('qa.thinking', 'AI 正在思考并多轮反思...')}
+        <div className="flex flex-1 gap-4 overflow-hidden">
+          <div className="flex-1 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-800">
+            {messages.length === 0 ? (
+              <div className="flex h-full flex-col items-center justify-center text-center">
+                <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary-100 dark:bg-primary-900/30">
+                  <ChatCircleDots size={32} className="text-primary-500" />
                 </div>
-              )}
-              <div ref={messagesEndRef} />
+                <h2 className="mb-2 text-lg font-semibold">{t('qa.welcomeTitle', '向你的知识库提问')}</h2>
+                <p className="mb-6 max-w-md text-sm text-slate-500 dark:text-slate-400">
+                  {t('qa.welcomeSubtitle', 'AI 将基于知识库中已提取的内容进行多轮反思问答，并标注每条结论的来源。')}
+                </p>
+                <div className="grid w-full max-w-2xl grid-cols-1 gap-3 sm:grid-cols-2">
+                  {SUGGESTED_QUESTIONS.map((q, i) => (
+                    <button
+                      key={i}
+                      onClick={() => handleSend(q)}
+                      className="rounded-lg border border-slate-200 p-3 text-left text-sm transition-all hover:border-primary-300 hover:bg-primary-50 dark:border-slate-700 dark:hover:border-primary-600 dark:hover:bg-slate-700"
+                    >
+                      <Sparkle size={16} className="mb-1.5 text-primary-500" />
+                      {q}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {messages.map(msg => (
+                  <MessageBubble key={msg.id} message={msg} viewMode={viewMode} onEvidenceClick={handleEvidenceClick} onFeedback={handleSubmitFeedback} navigate={navigate} />
+                ))}
+                {askMutation.isPending && (
+                  <div className="flex items-center gap-2 text-sm text-slate-500">
+                    <Brain size={16} className="animate-pulse text-primary-500" />
+                    {t('qa.thinking', 'AI 正在思考并多轮反思...')}
+                  </div>
+                )}
+                <div ref={messagesEndRef} />
+              </div>
+            )}
+          </div>
+
+          {activeEvidence && (
+            <div className="w-80 flex-shrink-0 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+                  {t('qa.evidenceDetail', '证据详情')}
+                </h3>
+                <button
+                  onClick={() => setActiveEvidence(null)}
+                  className="rounded p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              <div className="space-y-3">
+                <div>
+                  <div className="mb-1 text-xs text-slate-500 dark:text-slate-400">{t('qa.evidenceId', '证据 ID')}</div>
+                  <div className="font-mono text-sm text-slate-700 dark:text-slate-300">{activeEvidence.spanId}</div>
+                </div>
+                {activeEvidence.data && (
+                  <>
+                    <div>
+                      <div className="mb-1 text-xs text-slate-500 dark:text-slate-400">{t('qa.source', '来源')}</div>
+                      <div className="text-sm text-slate-700 dark:text-slate-300">{activeEvidence.data.source || '-'}</div>
+                    </div>
+                    <div>
+                      <div className="mb-1 text-xs text-slate-500 dark:text-slate-400">{t('qa.content', '内容')}</div>
+                      <div className="rounded bg-slate-50 p-2 text-xs text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                        {activeEvidence.data.text || '-'}</div>
+                    </div>
+                  </>
+                )}
+                <div className="border-t border-slate-200 pt-2 dark:border-slate-700">
+                  <button
+                    onClick={() => {
+                      setActiveEvidence(null);
+                    }}
+                    className="w-full text-xs text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
+                  >
+                    {t('qa.closePanel', '关闭面板')}
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -503,12 +550,22 @@ function MessageBubble({ message, viewMode, onEvidenceClick, onFeedback, navigat
             </div>
             <div className="space-y-1">
               {message.sources.slice(0, 3).map((src: any, i) => (
-                <div key={i} className="rounded bg-white/60 p-2 text-xs dark:bg-slate-800/60">
+                <button
+                  key={i}
+                  onClick={() => {
+                    if (src.fileHash) {
+                      navigate?.(`/library/${src.fileHash}`);
+                    } else if (onEvidenceClick) {
+                      onEvidenceClick(src.span_id);
+                    }
+                  }}
+                  className="flex w-full items-start gap-2 rounded bg-white/60 p-2 text-left text-xs transition-colors hover:bg-primary-50 dark:bg-slate-800/60 dark:hover:bg-primary-900/20"
+                >
                   <span className="font-mono text-primary-600 dark:text-primary-400">
                     [^{src.span_id || i + 1}]
-                  </span>{' '}
-                  <span className="line-clamp-1">{src.span_text || src.original_location}</span>
-                </div>
+                  </span>
+                  <span className="line-clamp-1 flex-1">{src.span_text || src.original_location}</span>
+                </button>
               ))}
             </div>
           </div>

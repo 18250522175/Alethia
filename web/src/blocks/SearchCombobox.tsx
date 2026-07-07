@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { MagnifyingGlass, X, Command, FileText, Graph, ChatsCircle, Hash } from '@phosphor-icons/react';
 import { Combobox, ComboboxInput, ComboboxOptions, ComboboxOption } from '@headlessui/react';
+import api from '../lib/api';
 
 interface SearchSuggestion {
   id: string;
@@ -39,14 +40,42 @@ export default function SearchCombobox() {
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
+  const [searchResults, setSearchResults] = useState<SearchSuggestion[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    
+    if (query.trim().length >= 2) {
+      debounceRef.current = setTimeout(async () => {
+        try {
+          const results = await api.searchEntities(query.trim(), 5);
+          const suggestions: SearchSuggestion[] = (results.items || []).map((r: any) => ({
+            id: r.id || r.slug || String(Math.random()),
+            type: r.type === 'file' ? 'file' : 'wiki',
+            title: r.title || r.name || '',
+            description: r.snippet || r.description || '',
+            path: r.type === 'file' ? `/library/${r.hash}` : `/wiki/${r.slug || r.id}`
+          }));
+          setSearchResults(suggestions);
+        } catch {
+          setSearchResults([]);
+        }
+      }, 300);
+    } else {
+      setSearchResults([]);
+    }
+    
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [query]);
 
   const filteredSuggestions = query === ''
     ? STATIC_SUGGESTIONS
-    : STATIC_SUGGESTIONS.filter(s =>
+    : [...searchResults.slice(0, 5), ...STATIC_SUGGESTIONS.filter(s =>
         s.title.toLowerCase().includes(query.toLowerCase()) ||
         s.description?.toLowerCase().includes(query.toLowerCase())
-      );
+      )].slice(0, 8);
 
   const handleSelect = useCallback((suggestion: SearchSuggestion | null) => {
     if (suggestion) {
