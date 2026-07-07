@@ -76,6 +76,8 @@ const ALLOWED_EXTENSIONS: string[] = [
 export default function MarkdownEditor({ value, onChange }: MarkdownEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const uploadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { addNotification } = useNotification();
 
   const [isOpen, setIsOpen] = useState(false);
@@ -188,7 +190,8 @@ export default function MarkdownEditor({ value, onChange }: MarkdownEditorProps)
       });
     } finally {
       setIsUploading(false);
-      setTimeout(() => setUploadProgress(0), 500);
+      if (uploadTimerRef.current) clearTimeout(uploadTimerRef.current);
+      uploadTimerRef.current = setTimeout(() => setUploadProgress(0), 500);
     }
   }, [calculateSHA256, isValidFileType, isImageFile, value, onChange, addNotification]);
 
@@ -365,7 +368,8 @@ export default function MarkdownEditor({ value, onChange }: MarkdownEditorProps)
   }, [isOpen, updateDropdownPosition]);
 
   const handleBlur = useCallback(() => {
-    setTimeout(() => {
+    if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
+    blurTimerRef.current = setTimeout(() => {
       closeAutocomplete();
     }, 150);
   }, [closeAutocomplete]);
@@ -383,6 +387,14 @@ export default function MarkdownEditor({ value, onChange }: MarkdownEditorProps)
     }, 200);
     return () => clearTimeout(timer);
   }, [query]);
+
+  // 组件卸载时清理定时器
+  useEffect(() => {
+    return () => {
+      if (uploadTimerRef.current) clearTimeout(uploadTimerRef.current);
+      if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
+    };
+  }, []);
 
   // Toolbar helpers
   const wrapSelection = useCallback((before: string, after: string = '') => {

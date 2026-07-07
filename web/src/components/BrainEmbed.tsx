@@ -305,7 +305,11 @@ class BrainEmbedElement extends HTMLElement {
     }
 
     if (this.error) {
-      body.innerHTML = `<div class="error-box" onclick="this.closest('brain-embed').fetchData()">${this.error}（点击重试）</div>`;
+      body.innerHTML = `<div class="error-box">${this.error}（点击重试）</div>`;
+      const errorBox = body.querySelector('.error-box');
+      if (errorBox) {
+        errorBox.addEventListener('click', () => this.fetchData());
+      }
       return;
     }
 
@@ -335,22 +339,28 @@ export function BrainEmbed({ type, params }: BrainEmbedProps) {
       return;
     }
 
+    let cancelled = false;
     const fetch = async () => {
       setLoading(true);
       setError(null);
       try {
         const response = await api.embedProxy(type, params);
-        setData(response.data);
-        setCachedData(type, params, response.data, response.expiresAt);
+        if (!cancelled) {
+          setData(response.data);
+          setCachedData(type, params, response.data, response.expiresAt);
+        }
       } catch {
-        setError('数据暂不可用');
+        if (!cancelled) {
+          setError('数据暂不可用');
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
     fetch();
-  }, [type, params]);
+    return () => { cancelled = true; };
+  }, [type, JSON.stringify(params)]);
 
   const handleRetry = () => {
     const fetch = async () => {

@@ -484,7 +484,7 @@ app.get('/api/pages', async (c) => {
 // Create wiki page
 app.post('/api/pages', async (c) => {
   try {
-    const body = await c.req.json();
+    const body = await c.req.json().catch(() => ({}));
     const { title, type, contexts, aliases } = body;
     if (!title) {
       return c.json({ error: { code: 'VALIDATION_ERROR', message: getErrorMessage('VALIDATION_ERROR') } }, 400);
@@ -977,7 +977,7 @@ app.get('/api/graph/neighbors/:slug', async (c) => {
 // Graph path highlighting
 app.post('/api/graph/paths', async (c) => {
   try {
-    const body = await c.req.json();
+    const body = await c.req.json().catch(() => ({}));
     const { sourceSlug, targetSlug, maxPaths, maxLength } = body;
     if (!sourceSlug || !targetSlug) {
       return c.json({ error: { code: 'BAD_REQUEST', message: '缺少 sourceSlug 或 targetSlug' } }, 400);
@@ -1083,7 +1083,7 @@ app.get('/api/snippets/:name', async (c) => {
 app.put('/api/snippets/:name', async (c) => {
   try {
     const name = c.req.param('name');
-    const body = await c.req.json();
+    const body = await c.req.json().catch(() => ({}));
     await brainAPI.saveSnippet(name, body.content);
     return c.json({ success: true });
   } catch (err) {
@@ -1206,7 +1206,7 @@ app.delete('/api/notifications/all', async (c) => {
 // Save search
 app.post('/api/saved-searches', async (c) => {
   try {
-    const body = await c.req.json();
+    const body = await c.req.json().catch(() => ({}));
     const { name, query, description } = body;
     if (!name || !query) {
       return c.json({ error: { code: 'BAD_REQUEST', message: '缺少 name 或 query' } }, 400);
