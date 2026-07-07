@@ -14,7 +14,7 @@ function classifyIntent(query: string): { intent: Intent; tier: Tier } {
   const lower = query.toLowerCase().trim();
   const length = query.length;
 
-  if (length < 10 && /是什么|是什么|定义|概念/.test(query)) {
+  if (length < 10 && /是什么|什么是|定义|概念/.test(query)) {
     return { intent: 'factual', tier: 'T0' };
   }
 
