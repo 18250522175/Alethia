@@ -93,14 +93,14 @@ export default function QAPanelPage() {
   })) || [];
 
   const conversationDetailQuery = useQuery({
-    queryKey: ['conversation', urlConvId],
-    queryFn: () => api.getConversation(urlConvId!),
-    enabled: !!urlConvId,
+    queryKey: ['conversation', conversationId],
+    queryFn: () => api.getConversation(conversationId!),
+    enabled: !!conversationId,
     staleTime: 60_000
   });
 
   useEffect(() => {
-    if (conversationDetailQuery.data?.items && conversationDetailQuery.data.items.length > 0) {
+    if (conversationId && conversationDetailQuery.data?.items && conversationDetailQuery.data.items.length > 0) {
       const chatMessages: ChatMessage[] = conversationDetailQuery.data.items.map((msg: any) => ({
         id: msg.id || String(Math.random()),
         role: msg.role === 'user' ? 'user' : 'assistant',
@@ -110,12 +110,12 @@ export default function QAPanelPage() {
         relatedEntities: msg.relatedEntities,
         tokensUsed: msg.tokensUsed,
         estimatedCost: msg.estimatedCost,
-        conversationId: urlConvId,
+        conversationId: conversationId,
         ts: msg.createdAt ? new Date(msg.createdAt).getTime() : Date.now()
       }));
       setMessages(chatMessages);
     }
-  }, [conversationDetailQuery.data, urlConvId]);
+  }, [conversationDetailQuery.data, conversationId]);
 
   const feedbackMutation = useMutation({
     mutationFn: ({ messageId, helpful }: { messageId: string; helpful: boolean }) =>

@@ -99,16 +99,16 @@ export default function DiffReviewPage() {
   const handleBatchApply = async () => {
     const items = allDiffsQuery.data?.items || [];
     const greenItems = items.filter(item => item.tier === 'green');
-    let successCount = 0;
-    let failCount = 0;
-    for (const item of greenItems) {
-      try {
-        await api.applyDiff(item.id);
-        successCount++;
-      } catch {
-        failCount++;
-      }
-    }
+    if (greenItems.length === 0) return;
+    
+    const promises = greenItems.map(item => 
+      api.applyDiff(item.id).then(() => ({ id: item.id, success: true })).catch(() => ({ id: item.id, success: false }))
+    );
+    
+    const results = await Promise.all(promises);
+    const successCount = results.filter(r => r.success).length;
+    const failCount = results.filter(r => !r.success).length;
+    
     queryClient.invalidateQueries({ queryKey: ['diffs'] });
     addNotification({
       type: 'system',
@@ -120,16 +120,16 @@ export default function DiffReviewPage() {
   const handleBatchReject = async () => {
     const items = allDiffsQuery.data?.items || [];
     const redItems = items.filter(item => item.tier === 'red');
-    let successCount = 0;
-    let failCount = 0;
-    for (const item of redItems) {
-      try {
-        await api.rejectDiff(item.id);
-        successCount++;
-      } catch {
-        failCount++;
-      }
-    }
+    if (redItems.length === 0) return;
+    
+    const promises = redItems.map(item => 
+      api.rejectDiff(item.id).then(() => ({ id: item.id, success: true })).catch(() => ({ id: item.id, success: false }))
+    );
+    
+    const results = await Promise.all(promises);
+    const successCount = results.filter(r => r.success).length;
+    const failCount = results.filter(r => !r.success).length;
+    
     queryClient.invalidateQueries({ queryKey: ['diffs'] });
     addNotification({
       type: 'system',

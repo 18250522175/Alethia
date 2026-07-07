@@ -504,6 +504,10 @@ function ModelAllocationSettings({ settings, onChange }: SettingsSectionProps) {
     staleTime: 300_000
   });
 
+  const [taskOrder, setTaskOrder] = useState<string[]>([
+    'qa', 'summary', 'extraction', 'reasoning', 'rewrite', 'draft'
+  ]);
+
   const tasks = [
     { id: 'qa', label: '问答', description: '用户问答、对话系统' },
     { id: 'summary', label: '摘要', description: '文档摘要、内容概括' },
@@ -515,6 +519,30 @@ function ModelAllocationSettings({ settings, onChange }: SettingsSectionProps) {
 
   const adapters = adaptersQuery.data?.adapters || [];
 
+  const handleDragStart = (e: React.DragEvent, taskId: string) => {
+    e.dataTransfer.setData('taskId', taskId);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = (e: React.DragEvent, targetTaskId: string) => {
+    e.preventDefault();
+    const draggedTaskId = e.dataTransfer.getData('taskId');
+    if (draggedTaskId && draggedTaskId !== targetTaskId) {
+      const newOrder = [...taskOrder];
+      const draggedIndex = newOrder.indexOf(draggedTaskId);
+      const targetIndex = newOrder.indexOf(targetTaskId);
+      newOrder.splice(draggedIndex, 1);
+      newOrder.splice(targetIndex, 0, draggedTaskId);
+      setTaskOrder(newOrder);
+      onChange('models.taskOrder', newOrder);
+    }
+  };
+
+  const getTaskById = (id: string) => tasks.find(t => t.id === id);
+
   return (
     <div className="card p-6">
       <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold">
@@ -525,34 +553,42 @@ function ModelAllocationSettings({ settings, onChange }: SettingsSectionProps) {
         为不同任务类型分配最适合的模型。拖动调整优先级。
       </p>
       <div className="space-y-3">
-        {tasks.map(task => (
-          <div
-            key={task.id}
-            className="flex items-center gap-4 rounded-lg border border-slate-200 p-4 dark:border-slate-700"
-          >
-            <div className="cursor-move text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
-              <DotsThreeVertical size={18} />
+        {taskOrder.map(taskId => {
+          const task = getTaskById(taskId);
+          if (!task) return null;
+          return (
+            <div
+              key={task.id}
+              draggable
+              onDragStart={(e) => handleDragStart(e, task.id)}
+              onDragOver={handleDragOver}
+              onDrop={(e) => handleDrop(e, task.id)}
+              className="flex items-center gap-4 rounded-lg border border-slate-200 p-4 transition-all dark:border-slate-700 hover:border-primary-300 hover:shadow-sm dark:hover:border-primary-600 cursor-grab active:cursor-grabbing"
+            >
+              <div className="cursor-move text-slate-400 hover:text-primary-500 dark:hover:text-primary-400">
+                <DotsThreeVertical size={18} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-medium">{task.label}</p>
+                <p className="text-sm text-slate-500 dark:text-slate-400">{task.description}</p>
+              </div>
+              <div className="w-64">
+                <select
+                  value={settings.models?.[task.id] || ''}
+                  onChange={e => onChange(`models.${task.id}`, e.target.value)}
+                  className="input w-full text-sm"
+                >
+                  <option value="">自动选择</option>
+                  {adapters.map((adapter: any) => (
+                    <option key={adapter.id} value={adapter.id}>
+                      {adapter.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="font-medium">{task.label}</p>
-              <p className="text-sm text-slate-500 dark:text-slate-400">{task.description}</p>
-            </div>
-            <div className="w-64">
-              <select
-                value={settings.models?.[task.id] || ''}
-                onChange={e => onChange(`models.${task.id}`, e.target.value)}
-                className="input w-full text-sm"
-              >
-                <option value="">自动选择</option>
-                {adapters.map((adapter: any) => (
-                  <option key={adapter.id} value={adapter.id}>
-                    {adapter.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
