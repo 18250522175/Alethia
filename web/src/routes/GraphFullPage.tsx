@@ -18,7 +18,11 @@ import {
   X,
   Info,
   ArrowSquareOut,
-  DotsThreeVertical
+  DotsThreeVertical,
+  Crosshair,
+  MapPin,
+  Flag,
+  Path
 } from '@phosphor-icons/react';
 import api from '../lib/api';
 
@@ -63,6 +67,24 @@ export default function GraphFullPage() {
     nodeData: null
   });
   const [selectedNode, setSelectedNode] = useState<{ id: string; data: any } | null>(null);
+  const [focusNode, setFocusNode] = useState<string | null>(null);
+  const [focusDegrees, setFocusDegrees] = useState<number>(2);
+  const [focusNeighbors, setFocusNeighbors] = useState<Set<string> | null>(null);
+  const [pathStartNode, setPathStartNode] = useState<string | null>(null);
+  const [pathEndNode, setPathEndNode] = useState<string | null>(null);
+  const [highlightedPaths, setHighlightedPaths] = useState<Array<{
+    nodes: string[];
+    edges: Array<{ source: string; target: string; relation: string }>;
+    length: number;
+  }>>([]);
+
+  const focusNodeRef = useRef<string | null>(null);
+  const pathStartNodeRef = useRef<string | null>(null);
+  const pathEndNodeRef = useRef<string | null>(null);
+
+  useEffect(() => { focusNodeRef.current = focusNode; }, [focusNode]);
+  useEffect(() => { pathStartNodeRef.current = pathStartNode; }, [pathStartNode]);
+  useEffect(() => { pathEndNodeRef.current = pathEndNode; }, [pathEndNode]);
 
   const graphQuery = useQuery({
     queryKey: ['graph'],
@@ -178,6 +200,58 @@ export default function GraphFullPage() {
           style: {
             'opacity': 0.2
           }
+        },
+        {
+          selector: '.focus-dimmed-node',
+          style: {
+            'opacity': 0.1
+          }
+        },
+        {
+          selector: '.focus-dimmed-edge',
+          style: {
+            'opacity': 0.05
+          }
+        },
+        {
+          selector: '.focus-center',
+          style: {
+            'border-width': 4,
+            'border-color': '#fbbf24',
+            'border-opacity': 1
+          }
+        },
+        {
+          selector: '.path-shortest-node',
+          style: {
+            'background-color': '#fbbf24',
+            'border-width': 3,
+            'border-color': '#f59e0b'
+          }
+        },
+        {
+          selector: '.path-shortest-edge',
+          style: {
+            'line-color': '#fbbf24',
+            'target-arrow-color': '#fbbf24',
+            'width': 3
+          }
+        },
+        {
+          selector: '.path-alt-node',
+          style: {
+            'background-color': '#fb923c',
+            'border-width': 2,
+            'border-color': '#f97316'
+          }
+        },
+        {
+          selector: '.path-alt-edge',
+          style: {
+            'line-color': '#fb923c',
+            'target-arrow-color': '#fb923c',
+            'width': 2
+          }
         }
       ],
       layout: {
@@ -199,10 +273,31 @@ export default function GraphFullPage() {
 
     cy.on('tap', 'node', (evt) => {
       const node = evt.target;
-      cy.elements().removeClass('highlighted');
+      const nodeId = node.data('id');
+
+      if (evt.originalEvent?.shiftKey) {
+        const start = pathStartNodeRef.current;
+        const end = pathEndNodeRef.current;
+        if (!start) {
+          setPathStartNode(nodeId);
+        } else if (!end && start !== nodeId) {
+          setPathEndNode(nodeId);
+          api.findShortestPaths(start, nodeId).then(data => {
+            setHighlightedPaths(data.paths || []);
+          }).catch(() => setHighlightedPaths([]));
+        }
+        return;
+      }
+
+      if (focusNodeRef.current) {
+        setSelectedNode({ id: nodeId, data: node.data() });
+        return;
+      }
+
+      cy.elements().removeClass('highlighted dimmed');
       node.addClass('highlighted');
       node.neighborhood().addClass('highlighted');
-      setSelectedNode({ id: node.data('id'), data: node.data() });
+      setSelectedNode({ id: nodeId, data: node.data() });
     });
 
     cy.on('cxttap', 'node', (evt) => {
@@ -256,6 +351,94 @@ export default function GraphFullPage() {
     }
     return () => document.removeEventListener('click', handleClickOutside);
   }, [contextMenu.visible]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setFocusNode(null);
+        setFocusDegrees(2);
+        setFocusNeighbors(null);
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  useEffect(() => {
+    if (!focusNode) {
+      setFocusNeighbors(null);
+      return;
+    }
+    let cancelled = false;
+    api.getNodeNeighbors(focusNode, focusDegrees).then(data => {
+      if (cancelled) return;
+      const neighborSet = new Set<string>();
+      data.nodes.forEach((n: any) => neighborSet.add(n.slug || n.id));
+      setFocusNeighbors(neighborSet);
+    }).catch(() => {
+      if (!cancelled) setFocusNeighbors(new Set());
+    });
+    return () => { cancelled = true; };
+  }, [focusNode, focusDegrees]);
+
+  useEffect(() => {
+    const cy = cyInstanceRef.current;
+    if (!cy) return;
+
+    cy.elements().removeClass('focus-dimmed-node focus-dimmed-edge focus-center');
+
+    if (focusNode && focusNeighbors) {
+      const visibleIds = new Set(focusNeighbors);
+      visibleIds.add(focusNode);
+
+      const focusEle = cy.getElementById(focusNode);
+      if (focusEle.length > 0) {
+        focusEle.addClass('focus-center');
+      }
+
+      cy.nodes().forEach(node => {
+        const id = node.data('id');
+        if (!visibleIds.has(id)) {
+          node.addClass('focus-dimmed-node');
+        }
+      });
+
+      cy.edges().forEach(edge => {
+        const src = edge.data('source');
+        const tgt = edge.data('target');
+        if (!visibleIds.has(src) || !visibleIds.has(tgt)) {
+          edge.addClass('focus-dimmed-edge');
+        }
+      });
+    }
+  }, [focusNode, focusNeighbors]);
+
+  useEffect(() => {
+    const cy = cyInstanceRef.current;
+    if (!cy) return;
+
+    cy.elements().removeClass('path-shortest-node path-shortest-edge path-alt-node path-alt-edge');
+
+    if (!highlightedPaths.length) return;
+
+    highlightedPaths.forEach((path, idx) => {
+      const isShortest = idx === 0;
+      const nodeClass = isShortest ? 'path-shortest-node' : 'path-alt-node';
+      const edgeClass = isShortest ? 'path-shortest-edge' : 'path-alt-edge';
+
+      path.nodes.forEach(nodeId => {
+        const node = cy.getElementById(nodeId);
+        if (node.length > 0) node.addClass(nodeClass);
+      });
+
+      path.edges.forEach(e => {
+        const edges = cy.edges().filter(edge =>
+          edge.data('source') === e.source && edge.data('target') === e.target
+        );
+        edges.forEach(edge => edge.addClass(edgeClass));
+      });
+    });
+  }, [highlightedPaths]);
 
   const handleSearch = () => {
     if (!cyInstanceRef.current || !search.trim()) return;
@@ -505,6 +688,35 @@ export default function GraphFullPage() {
           </div>
         )}
 
+        {focusNode && (
+          <div className="absolute left-3 top-14 rounded-lg border border-slate-200 bg-white/95 p-3 shadow-sm dark:border-slate-700 dark:bg-slate-800/95">
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200">
+                <Crosshair size={14} className="text-primary-500" />
+                焦点模式
+              </div>
+              <button
+                onClick={() => { setFocusNode(null); setFocusDegrees(2); setFocusNeighbors(null); }}
+                className="rounded px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+              >
+                退出焦点
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-500 dark:text-slate-400">深度</span>
+              <input
+                type="range"
+                min={1}
+                max={5}
+                value={focusDegrees}
+                onChange={e => setFocusDegrees(Number(e.target.value))}
+                className="w-24 accent-primary-500"
+              />
+              <span className="w-4 text-xs font-medium text-slate-700 dark:text-slate-200">{focusDegrees}</span>
+            </div>
+          </div>
+        )}
+
         <div className="absolute bottom-3 left-3 rounded-lg border border-slate-200 bg-white/95 p-3 text-xs shadow-sm dark:border-slate-700 dark:bg-slate-800/95">
           <div className="mb-1 font-semibold text-slate-700 dark:text-slate-200">{t('graph.legend')}</div>
           <div className="space-y-1">
@@ -577,6 +789,46 @@ export default function GraphFullPage() {
               <MagnifyingGlass size={14} />
               聚焦节点
             </button>
+            <button
+              onClick={() => {
+                setFocusNode(contextMenu.nodeId);
+                setContextMenu(prev => ({ ...prev, visible: false }));
+              }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700"
+            >
+              <Crosshair size={14} />
+              设为焦点
+            </button>
+            <button
+              onClick={() => {
+                setPathStartNode(contextMenu.nodeId);
+                if (pathEndNode && pathEndNode !== contextMenu.nodeId) {
+                  api.findShortestPaths(contextMenu.nodeId, pathEndNode).then(data => {
+                    setHighlightedPaths(data.paths || []);
+                  }).catch(() => setHighlightedPaths([]));
+                }
+                setContextMenu(prev => ({ ...prev, visible: false }));
+              }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700"
+            >
+              <MapPin size={14} />
+              设为路径起点
+            </button>
+            <button
+              onClick={() => {
+                setPathEndNode(contextMenu.nodeId);
+                if (pathStartNode && pathStartNode !== contextMenu.nodeId) {
+                  api.findShortestPaths(pathStartNode, contextMenu.nodeId).then(data => {
+                    setHighlightedPaths(data.paths || []);
+                  }).catch(() => setHighlightedPaths([]));
+                }
+                setContextMenu(prev => ({ ...prev, visible: false }));
+              }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700"
+            >
+              <Flag size={14} />
+              设为路径终点
+            </button>
           </div>
         )}
 
@@ -626,6 +878,45 @@ export default function GraphFullPage() {
               <ArrowSquareOut size={12} className="mr-1" />
               查看完整条目
             </button>
+          </div>
+        )}
+
+        {highlightedPaths.length > 0 && (
+          <div className="absolute right-3 bottom-3 w-64 rounded-xl border border-slate-200 bg-white p-4 shadow-xl dark:border-slate-700 dark:bg-slate-800 animate-slide-in">
+            <div className="mb-3 flex items-start justify-between">
+              <div className="flex items-center gap-2">
+                <Path size={16} className="text-primary-500" />
+                <span className="font-semibold text-slate-900 dark:text-white">路径结果</span>
+              </div>
+              <button
+                onClick={() => { setPathStartNode(null); setPathEndNode(null); setHighlightedPaths([]); }}
+                className="rounded px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+              >
+                清除路径
+              </button>
+            </div>
+            <div className="mb-2 text-xs text-slate-500 dark:text-slate-400">
+              {pathStartNode} → {pathEndNode}
+            </div>
+            <div className="space-y-2">
+              {highlightedPaths.map((path, i) => (
+                <div
+                  key={i}
+                  className={`rounded-lg border p-2 text-xs ${
+                    i === 0
+                      ? 'border-yellow-200 bg-yellow-50 dark:border-yellow-900/30 dark:bg-yellow-900/10'
+                      : 'border-orange-200 bg-orange-50 dark:border-orange-900/30 dark:bg-orange-900/10'
+                  }`}
+                >
+                  <div className={`font-medium ${i === 0 ? 'text-yellow-700 dark:text-yellow-400' : 'text-orange-700 dark:text-orange-400'}`}>
+                    {i === 0 ? '最短路径' : `替代路径 ${i}`}
+                  </div>
+                  <div className="mt-0.5 text-slate-500 dark:text-slate-400">
+                    {path.length} 跳 · {path.nodes.length} 节点
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>

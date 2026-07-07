@@ -286,6 +286,7 @@ export const api = {
         title: string;
         type: string;
         contexts: string[];
+        aliases: string[];
         rawMd: string;
         contentMd: string;
         hash: string;
@@ -302,6 +303,18 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify({ content })
     });
+  },
+
+  getAliasMap() {
+    return request<Record<string, string>>('/aliases/map');
+  },
+
+  getAliasConflicts() {
+    return request<{ conflicts: Array<{ alias: string; slugs: string[] }> }>('/aliases/conflicts');
+  },
+
+  resolveAlias(alias: string) {
+    return request<{ slug: string | null; aliases: string[] }>(`/aliases/resolve/${encodeURIComponent(alias)}`);
   },
 
   getChangeLog(params?: { limit?: number; op?: string }) {
@@ -395,6 +408,163 @@ export const api = {
       conversations: { id: string; question: string; answer: string; ts: string }[];
       total: number;
     }>(`/search?q=${encodeURIComponent(query)}`);
+  },
+
+  searchEntities(query: string, limit?: number) {
+    return request<{
+      items: Array<{
+        slug: string;
+        title: string;
+        aliases: string[];
+        namespace: string;
+        matchType: 'canonical' | 'alias' | 'fuzzy';
+      }>;
+    }>('/entities/search', { params: { q: query, limit: limit || 10 } });
+  },
+
+  getNodeNeighbors(slug: string, degrees?: number) {
+    return request<{
+      nodes: Array<{ slug: string; title: string; type: string; degree: number }>;
+      edges: Array<{ source: string; target: string; relation: string; weight: number }>;
+    }>(`/graph/neighbors/${encodeURIComponent(slug)}`, { params: { degrees: degrees || 2 } });
+  },
+
+  findShortestPaths(sourceSlug: string, targetSlug: string, maxPaths?: number, maxLength?: number) {
+    return request<{
+      paths: Array<{
+        nodes: string[];
+        edges: Array<{ source: string; target: string; relation: string }>;
+        length: number;
+      }>;
+    }>('/graph/paths', {
+      method: 'POST',
+      body: JSON.stringify({ sourceSlug, targetSlug, maxPaths, maxLength })
+    });
+  },
+
+  getBacklinks(slug: string, contextChars?: number) {
+    return request<{
+      backlinks: Array<{
+        sourceSlug: string;
+        sourceTitle: string;
+        context: string;
+        relationType?: string;
+      }>;
+    }>(`/pages/${encodeURIComponent(slug)}/backlinks`, { params: { contextChars: contextChars || 80 } });
+  },
+
+  getEntityPreview(slug: string) {
+    return request<{
+      title: string;
+      summary: string;
+      lastModified: string;
+      quality?: string;
+      type: string;
+      aliases: string[];
+      backlinkCount: number;
+      hasOpenThreads: boolean;
+    }>(`/preview/${encodeURIComponent(slug)}`);
+  },
+
+  ingestFile(file: File, sha256: string) {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('sha256', sha256);
+    return request<{
+      libraryUrl: string;
+      alreadyExists: boolean;
+      extractionQueued: boolean;
+    }>('/ingest/upload', {
+      method: 'POST',
+      body: formData,
+      headers: { 'Content-Type': undefined }
+    });
+  },
+
+  listSnippets(category?: string) {
+    return request<{
+      items: Array<{
+        name: string;
+        trigger: string;
+        description: string;
+        category: string;
+      }>;
+    }>('/snippets', { params: category ? { category } : {} });
+  },
+
+  getSnippet(name: string) {
+    return request<{
+      name: string;
+      trigger: string;
+      description: string;
+      category: string;
+      content: string;
+    }>(`/snippets/${encodeURIComponent(name)}`);
+  },
+
+  saveSnippet(name: string, content: string) {
+    return request<{ success: boolean }>(`/snippets/${encodeURIComponent(name)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ content })
+    });
+  },
+
+  deleteSnippet(name: string) {
+    return request<{ success: boolean }>(`/snippets/${encodeURIComponent(name)}`, {
+      method: 'DELETE'
+    });
+  },
+
+  embedProxy(type: string, params: Record<string, string>, refresh?: boolean) {
+    const query = new URLSearchParams({ type, ...params });
+    if (refresh) query.set('refresh', 'true');
+    return request<{
+      data: any;
+      cached: boolean;
+      cachedAt?: string;
+      expiresAt: string;
+    }>(`/embed-proxy?${query.toString()}`);
+  },
+
+  getSearchCompletions(prefix?: string) {
+    return request<{
+      types: string[];
+      namespaces: string[];
+      tags: string[];
+      contexts: string[];
+      qualities: string[];
+    }>('/search/completions', { params: prefix ? { prefix } : {} });
+  },
+
+  getSyntaxHelp() {
+    return request<{
+      items: Array<{ key: string; description: string; example: string }>;
+    }>('/search/syntax-help');
+  },
+
+  saveSearch(name: string, query: string, description?: string) {
+    return request<{ success: boolean }>('/saved-searches', {
+      method: 'POST',
+      body: JSON.stringify({ name, query, description })
+    });
+  },
+
+  getSavedSearches() {
+    return request<{
+      items: Array<{
+        name: string;
+        query: string;
+        description: string;
+        created_at: string;
+        updated_at: string;
+      }>;
+    }>('/saved-searches');
+  },
+
+  deleteSavedSearch(name: string) {
+    return request<{ success: boolean }>(`/saved-searches/${encodeURIComponent(name)}`, {
+      method: 'DELETE'
+    });
   },
 
   getLibraryFile(hash: string) {

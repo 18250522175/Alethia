@@ -18,7 +18,9 @@ import { getErrorMessage } from '../i18n/errors.zh-CN';
 import { budgetManager } from '../evolution/budget';
 import { randomUUID } from 'crypto';
 import { join } from 'path';
-import { existsSync, unlinkSync } from 'fs';
+import { existsSync, unlinkSync, readdirSync } from 'fs';
+import { createHash } from 'crypto';
+import { getSyntaxHelp } from '../retrieval/syntaxParser';
 import type {
   RebuildReport,
   ExtractReport,
@@ -651,6 +653,7 @@ ${relationsBlock}
       title: string;
       type: string;
       contexts: string[];
+      aliases: string[];
       rawMd: string;
       contentMd: string;
       hash: string;
@@ -661,7 +664,27 @@ ${relationsBlock}
     links: { incoming: any[]; outgoing: any[] };
   }> {
     const wikiPath = storage.getWikiPath();
-    const targetFile = join(wikiPath, `${slug}.md`);
+    let targetFile = join(wikiPath, `${slug}.md`);
+    let resolvedSlug = slug;
+
+    // 如果文件不存在，尝试通过别名查找
+    if (!existsSync(targetFile)) {
+      const pool = getPool();
+      const aliasResult = await pool.query(
+        `SELECT slug FROM pages
+         WHERE slug = $1
+            OR EXISTS (
+              SELECT 1 FROM unnest(aliases) AS a
+              WHERE LOWER(a) = LOWER($1)
+            )
+         LIMIT 1`,
+        [slug]
+      );
+      if (aliasResult.rows.length > 0) {
+        resolvedSlug = aliasResult.rows[0].slug;
+        targetFile = join(wikiPath, `${resolvedSlug}.md`);
+      }
+    }
 
     if (!existsSync(targetFile)) {
       throw new Error(`页面 ${slug} 不存在`);
@@ -674,7 +697,7 @@ ${relationsBlock}
     const pool = getPool();
     const evidenceResult = await pool.query(
       'SELECT span_id, source_file_hash, span_text, source_type, confidence FROM evidence_spans WHERE slug = $1',
-      [slug]
+      [resolvedSlug]
     );
 
     // 查询关联链接
@@ -683,29 +706,37 @@ ${relationsBlock}
         `SELECT l.*, p.title as target_title FROM links l
          LEFT JOIN pages p ON p.slug = l.source_slug
          WHERE l.target_slug = $1`,
-        [slug]
+        [resolvedSlug]
       ),
       pool.query(
         `SELECT l.*, p.title as target_title FROM links l
          LEFT JOIN pages p ON p.slug = l.target_slug
          WHERE l.source_slug = $1`,
-        [slug]
+        [resolvedSlug]
       )
     ]);
 
-    // 查询版本号
-    const versionResult = await pool.query(
-      'SELECT MAX(version) as max_version FROM knowledge_versions WHERE slug = $1',
-      [slug]
-    );
+    // 查询版本号和数据库中的别名
+    const [versionResult, dbPageResult] = await Promise.all([
+      pool.query(
+        'SELECT MAX(version) as max_version FROM knowledge_versions WHERE slug = $1',
+        [resolvedSlug]
+      ),
+      pool.query(
+        'SELECT aliases FROM pages WHERE slug = $1',
+        [resolvedSlug]
+      )
+    ]);
     const version = versionResult.rows[0]?.max_version || 1;
+    const dbAliases = dbPageResult.rows[0]?.aliases || [];
 
     return {
       page: {
-        slug: parsed.slug || slug,
-        title: parsed.title || slug,
+        slug: parsed.slug || resolvedSlug,
+        title: parsed.title || resolvedSlug,
         type: parsed.type || 'concept',
         contexts: parsed.contexts || [],
+        aliases: dbAliases.length > 0 ? dbAliases : (parsed.aliases || []),
         rawMd,
         contentMd: parsed.contentMd || '',
         hash: storage.getFileHash(targetFile),
@@ -737,6 +768,66 @@ ${relationsBlock}
     logger.info({ slug, hash }, 'Wiki 页面已更新');
 
     return { success: true, hash };
+  }
+
+  /**
+   * 别名解析：将别名映射到规范 slug
+   */
+  async resolveAlias(alias: string): Promise<{ slug: string | null; aliases: string[] }> {
+    const pool = getPool();
+    const result = await pool.query(
+      `SELECT slug, aliases FROM pages
+       WHERE slug = $1
+          OR EXISTS (
+            SELECT 1 FROM unnest(aliases) AS a
+            WHERE LOWER(a) = LOWER($1)
+          )
+       LIMIT 1`,
+      [alias]
+    );
+    if (result.rows.length === 0) {
+      return { slug: null, aliases: [] };
+    }
+    return { slug: result.rows[0].slug, aliases: result.rows[0].aliases || [] };
+  }
+
+  /**
+   * 获取所有别名映射表（用于前端 wikilink 解析）
+   */
+  async getAllAliasMap(): Promise<Record<string, string>> {
+    const pool = getPool();
+    const result = await pool.query(
+      `SELECT slug, aliases FROM pages
+       WHERE aliases IS NOT NULL AND array_length(aliases, 1) > 0`
+    );
+    const map: Record<string, string> = {};
+    for (const row of result.rows) {
+      for (const alias of row.aliases || []) {
+        const key = alias.toLowerCase();
+        if (!map[key]) {
+          map[key] = row.slug;
+        }
+      }
+    }
+    return map;
+  }
+
+  /**
+   * 别名冲突检测：返回重复出现的别名及其关联的多个实体
+   */
+  async getAliasConflicts(): Promise<Array<{ alias: string; slugs: string[] }>> {
+    const pool = getPool();
+    const result = await pool.query(
+      `SELECT LOWER(a) AS alias, array_agg(DISTINCT slug) AS slugs, COUNT(DISTINCT slug) AS cnt
+       FROM pages, unnest(aliases) AS a
+       WHERE aliases IS NOT NULL AND array_length(aliases, 1) > 0
+       GROUP BY LOWER(a)
+       HAVING COUNT(DISTINCT slug) > 1`
+    );
+    return result.rows.map((r: any) => ({
+      alias: r.alias,
+      slugs: r.slugs
+    }));
   }
 
   async generateStaticSite(options?: any): Promise<any> {
@@ -1109,6 +1200,652 @@ ${relationsBlock}
   async getBudgetAlerts(): Promise<{ items: any[]; total: number }> {
     const alerts = budgetManager.getAlerts();
     return { items: alerts, total: alerts.length };
+  }
+
+  /**
+   * 图谱焦点模式：获取节点的 N 度邻居
+   */
+  async getNodeNeighbors(slug: string, degrees: number = 2): Promise<{
+    nodes: Array<{ slug: string; title: string; type: string; degree: number }>;
+    edges: Array<{ source: string; target: string; relation: string; weight: number }>;
+  }> {
+    const pool = getPool();
+    const degreeLimit = Math.min(Math.max(degrees, 1), 5);
+
+    const nodeResult = await pool.query(
+      `WITH RECURSIVE neighbors AS (
+        SELECT target_slug AS slug, 1 AS degree
+        FROM links
+        WHERE source_slug = $1 AND NOT orphaned
+        UNION
+        SELECT l.target_slug, n.degree + 1
+        FROM links l
+        JOIN neighbors n ON l.source_slug = n.slug
+        WHERE n.degree < $2 AND NOT l.orphaned
+          AND l.target_slug NOT IN (SELECT slug FROM neighbors)
+      )
+      SELECT DISTINCT n.slug, n.degree, p.title, p.type
+      FROM neighbors n
+      LEFT JOIN pages p ON p.slug = n.slug
+      UNION
+      SELECT $1::varchar AS slug, 0 AS degree, p.title, p.type
+      FROM pages p WHERE p.slug = $1`,
+      [slug, degreeLimit]
+    );
+
+    const edgeResult = await pool.query(
+      `SELECT source_slug, target_slug, relation, weight
+       FROM links
+       WHERE source_slug IN (
+         SELECT target_slug FROM links WHERE source_slug = $1 AND NOT orphaned
+       ) OR source_slug = $1
+       AND NOT orphaned`,
+      [slug]
+    );
+
+    return {
+      nodes: nodeResult.rows.map((r: any) => ({
+        slug: r.slug,
+        title: r.title || r.slug,
+        type: r.type || 'concept',
+        degree: r.degree
+      })),
+      edges: edgeResult.rows.map((r: any) => ({
+        source: r.source_slug,
+        target: r.target_slug,
+        relation: r.relation,
+        weight: r.weight
+      }))
+    };
+  }
+
+  /**
+   * 图谱路径高亮：查找两个节点之间的最短路径
+   */
+  async findShortestPaths(
+    sourceSlug: string,
+    targetSlug: string,
+    maxPaths: number = 3,
+    maxLength: number = 6
+  ): Promise<Array<{
+    nodes: string[];
+    edges: Array<{ source: string; target: string; relation: string }>;
+    length: number;
+  }>>> {
+    const pool = getPool();
+
+    const result = await pool.query(
+      `WITH RECURSIVE paths AS (
+        SELECT
+          ARRAY[source_slug] AS node_path,
+          ARRAY[source_slug || ':' || target_slug] AS edge_path,
+          target_slug AS last_node,
+          1 AS depth
+        FROM links
+        WHERE source_slug = $1 AND NOT orphaned
+        UNION ALL
+        SELECT
+          p.node_path || l.target_slug,
+          p.edge_path || (l.source_slug || ':' || l.target_slug),
+          l.target_slug,
+          p.depth + 1
+        FROM paths p
+        JOIN links l ON l.source_slug = p.last_node
+        WHERE p.depth < $3
+          AND l.target_slug <> ALL(p.node_path)
+          AND NOT l.orphaned
+      )
+      SELECT node_path, edge_path, depth
+      FROM paths
+      WHERE last_node = $2
+      ORDER BY depth ASC
+      LIMIT $4`,
+      [sourceSlug, targetSlug, maxLength, maxPaths]
+    );
+
+    if (result.rows.length === 0) {
+      return [];
+    }
+
+    const paths = [];
+    for (const row of result.rows) {
+      const nodePath: string[] = row.node_path;
+      const edgeKeys: string[] = row.edge_path;
+      const edges = [];
+      for (let i = 0; i < nodePath.length - 1; i++) {
+        const s = nodePath[i];
+        const t = nodePath[i + 1];
+        const edgeRes = await pool.query(
+          `SELECT relation FROM links
+           WHERE source_slug = $1 AND target_slug = $2
+           LIMIT 1`,
+          [s, t]
+        );
+        edges.push({
+          source: s,
+          target: t,
+          relation: edgeRes.rows[0]?.relation || 'related'
+        });
+      }
+      paths.push({
+        nodes: nodePath,
+        edges,
+        length: row.depth
+      });
+    }
+
+    return paths;
+  }
+
+  /**
+   * 反向链接预览：查找引用当前实体的所有页面及上下文
+   */
+  async getBacklinks(
+    slug: string,
+    contextChars: number = 80
+  ): Promise<Array<{
+    sourceSlug: string;
+    sourceTitle: string;
+    context: string;
+    relationType?: string;
+  }>>> {
+    const pool = getPool();
+
+    const [linkResult, aliasResult] = await Promise.all([
+      pool.query(
+        `SELECT l.source_slug, l.relation, p.title
+         FROM links l
+         LEFT JOIN pages p ON p.slug = l.source_slug
+         WHERE l.target_slug = $1 AND NOT l.orphaned
+         ORDER BY l.created_at DESC`,
+        [slug]
+      ),
+      pool.query(
+        `SELECT slug FROM pages WHERE slug = $1`,
+        [slug]
+      )
+    ]);
+
+    const sourceSlugs = linkResult.rows.map((r: any) => r.source_slug);
+    if (sourceSlugs.length === 0) return [];
+
+    const contentResult = await pool.query(
+      `SELECT slug, content_md FROM pages WHERE slug = ANY($1)`,
+      [sourceSlugs]
+    );
+    const contentMap = new Map<string, string>();
+    for (const r of contentResult.rows) {
+      contentMap.set(r.slug, r.content_md || '');
+    }
+
+    return linkResult.rows.map((r: any) => {
+      const content = contentMap.get(r.source_slug) || '';
+      const wikilinkPattern = new RegExp(
+        `\\[\\[([^\\]]*${slug.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}[^\\]]*)\\]\\]`,
+        'i'
+      );
+      const match = content.match(wikilinkPattern);
+      let context = '';
+      if (match && match.index !== undefined) {
+        const start = Math.max(0, match.index - contextChars);
+        const end = Math.min(content.length, match.index + match[0].length + contextChars);
+        context = content.slice(start, end).replace(/\n+/g, ' ').trim();
+      } else {
+        context = content.slice(0, contextChars * 2).replace(/\n+/g, ' ').trim();
+      }
+      return {
+        sourceSlug: r.source_slug,
+        sourceTitle: r.title || r.source_slug,
+        context: context.length > contextChars * 2 + 50 ? context.slice(0, contextChars * 2 + 50) + '...' : context,
+        relationType: r.relation
+      };
+    });
+  }
+
+  /**
+   * 实体搜索自动补全：匹配规范名称、别名、拼音首字母
+   */
+  async searchEntities(
+    query: string,
+    limit: number = 10
+  ): Promise<Array<{
+    slug: string;
+    title: string;
+    aliases: string[];
+    namespace: string;
+    matchType: 'canonical' | 'alias' | 'fuzzy';
+  }>> {
+    const pool = getPool();
+    const normalized = query.trim().toLowerCase();
+    if (!normalized) return [];
+
+    const [exactResult, aliasResult, fuzzyResult] = await Promise.all([
+      pool.query(
+        `SELECT slug, title, type, aliases, path
+         FROM pages
+         WHERE LOWER(title) = $1 OR LOWER(slug) = $1
+         ORDER BY title ASC
+         LIMIT $2`,
+        [normalized, limit]
+      ),
+      pool.query(
+        `SELECT slug, title, type, aliases, path
+         FROM pages
+         WHERE EXISTS (
+           SELECT 1 FROM unnest(aliases) AS a
+           WHERE LOWER(a) = $1
+         )
+         AND LOWER(title) <> $1
+         ORDER BY title ASC
+         LIMIT $2`,
+        [normalized, limit]
+      ),
+      pool.query(
+        `SELECT slug, title, type, aliases, path
+         FROM pages
+         WHERE title ILIKE $1 OR slug ILIKE $1
+           OR EXISTS (
+             SELECT 1 FROM unnest(aliases) AS a
+             WHERE a ILIKE $1
+           )
+         ORDER BY title ASC
+         LIMIT $2`,
+        [`%${normalized}%`, limit]
+      )
+    ]);
+
+    const seen = new Set<string>();
+    const results: Array<{
+      slug: string; title: string; aliases: string[];
+      namespace: string; matchType: 'canonical' | 'alias' | 'fuzzy';
+    }> = [];
+
+    const addRow = (r: any, matchType: 'canonical' | 'alias' | 'fuzzy') => {
+      if (seen.has(r.slug)) return;
+      seen.add(r.slug);
+      const pathParts = (r.path || '').split('/');
+      const namespace = pathParts.length > 1 ? pathParts[pathParts.length - 2] : 'wiki';
+      results.push({
+        slug: r.slug,
+        title: r.title || r.slug,
+        aliases: r.aliases || [],
+        namespace,
+        matchType
+      });
+    };
+
+    exactResult.rows.forEach((r: any) => addRow(r, 'canonical'));
+    aliasResult.rows.forEach((r: any) => addRow(r, 'alias'));
+    fuzzyResult.rows.forEach((r: any) => addRow(r, 'fuzzy'));
+
+    return results.slice(0, limit);
+  }
+
+  /**
+   * 获取实体预览数据（用于悬浮卡片）
+   */
+  async getEntityPreview(slug: string): Promise<{
+    title: string;
+    summary: string;
+    lastModified: string;
+    quality?: string;
+    type: string;
+    aliases: string[];
+    backlinkCount: number;
+    hasOpenThreads: boolean;
+  }> {
+    const pool = getPool();
+
+    const [pageResult, backlinkResult] = await Promise.all([
+      pool.query(
+        `SELECT title, type, aliases, content_md, raw_md, updated_at, parsed_json
+         FROM pages WHERE slug = $1`,
+        [slug]
+      ),
+      pool.query(
+        `SELECT COUNT(*) as cnt FROM links WHERE target_slug = $1 AND NOT orphaned`,
+        [slug]
+      )
+    ]);
+
+    if (pageResult.rows.length === 0) {
+      throw new Error(`实体 ${slug} 不存在`);
+    }
+
+    const row = pageResult.rows[0];
+
+    let summary = '';
+    const content = row.content_md || '';
+    const assessmentMatch = content.match(/^##\s+Assessment\s*\n([\s\S]*?)(?=\n##\s|$)/i);
+    if (assessmentMatch) {
+      summary = assessmentMatch[1].replace(/\n/g, ' ').trim();
+      if (summary.length > 200) {
+        const lastPeriod = summary.lastIndexOf('.', 200);
+        const lastSpace = summary.lastIndexOf(' ', 200);
+        const cutoff = lastPeriod > 100 ? lastPeriod + 1 : (lastSpace > 100 ? lastSpace : 200);
+        summary = summary.slice(0, cutoff) + '...';
+      }
+    }
+
+    const parsedJson = typeof row.parsed_json === 'string' ? JSON.parse(row.parsed_json) : row.parsed_json;
+    const openThreads = parsedJson?.sections?.['Open Threads'] || '';
+    const hasOpenThreads = openThreads.trim().length > 0;
+
+    return {
+      title: row.title || slug,
+      summary,
+      lastModified: row.updated_at ? new Date(row.updated_at).toISOString() : new Date().toISOString(),
+      quality: parsedJson?.frontmatter?.quality,
+      type: row.type || 'concept',
+      aliases: row.aliases || [],
+      backlinkCount: parseInt(backlinkResult.rows[0]?.cnt || '0'),
+      hasOpenThreads
+    };
+  }
+
+  /**
+   * 摄入文件（拖拽上传）
+   */
+  async ingestFile(originalName: string, mime: string, content: Buffer, sha256: string): Promise<{
+    libraryUrl: string;
+    alreadyExists: boolean;
+    extractionQueued: boolean;
+  }> {
+    const pool = getPool();
+
+    const existingResult = await pool.query(
+      'SELECT hash FROM library_files WHERE hash = $1',
+      [sha256]
+    );
+
+    if (existingResult.rows.length > 0) {
+      return {
+        libraryUrl: `library://${sha256}`,
+        alreadyExists: true,
+        extractionQueued: false
+      };
+    }
+
+    storage.saveLibraryFile(sha256, content);
+
+    await pool.query(
+      `INSERT INTO library_files (hash, mime, original_name, size, status, ingested_at)
+       VALUES ($1, $2, $3, $4, 'new', NOW())`,
+      [sha256, mime, originalName, content.length]
+    );
+
+    return {
+      libraryUrl: `library://${sha256}`,
+      alreadyExists: false,
+      extractionQueued: true
+    };
+  }
+
+  /**
+   * 模板片段相关 API
+   */
+  async listSnippets(category?: string): Promise<Array<{
+    name: string;
+    trigger: string;
+    description: string;
+    category: string;
+  }>> {
+    const snippetsPath = join(storage.getSkillsPath(), 'snippets');
+    const results: Array<{ name: string; trigger: string; description: string; category: string }> = [];
+
+    if (!existsSync(snippetsPath)) return results;
+
+    const files = await new Promise<string[]>((resolve) => {
+      require('fs').readdir(snippetsPath, (err: any, files: string[]) => {
+        resolve(err ? [] : files.filter(f => f.endsWith('.md')));
+      });
+    });
+
+    for (const file of files) {
+      try {
+        const content = storage.readFile(join(snippetsPath, file));
+        const parsed = require('gray-matter')(content);
+        const name = file.replace('.md', '');
+        if (!category || parsed.data.category === category) {
+          results.push({
+            name,
+            trigger: parsed.data.trigger || name,
+            description: parsed.data.description || '',
+            category: parsed.data.category || '其他'
+          });
+        }
+      } catch {
+        continue;
+      }
+    }
+
+    return results;
+  }
+
+  async getSnippet(name: string): Promise<{
+    name: string;
+    trigger: string;
+    description: string;
+    category: string;
+    content: string;
+  }> {
+    const snippetsPath = join(storage.getSkillsPath(), 'snippets');
+    const filePath = join(snippetsPath, `${name}.md`);
+
+    if (!existsSync(filePath)) {
+      throw new Error(`片段 ${name} 不存在`);
+    }
+
+    const content = storage.readFile(filePath);
+    const parsed = require('gray-matter')(content);
+
+    return {
+      name,
+      trigger: parsed.data.trigger || name,
+      description: parsed.data.description || '',
+      category: parsed.data.category || '其他',
+      content: parsed.content || ''
+    };
+  }
+
+  async saveSnippet(name: string, content: string): Promise<void> {
+    const snippetsPath = join(storage.getSkillsPath(), 'snippets');
+    if (!existsSync(snippetsPath)) {
+      require('fs').mkdirSync(snippetsPath, { recursive: true });
+    }
+
+    storage.atomicWrite(join(snippetsPath, `${name}.md`), content);
+  }
+
+  async deleteSnippet(name: string): Promise<void> {
+    const snippetsPath = join(storage.getSkillsPath(), 'snippets');
+    const filePath = join(snippetsPath, `${name}.md`);
+
+    if (existsSync(filePath)) {
+      unlinkSync(filePath);
+    }
+  }
+
+  /**
+   * 获取高级搜索语法补全候选
+   */
+  async getSearchCompletions(prefix: string): Promise<{
+    types: string[];
+    namespaces: string[];
+    tags: string[];
+    contexts: string[];
+    qualities: string[];
+  }> {
+    const pool = getPool();
+    const [typeResult, nsResult, tagResult, ctxResult] = await Promise.all([
+      pool.query(
+        `SELECT type, COUNT(*) as cnt FROM pages GROUP BY type ORDER BY cnt DESC LIMIT 20`
+      ),
+      pool.query(
+        `SELECT DISTINCT SPLIT_PART(path, '/', 1) AS ns FROM pages WHERE path LIKE '%/%' LIMIT 20`
+      ),
+      pool.query(
+        `SELECT DISTINCT unnest(tags) AS tag FROM pages WHERE tags <> '{}' ORDER BY tag LIMIT 50`
+      ),
+      pool.query(
+        `SELECT DISTINCT unnest(contexts) AS ctx FROM pages WHERE contexts <> '{}' ORDER BY ctx LIMIT 50`
+      )
+    ]);
+
+    return {
+      types: typeResult.rows.map((r: any) => r.type).filter(Boolean),
+      namespaces: nsResult.rows.map((r: any) => r.ns).filter(Boolean),
+      tags: tagResult.rows.map((r: any) => r.tag).filter(Boolean),
+      contexts: ctxResult.rows.map((r: any) => r.ctx).filter(Boolean),
+      qualities: ['A', 'B', 'C']
+    };
+  }
+
+  /**
+   * 获取语法帮助
+   */
+  getSyntaxDocumentation() {
+    return getSyntaxHelp();
+  }
+
+  /**
+   * 嵌入数据代理 API
+   */
+  async embedProxy(type: string, params: Record<string, string>, refresh: boolean = false): Promise<{
+    data: any;
+    cached: boolean;
+    cachedAt?: string;
+    expiresAt: string;
+  }> {
+    const pool = getPool();
+    const paramsHash = createHash('sha256').update(JSON.stringify(params)).digest('hex');
+    const cacheKey = `${type}:${paramsHash}`;
+
+    const cacheDuration = {
+      stock: 5 * 60 * 1000,
+      weather: 30 * 60 * 1000,
+      rss: 60 * 60 * 1000,
+      crypto: 5 * 60 * 1000,
+      json: 5 * 60 * 1000
+    };
+
+    if (!refresh) {
+      const cacheResult = await pool.query(
+        'SELECT data, cached_at FROM embed_cache WHERE key = $1 AND expires_at > NOW()',
+        [cacheKey]
+      );
+
+      if (cacheResult.rows.length > 0) {
+        return {
+          data: JSON.parse(cacheResult.rows[0].data),
+          cached: true,
+          cachedAt: cacheResult.rows[0].cached_at?.toISOString(),
+          expiresAt: new Date(Date.now() + (cacheDuration[type as keyof typeof cacheDuration] || 300000)).toISOString()
+        };
+      }
+    }
+
+    let data: any = null;
+
+    try {
+      switch (type) {
+        case 'stock': {
+          const symbol = params.symbol;
+          const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`;
+          const response = await fetch(url, { timeout: 5000 });
+          const json = await response.json();
+          const meta = json.chart?.result?.[0]?.meta || {};
+          data = {
+            symbol,
+            price: meta.regularMarketPrice,
+            change: meta.regularMarketChange,
+            changePercent: meta.regularMarketChangePercent,
+            currency: meta.currency
+          };
+          break;
+        }
+        case 'weather': {
+          const city = params.city;
+          const apiKey = process.env.OPENWEATHERMAP_API_KEY;
+          if (!apiKey) {
+            data = { error: 'OpenWeatherMap API key not configured' };
+            break;
+          }
+          const url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&appid=${apiKey}&units=${params.units || 'metric'}`;
+          const response = await fetch(url, { timeout: 5000 });
+          const json = await response.json();
+          data = {
+            city: json.name,
+            temp: json.main?.temp,
+            feelsLike: json.main?.feels_like,
+            humidity: json.main?.humidity,
+            description: json.weather?.[0]?.description,
+            icon: json.weather?.[0]?.icon,
+            windSpeed: json.wind?.speed
+          };
+          break;
+        }
+        case 'rss': {
+          const url = params.url;
+          const response = await fetch(url, { timeout: 5000 });
+          const xml = await response.text();
+          const parser = new (require('xml2js').Parser)({ trim: true, explicitArray: false });
+          const json = await new Promise((resolve) => parser.parseString(xml, (_, result) => resolve(result)));
+          const items = json.rss?.channel?.item || [];
+          const limit = parseInt(params.limit || '5');
+          data = {
+            title: json.rss?.channel?.title,
+            items: Array.isArray(items) ? items.slice(0, limit).map((item: any) => ({
+              title: item.title,
+              link: item.link,
+              pubDate: item.pubDate
+            })) : []
+          };
+          break;
+        }
+        case 'crypto': {
+          const symbol = params.symbol;
+          const url = `https://api.coingecko.com/api/v3/simple/price?ids=${symbol}&vs_currencies=usd`;
+          const response = await fetch(url, { timeout: 5000 });
+          const json = await response.json();
+          data = {
+            symbol,
+            price: json[symbol]?.usd
+          };
+          break;
+        }
+        case 'json': {
+          const url = params.url;
+          const response = await fetch(url, { timeout: 5000 });
+          data = await response.json();
+          break;
+        }
+        default:
+          data = { error: `Unsupported embed type: ${type}` };
+      }
+    } catch (err) {
+      logger.warn({ err, type, params }, '嵌入数据获取失败');
+      data = { error: 'Failed to fetch data' };
+    }
+
+    const expiresAt = new Date(Date.now() + (cacheDuration[type as keyof typeof cacheDuration] || 300000));
+
+    await pool.query(
+      `INSERT INTO embed_cache (key, type, params, data, cached_at, expires_at)
+       VALUES ($1, $2, $3, $4, NOW(), $5)
+       ON CONFLICT (key) DO UPDATE SET
+         data = EXCLUDED.data,
+         cached_at = NOW(),
+         expires_at = EXCLUDED.expires_at`,
+      [cacheKey, type, JSON.stringify(params), JSON.stringify(data), expiresAt]
+    );
+
+    return {
+      data,
+      cached: false,
+      cachedAt: new Date().toISOString(),
+      expiresAt: expiresAt.toISOString()
+    };
   }
 }
 

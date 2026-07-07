@@ -10,6 +10,7 @@ export interface ParsedPage {
   title: string;
   type: string;
   contexts: string[];
+  aliases: string[];
   rawMd: string;
   contentMd: string;
   parsedJson: Record<string, unknown>;
@@ -68,6 +69,7 @@ export class CompiledTruthParser {
     const title = data.title || this.extractTitle(content) || slug;
     const type = data.type || 'concept';
     const contexts = Array.isArray(data.contexts) ? data.contexts : [];
+    const aliases = Array.isArray(data.aliases) ? data.aliases : [];
 
     const relations = this.parseRelations(sections['Relations'] || '');
     const timeline = this.parseTimeline(sections['Timeline'] || '');
@@ -82,6 +84,7 @@ export class CompiledTruthParser {
       title,
       type,
       contexts,
+      aliases,
       rawMd: rawContent,
       contentMd: content,
       parsedJson: {
