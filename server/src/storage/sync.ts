@@ -67,12 +67,13 @@ export class SyncEngine {
     const hash = createHash('sha256').update(parsed.rawMd).digest('hex');
 
     await client.query(`
-      INSERT INTO pages (slug, path, type, contexts, raw_md, parsed_json, content_md, hash, updated_at)
-      VALUES ($1, $2, $3, $4::text[], $5, $6::jsonb, $7, $8, NOW())
+      INSERT INTO pages (slug, path, type, contexts, aliases, raw_md, parsed_json, content_md, hash, updated_at)
+      VALUES ($1, $2, $3, $4::text[], $5::text[], $6, $7::jsonb, $8, $9, NOW())
       ON CONFLICT (slug) DO UPDATE SET
         path = EXCLUDED.path,
         type = EXCLUDED.type,
         contexts = EXCLUDED.contexts,
+        aliases = EXCLUDED.aliases,
         raw_md = EXCLUDED.raw_md,
         parsed_json = EXCLUDED.parsed_json,
         content_md = EXCLUDED.content_md,
@@ -83,6 +84,7 @@ export class SyncEngine {
       parsed.path,
       parsed.type,
       parsed.contexts,
+      parsed.aliases,
       parsed.rawMd,
       JSON.stringify(parsed.parsedJson),
       parsed.contentMd,
