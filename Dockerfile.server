@@ -41,6 +41,10 @@ COPY --from=builder /app/server/skills /app/server/skills
 COPY --from=builder /app/server/src/db/migrations /app/server/src/db/migrations
 COPY --from=builder /app/wiki /app/wiki
 
+# 拷贝初始化脚本（init 容器入口）
+COPY init.sh /app/init.sh
+RUN chmod +x /app/init.sh
+
 # 默认环境变量（DB 密钥不再硬编码，由 compose/.env 强制注入）
 ENV NODE_ENV=production
 ENV BRAIN_PORT=3000
