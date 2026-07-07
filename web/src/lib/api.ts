@@ -54,15 +54,29 @@ class ApiErrorClass extends Error {
 
 async function request<T>(
   path: string,
-  options: RequestInit & { timeout?: number; signal?: AbortSignal } = {}
+  options: RequestInit & { timeout?: number; signal?: AbortSignal; params?: Record<string, any> } = {}
 ): Promise<T> {
-  const url = `${API_BASE}${path}`;
+  let url = `${API_BASE}${path}`;
+
+  // 处理 params 参数
+  if (options.params) {
+    const queryString = new URLSearchParams();
+    for (const [key, value] of Object.entries(options.params)) {
+      if (value !== undefined && value !== null) {
+        queryString.set(key, String(value));
+      }
+    }
+    if (queryString.toString()) {
+      url += (url.includes('?') ? '&' : '?') + queryString.toString();
+    }
+  }
+
   const headers: Record<string, string> = {
     ...(options.headers as Record<string, string> || {})
   };
 
-  // 仅对非 GET 请求设置 Content-Type
-  if (options.method && options.method !== 'GET') {
+  // 仅对非 GET 请求设置 Content-Type（FormData 除外）
+  if (options.method && options.method !== 'GET' && !(options.body instanceof FormData)) {
     headers['Content-Type'] = 'application/json';
   }
 
@@ -211,7 +225,7 @@ export const api = {
       lastSync?: string;
       uptimeMs: number;
       components: { name: string; status: 'ok' | 'degraded' | 'error'; latencyMs?: number }[];
-    }>('/health');
+    }>('/health-dashboard');
   },
 
   getHealthDashboard() {
@@ -476,8 +490,7 @@ export const api = {
       extractionQueued: boolean;
     }>('/ingest/upload', {
       method: 'POST',
-      body: formData,
-      headers: { 'Content-Type': undefined }
+      body: formData
     });
   },
 
@@ -599,11 +612,11 @@ export const api = {
   },
 
   translateEvidence(spanId: string, targetLang: string) {
-    return request<{ spanId: string; translatedText: string; targetLang: string }>(
+    return request<{ items: Array<{ spanId: string; translatedText: string; targetLang: string }>; total: number }>(
       '/translate-evidence',
       {
         method: 'POST',
-        body: JSON.stringify({ spanId, targetLang })
+        body: JSON.stringify({ spanIds: [spanId], targetLang })
       }
     );
   },
@@ -704,10 +717,110 @@ export const api = {
     }>('/budget/alerts');
   },
 
+  getConversations() {
+    return request<{
+      items: Array<{
+        id: string;
+        title: string;
+        preview: string;
+        updatedAt: string;
+        totalTokens?: number;
+        totalCost?: number;
+      }>;
+      total: number;
+    }>('/conversations');
+  },
+
+  deleteConversation(conversationId: string) {
+    return request<{ success: boolean }>(`/conversations/${conversationId}`, { method: 'DELETE' });
+  },
+
+  getLibraryFiles() {
+    return request<{
+      items: Array<{
+        hash: string;
+        mime: string;
+        originalName: string;
+        size: number;
+        status: string;
+        ingestedAt: string;
+      }>;
+      total: number;
+    }>('/library-files');
+  },
+
+  deleteLibraryFile(hash: string) {
+    return request<{ success: boolean }>(`/library-files/${hash}`, { method: 'DELETE' });
+  },
+
+  getPages() {
+    return request<{
+      items: Array<{
+        slug: string;
+        title: string;
+        type: string;
+        contexts: string[];
+        aliases: string[];
+        updatedAt: string;
+      }>;
+      total: number;
+    }>('/pages');
+  },
+
+  createPage(title: string, type?: string, contexts?: string[], aliases?: string[]) {
+    return request<{ success: boolean; slug: string }>('/pages', {
+      method: 'POST',
+      body: JSON.stringify({ title, type, contexts, aliases })
+    });
+  },
+
+  getPageVersions(slug: string) {
+    return request<{
+      items: Array<{
+        version: number;
+        hash: string;
+        updatedAt: string;
+        changeSummary: string;
+      }>;
+      total: number;
+    }>(`/pages/${encodeURIComponent(slug)}/versions`);
+  },
+
+  getPageVersion(slug: string, version: number) {
+    return request<{ content: string }>(`/pages/${encodeURIComponent(slug)}/versions/${version}`);
+  },
+
+  getNotifications() {
+    return request<{
+      items: Array<{
+        id: number;
+        type: string;
+        title: string;
+        message: string;
+        read: boolean;
+        metadata: Record<string, unknown>;
+        created_at: string;
+      }>;
+      total: number;
+    }>('/notifications');
+  },
+
+  markNotificationRead(id: number) {
+    return request<{ success: boolean }>(`/notifications/${id}/read`, { method: 'POST' });
+  },
+
+  markAllNotificationsRead() {
+    return request<{ success: boolean }>('/notifications/read-all', { method: 'POST' });
+  },
+
+  clearAllNotifications() {
+    return request<{ success: boolean }>('/notifications/all', { method: 'DELETE' });
+  },
+
   updateDailyBudget(amount: number) {
     return request<{ success: boolean; dailyBudget: number }>('/settings/daily-budget', {
-      method: 'PUT',
-      body: JSON.stringify({ dailyBudget: amount })
+      method: 'POST',
+      body: JSON.stringify({ amount })
     });
   }
 };

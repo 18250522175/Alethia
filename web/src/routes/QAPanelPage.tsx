@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   PaperPlaneTilt,
@@ -53,12 +53,13 @@ const SUGGESTED_QUESTIONS = [
   '什么是 Compiled Truth Markdown？'
 ];
 
-const MOCK_CONVERSATIONS: Conversation[] = [
-  { id: '1', title: '关于熵的讨论', preview: '熵的概念是什么？', updatedAt: Date.now() - 1000 * 60 * 30, compressed: false },
-  { id: '2', title: '热力学第二定律', preview: '热力学第二定律的应用...', updatedAt: Date.now() - 1000 * 60 * 60 * 2, compressed: false },
-  { id: '3', title: '知识库结构咨询', preview: '核心概念有哪些？', updatedAt: Date.now() - 1000 * 60 * 60 * 24, compressed: true },
-  { id: '4', title: 'CTM 格式说明', preview: 'Compiled Truth Markdown...', updatedAt: Date.now() - 1000 * 60 * 60 * 24 * 3, compressed: true },
-];
+interface Conversation {
+  id: string;
+  title: string;
+  preview: string;
+  updatedAt: number;
+  compressed?: boolean;
+}
 
 type ViewMode = 'detailed' | 'concise';
 
@@ -69,11 +70,42 @@ export default function QAPanelPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [conversationId, setConversationId] = useState<string | undefined>(urlConvId);
-  const [conversations, setConversations] = useState<Conversation[]>(MOCK_CONVERSATIONS);
   const [showSidebar, setShowSidebar] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>('detailed');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [activeEvidence, setActiveEvidence] = useState<{ spanId: string; data?: any } | null>(null);
+  const [feedbackStatus, setFeedbackStatus] = useState<Record<string, 'pending' | 'success' | 'error' | undefined>>({});
+
+  const { data: conversationsData } = useQuery({
+    queryKey: ['conversations'],
+    queryFn: () => api.getConversations(),
+    staleTime: 60_000
+  });
+
+  const conversations = conversationsData?.items.map(c => ({
+    id: c.id,
+    title: c.title,
+    preview: c.preview,
+    updatedAt: new Date(c.updatedAt).getTime(),
+    compressed: false
+  })) || [];
+
+  const feedbackMutation = useMutation({
+    mutationFn: ({ messageId, helpful }: { messageId: string; helpful: boolean }) =>
+      api.submitFeedback(messageId, helpful),
+    onSuccess: (_data, variables) => {
+      setFeedbackStatus(prev => ({ ...prev, [variables.messageId]: 'success' }));
+      setTimeout(() => setFeedbackStatus(prev => ({ ...prev, [variables.messageId]: undefined })), 2000);
+    },
+    onError: (_err, variables) => {
+      setFeedbackStatus(prev => ({ ...prev, [variables.messageId]: 'error' }));
+      setTimeout(() => setFeedbackStatus(prev => ({ ...prev, [variables.messageId]: undefined })), 2000);
+    }
+  });
+
+  const handleSubmitFeedback = (messageId: string, helpful: boolean) => {
+    feedbackMutation.mutate({ messageId, helpful });
+  };
 
   const handleEvidenceClick = useCallback((spanId: string) => {
     setActiveEvidence(prev => prev?.spanId === spanId ? null : { spanId });
@@ -175,9 +207,6 @@ export default function QAPanelPage() {
 
   const toggleCompressConversation = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setConversations(prev => prev.map(c =>
-      c.id === id ? { ...c, compressed: !c.compressed } : c
-    ));
   };
 
   useEffect(() => {
@@ -352,7 +381,7 @@ export default function QAPanelPage() {
           ) : (
             <div className="space-y-6">
               {messages.map(msg => (
-                <MessageBubble key={msg.id} message={msg} viewMode={viewMode} onEvidenceClick={handleEvidenceClick} />
+                <MessageBubble key={msg.id} message={msg} viewMode={viewMode} onEvidenceClick={handleEvidenceClick} onFeedback={handleSubmitFeedback} />
               ))}
               {askMutation.isPending && (
                 <div className="flex items-center gap-2 text-sm text-slate-500">
@@ -389,7 +418,7 @@ export default function QAPanelPage() {
   );
 }
 
-function MessageBubble({ message, viewMode, onEvidenceClick }: { message: ChatMessage; viewMode: ViewMode; onEvidenceClick?: (spanId: string) => void }) {
+function MessageBubble({ message, viewMode, onEvidenceClick, onFeedback }: { message: ChatMessage; viewMode: ViewMode; onEvidenceClick?: (spanId: string) => void; onFeedback?: (messageId: string, helpful: boolean) => void }) {
   const { t } = useTranslation();
   const isUser = message.role === 'user';
   const confidenceColor =
@@ -481,11 +510,17 @@ function MessageBubble({ message, viewMode, onEvidenceClick }: { message: ChatMe
 
         {!isUser && (
           <div className="mt-3 flex gap-2">
-            <button className="text-xs text-slate-400 hover:text-green-500">
+            <button
+              onClick={() => onFeedback?.(message.id, true)}
+              className="text-xs text-slate-400 hover:text-green-500 transition-colors"
+            >
               <ThumbsUp size={14} className="mr-1 inline" />
               {t('qa.feedbackHelpful')}
             </button>
-            <button className="text-xs text-slate-400 hover:text-red-500">
+            <button
+              onClick={() => onFeedback?.(message.id, false)}
+              className="text-xs text-slate-400 hover:text-red-500 transition-colors"
+            >
               <ThumbsDown size={14} className="mr-1 inline" />
               {t('qa.feedbackWrong')}
             </button>

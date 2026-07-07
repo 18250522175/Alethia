@@ -83,18 +83,36 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     []
   );
 
-  const markAsRead = useCallback((id: string) => {
+  const markAsRead = useCallback(async (id: string) => {
     setLocalNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, read: true } : n))
     );
+    try {
+      const numId = parseInt(id, 10);
+      if (!isNaN(numId)) {
+        await api.markNotificationRead(numId);
+      }
+    } catch {
+      // 忽略网络错误
+    }
   }, []);
 
-  const markAllAsRead = useCallback(() => {
+  const markAllAsRead = useCallback(async () => {
     setLocalNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    try {
+      await api.markAllNotificationsRead();
+    } catch {
+      // 忽略网络错误
+    }
   }, []);
 
-  const clearAll = useCallback(() => {
+  const clearAll = useCallback(async () => {
     setLocalNotifications([]);
+    try {
+      await api.clearAllNotifications();
+    } catch {
+      // 忽略网络错误
+    }
   }, []);
 
   return (

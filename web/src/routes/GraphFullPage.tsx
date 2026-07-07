@@ -435,7 +435,7 @@ export default function GraphFullPage() {
         const edges = cy.edges().filter(edge =>
           edge.data('source') === e.source && edge.data('target') === e.target
         );
-        edges.forEach(edge => edge.addClass(edgeClass));
+        edges.forEach(edge => { edge.addClass(edgeClass); });
       });
     });
   }, [highlightedPaths]);

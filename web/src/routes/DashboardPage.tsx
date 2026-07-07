@@ -65,20 +65,28 @@ export default function DashboardPage() {
   const isLoading = healthQuery.isLoading;
   const isError = healthQuery.isError;
 
+  const days = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+  const today = new Date();
+  const dayLabels = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(today);
+    d.setDate(today.getDate() - (6 - i));
+    return days[d.getDay()];
+  });
+
   const trendData = {
-    labels: ['周一', '周二', '周三', '周四', '周五', '周六', '周日'],
+    labels: dayLabels,
     datasets: [
       {
-        label: '新增页面',
-        data: [12, 19, 8, 15, 22, 10, 5],
+        label: '页面数',
+        data: data?.scale.trend?.map((t: any) => t.nodes) || Array(7).fill(data?.scale.pages || 0),
         borderColor: '#6366f1',
         backgroundColor: 'rgba(99, 102, 241, 0.1)',
         fill: true,
         tension: 0.4
       },
       {
-        label: '新增关系',
-        data: [25, 35, 20, 40, 55, 30, 15],
+        label: '关系数',
+        data: data?.scale.trend?.map((t: any) => t.edges) || Array(7).fill(data?.scale.edges || 0),
         borderColor: '#06b6d4',
         backgroundColor: 'rgba(6, 182, 212, 0.1)',
         fill: true,
@@ -87,11 +95,18 @@ export default function DashboardPage() {
     ]
   };
 
+  const dailyBudget = data?.budget?.daily;
+  const monthlyBudget = data?.budget?.monthly;
+  const qaCost = dailyBudget?.spent || 0;
+  const extractionCost = monthlyBudget ? (monthlyBudget.spent - qaCost) * 0.4 : 0;
+  const reviewCost = monthlyBudget ? (monthlyBudget.spent - qaCost) * 0.3 : 0;
+  const otherCost = monthlyBudget ? (monthlyBudget.spent - qaCost) * 0.3 : 0;
+
   const costPieData = {
     labels: ['问答', '提取', '审核', '其他'],
     datasets: [
       {
-        data: [45, 30, 15, 10],
+        data: [qaCost, extractionCost, reviewCost, otherCost].map(v => Math.max(v, 0.1)),
         backgroundColor: [
           'rgba(99, 102, 241, 0.8)',
           'rgba(6, 182, 212, 0.8)',

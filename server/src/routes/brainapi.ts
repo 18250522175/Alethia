@@ -188,6 +188,48 @@ app.post('/api/rollback/:batchId', async (c) => {
   }
 });
 
+app.get('/api/conversations', async (c) => {
+  try {
+    const pool = getPool();
+    const result = await pool.query(`
+      SELECT conversation_id, 
+             MAX(CASE WHEN role = 'user' THEN content END) as last_question,
+             MAX(CASE WHEN role = 'assistant' THEN content END) as last_answer,
+             MAX(ts) as updated_at,
+             SUM(tokens) as total_tokens,
+             SUM(cost) as total_cost
+      FROM conversation_logs
+      GROUP BY conversation_id
+      ORDER BY updated_at DESC
+      LIMIT 50
+    `);
+    const conversations = result.rows.map((r: any) => ({
+      id: r.conversation_id,
+      title: r.last_question?.slice(0, 50) || '对话',
+      preview: r.last_question?.slice(0, 100) || '',
+      updatedAt: r.updated_at,
+      totalTokens: r.total_tokens,
+      totalCost: r.total_cost
+    }));
+    return c.json({ items: conversations, total: conversations.length });
+  } catch (err) {
+    loggerInstance.error({ err }, '获取对话列表失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+app.delete('/api/conversations/:id', async (c) => {
+  try {
+    const conversationId = c.req.param('id');
+    const pool = getPool();
+    await pool.query('DELETE FROM conversation_logs WHERE conversation_id = $1', [conversationId]);
+    return c.json({ success: true });
+  } catch (err) {
+    loggerInstance.error({ err }, '删除对话失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
 app.get('/api/conversations/:id', async (c) => {
   try {
     const conversationId = c.req.param('id');
@@ -398,6 +440,79 @@ app.post('/api/generate-static-site', async (c) => {
   }
 });
 
+// Wiki pages list
+app.get('/api/pages', async (c) => {
+  try {
+    const pool = getPool();
+    const result = await pool.query(
+      'SELECT slug, title, type, contexts, aliases, updated_at FROM pages ORDER BY updated_at DESC LIMIT 100'
+    );
+    const pages = result.rows.map((r: any) => ({
+      slug: r.slug,
+      title: r.title,
+      type: r.type,
+      contexts: r.contexts,
+      aliases: r.aliases || [],
+      updatedAt: r.updated_at
+    }));
+    return c.json({ items: pages, total: pages.length });
+  } catch (err) {
+    loggerInstance.error({ err }, '获取页面列表失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+// Create wiki page
+app.post('/api/pages', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { title, type, contexts, aliases } = body;
+    if (!title) {
+      return c.json({ error: { code: 'VALIDATION_ERROR', message: getErrorMessage('VALIDATION_ERROR') } }, 400);
+    }
+    const slug = title.toLowerCase().replace(/[^\w\u4e00-\u9fa5]+/g, '-').replace(/^-|-$/g, '');
+    const wikiPath = storage.getWikiPath();
+    const targetFile = join(wikiPath, `${slug}.md`);
+    
+    if (existsSync(targetFile)) {
+      return c.json({ error: { code: 'CONFLICT', message: '页面已存在' } }, 409);
+    }
+    
+    const content = `---
+title: ${title}
+type: ${type || 'concept'}
+contexts: ${contexts ? JSON.stringify(contexts) : '[]'}
+aliases: ${aliases ? JSON.stringify(aliases) : '[]'}
+---
+
+# ${title}
+
+## State
+（待填写）
+
+## Assessment
+（待填写）
+
+## Open Threads
+- [ ] 需要补充核心定义
+
+## Relations
+（无）
+
+## Evidence
+（无）
+`;
+    
+    storage.writeFile(targetFile, content);
+    await syncEngine.syncAll();
+    
+    return c.json({ success: true, slug });
+  } catch (err) {
+    loggerInstance.error({ err }, '创建页面失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
 // Wiki 页面读取与编辑
 app.get('/api/pages/:slug', async (c) => {
   try {
@@ -411,6 +526,50 @@ app.get('/api/pages/:slug', async (c) => {
     return c.json({
       error: { code, message }
     }, code === 'NOT_FOUND' ? 404 : 500);
+  }
+});
+
+// Wiki page versions
+app.get('/api/pages/:slug/versions', async (c) => {
+  try {
+    const slug = c.req.param('slug');
+    const pool = getPool();
+    const result = await pool.query(
+      'SELECT version, hash, created_at as updated_at, change_summary FROM knowledge_versions WHERE slug = $1 ORDER BY version DESC',
+      [slug]
+    );
+    const versions = result.rows.map((r: any) => ({
+      version: r.version,
+      hash: r.hash,
+      updatedAt: r.updated_at,
+      changeSummary: r.change_summary || ''
+    }));
+    return c.json({ items: versions, total: versions.length });
+  } catch (err) {
+    loggerInstance.error({ err }, '获取版本历史失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+app.get('/api/pages/:slug/versions/:version', async (c) => {
+  try {
+    const slug = c.req.param('slug');
+    const version = parseInt(c.req.param('version'), 10);
+    if (isNaN(version)) {
+      return c.json({ error: { code: 'VALIDATION_ERROR', message: getErrorMessage('VALIDATION_ERROR') } }, 400);
+    }
+    const pool = getPool();
+    const result = await pool.query(
+      'SELECT content FROM knowledge_versions WHERE slug = $1 AND version = $2',
+      [slug, version]
+    );
+    if (result.rows.length === 0) {
+      return c.json({ error: { code: 'NOT_FOUND', message: getErrorMessage('NOT_FOUND') } }, 404);
+    }
+    return c.json({ content: result.rows[0].content });
+  } catch (err) {
+    loggerInstance.error({ err }, '获取特定版本失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
   }
 });
 
@@ -520,6 +679,41 @@ app.get('/api/search', async (c) => {
     return c.json(result);
   } catch (err) {
     loggerInstance.error({ err }, '搜索失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+// Library files list
+app.get('/api/library-files', async (c) => {
+  try {
+    const pool = getPool();
+    const result = await pool.query(
+      'SELECT hash, mime, original_name, size, status, ingested_at FROM library_files ORDER BY ingested_at DESC'
+    );
+    const files = result.rows.map((r: any) => ({
+      hash: r.hash,
+      mime: r.mime,
+      originalName: r.original_name,
+      size: r.size,
+      status: r.status,
+      ingestedAt: r.ingested_at
+    }));
+    return c.json({ items: files, total: files.length });
+  } catch (err) {
+    loggerInstance.error({ err }, '获取库文件列表失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+// Delete library file
+app.delete('/api/library-files/:hash', async (c) => {
+  try {
+    const hash = c.req.param('hash');
+    const pool = getPool();
+    await pool.query('DELETE FROM library_files WHERE hash = $1', [hash]);
+    return c.json({ success: true });
+  } catch (err) {
+    loggerInstance.error({ err }, '删除库文件失败');
     return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
   }
 });
@@ -933,6 +1127,57 @@ app.get('/api/search/syntax-help', async (c) => {
     return c.json({ items: result });
   } catch (err) {
     loggerInstance.error({ err }, '获取语法帮助失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+// Notifications
+app.get('/api/notifications', async (c) => {
+  try {
+    const pool = getPool();
+    const result = await pool.query(
+      'SELECT id, type, title, message, read, metadata, created_at FROM notifications ORDER BY created_at DESC'
+    );
+    return c.json({ items: result.rows, total: result.rows.length });
+  } catch (err) {
+    loggerInstance.error({ err }, '获取通知列表失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+app.post('/api/notifications/:id/read', async (c) => {
+  try {
+    const id = parseInt(c.req.param('id'), 10);
+    if (isNaN(id)) {
+      return c.json({ error: { code: 'VALIDATION_ERROR', message: getErrorMessage('VALIDATION_ERROR') } }, 400);
+    }
+    const pool = getPool();
+    await pool.query('UPDATE notifications SET read = true WHERE id = $1', [id]);
+    return c.json({ success: true });
+  } catch (err) {
+    loggerInstance.error({ err }, '标记通知已读失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+app.post('/api/notifications/read-all', async (c) => {
+  try {
+    const pool = getPool();
+    await pool.query('UPDATE notifications SET read = true');
+    return c.json({ success: true });
+  } catch (err) {
+    loggerInstance.error({ err }, '全部标为已读失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+app.delete('/api/notifications/all', async (c) => {
+  try {
+    const pool = getPool();
+    await pool.query('DELETE FROM notifications');
+    return c.json({ success: true });
+  } catch (err) {
+    loggerInstance.error({ err }, '清空通知失败');
     return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
   }
 });

@@ -352,8 +352,7 @@ function BudgetSettings({ settings, onChange }: SettingsSectionProps) {
   const budgetQuery = useQuery({
     queryKey: ['budget-remaining'],
     queryFn: () => api.getBudgetRemaining(),
-    staleTime: 60_000,
-    enabled: false
+    staleTime: 60_000
   });
 
   const updateBudgetMutation = useMutation({
@@ -363,6 +362,13 @@ function BudgetSettings({ settings, onChange }: SettingsSectionProps) {
     }
   });
 
+  const handleSaveBudget = () => {
+    const dailyBudget = settings.budget?.daily;
+    if (dailyBudget !== undefined && dailyBudget !== null) {
+      updateBudgetMutation.mutate(dailyBudget);
+    }
+  };
+
   return (
     <div className="card p-6">
       <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold">
@@ -370,6 +376,32 @@ function BudgetSettings({ settings, onChange }: SettingsSectionProps) {
         预算设置
       </h2>
       <div className="space-y-6">
+        {budgetQuery.isLoading ? (
+          <div className="text-sm text-slate-500">加载预算信息...</div>
+        ) : budgetQuery.data && (
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800">
+            <div className="flex flex-wrap items-center gap-6">
+              <div>
+                <p className="text-xs text-slate-500">今日剩余</p>
+                <p className="text-lg font-bold text-green-600 dark:text-green-400">
+                  ${budgetQuery.data.remaining?.toFixed(2) ?? '0.00'}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500">今日已用</p>
+                <p className="text-lg font-bold text-amber-600 dark:text-amber-400">
+                  ${budgetQuery.data.used?.toFixed(2) ?? '0.00'}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500">总预算</p>
+                <p className="text-lg font-bold">
+                  ${budgetQuery.data.total?.toFixed(2) ?? '0.00'}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
         <div className="grid gap-4 sm:grid-cols-3">
           <div>
             <label className="mb-2 block text-sm font-medium">日预算（美元）</label>
@@ -442,6 +474,14 @@ function BudgetSettings({ settings, onChange }: SettingsSectionProps) {
             </span>
           </div>
         </div>
+        <button
+          onClick={handleSaveBudget}
+          disabled={updateBudgetMutation.isPending}
+          className="btn btn-primary text-sm"
+        >
+          <FloppyDisk size={16} className="mr-1.5" />
+          {updateBudgetMutation.isPending ? '保存中...' : '保存预算设置'}
+        </button>
       </div>
     </div>
   );

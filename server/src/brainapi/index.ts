@@ -1271,7 +1271,7 @@ ${relationsBlock}
     nodes: string[];
     edges: Array<{ source: string; target: string; relation: string }>;
     length: number;
-  }>>> {
+  }>> {
     const pool = getPool();
 
     const result = await pool.query(
@@ -1348,7 +1348,7 @@ ${relationsBlock}
     sourceTitle: string;
     context: string;
     relationType?: string;
-  }>>> {
+  }>> {
     const pool = getPool();
 
     const [linkResult, aliasResult] = await Promise.all([
