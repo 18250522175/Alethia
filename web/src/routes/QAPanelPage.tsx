@@ -78,6 +78,12 @@ export default function QAPanelPage() {
     staleTime: 60_000
   });
 
+  const { data: aliasMap } = useQuery({
+    queryKey: ['alias-map'],
+    queryFn: () => api.getAliasMap(),
+    staleTime: 300_000
+  });
+
   const conversations = conversationsData?.items.map(c => ({
     id: c.id,
     title: c.title,
@@ -419,7 +425,7 @@ export default function QAPanelPage() {
             ) : (
               <div className="space-y-6">
                 {messages.map(msg => (
-                  <MessageBubble key={msg.id} message={msg} viewMode={viewMode} onEvidenceClick={handleEvidenceClick} onFeedback={handleSubmitFeedback} navigate={navigate} />
+                  <MessageBubble key={msg.id} message={msg} viewMode={viewMode} onEvidenceClick={handleEvidenceClick} onFeedback={handleSubmitFeedback} navigate={navigate} aliasMap={aliasMap} />
                 ))}
                 {askMutation.isPending && (
                   <div className="flex items-center gap-2 text-sm text-slate-500">
@@ -502,7 +508,7 @@ export default function QAPanelPage() {
   );
 }
 
-function MessageBubble({ message, viewMode, onEvidenceClick, onFeedback, navigate }: { message: ChatMessage; viewMode: ViewMode; onEvidenceClick?: (spanId: string) => void; onFeedback?: (messageId: string, helpful: boolean) => void; navigate?: (to: string) => void }) {
+function MessageBubble({ message, viewMode, onEvidenceClick, onFeedback, navigate, aliasMap }: { message: ChatMessage; viewMode: ViewMode; onEvidenceClick?: (spanId: string) => void; onFeedback?: (messageId: string, helpful: boolean) => void; navigate?: (to: string) => void; aliasMap?: Record<string, string> }) {
   const { t } = useTranslation();
   const isUser = message.role === 'user';
   const confidenceColor =
@@ -541,6 +547,7 @@ function MessageBubble({ message, viewMode, onEvidenceClick, onFeedback, navigat
             content={message.content}
             evidenceSpans={evidenceSpans}
             onEvidenceClick={onEvidenceClick}
+            aliasMap={aliasMap}
           />
         )}
 

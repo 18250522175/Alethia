@@ -1,4 +1,4 @@
-import { Bell, Gauge, User, List, ChatsCircle, CurrencyDollar } from '@phosphor-icons/react';
+import { Bell, Gauge, User, List, ChatsCircle, CurrencyDollar, Warning } from '@phosphor-icons/react';
 import { useTheme } from '../store/ThemeContext';
 import { useAuth } from '../store/AuthContext';
 import { useState, useRef, useEffect } from 'react';
@@ -92,6 +92,13 @@ export default function TopBar({ onToggleSidebar }: TopBarProps) {
     queryKey: ['budget-remaining'],
     queryFn: () => api.getBudgetRemaining(),
     staleTime: 60_000,
+    retry: 1
+  });
+
+  const budgetAlertsQuery = useQuery({
+    queryKey: ['budget-alerts'],
+    queryFn: () => api.getBudgetAlerts(),
+    staleTime: 120_000,
     retry: 1
   });
 
@@ -195,6 +202,21 @@ export default function TopBar({ onToggleSidebar }: TopBarProps) {
                   total={budgetData.monthly.total}
                 />
               </div>
+              {budgetAlertsQuery.data && budgetAlertsQuery.data.items.length > 0 && (
+                <div className="mt-2 border-t border-amber-200 pt-2 dark:border-amber-700">
+                  <div className="flex items-center gap-1 text-xs font-medium text-amber-600 dark:text-amber-400">
+                    <Warning size={12} />
+                    {t('budget.alerts', '预算告警')}
+                  </div>
+                  <div className="mt-1 max-h-24 overflow-y-auto space-y-1">
+                    {budgetAlertsQuery.data.items.slice(0, 3).map((alert: any, i: number) => (
+                      <div key={i} className="text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/30 rounded px-2 py-1">
+                        {alert.message}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               <button
                 onClick={() => navigate('/dashboard')}
                 className="mt-3 w-full text-xs text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 font-medium text-right"
