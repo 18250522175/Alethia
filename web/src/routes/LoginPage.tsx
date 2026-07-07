@@ -53,7 +53,7 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
-                API 密钥
+                {t('login.apiKeyLabel', 'API 密钥')}
               </label>
               <div className="relative">
                 <input
@@ -104,7 +104,7 @@ export default function LoginPage() {
         </div>
 
         <p className="mt-6 text-center text-xs text-slate-500">
-          输入配置文件中设置的 BRAIN_API_KEY 进行登录
+          {t('login.loginHint', '输入配置文件中设置的 BRAIN_API_KEY 进行登录')}
         </p>
       </div>
     </div>

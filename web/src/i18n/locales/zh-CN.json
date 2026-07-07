@@ -57,7 +57,9 @@
   "login": {
     "title": "理想 AI 知识库",
     "subtitle": "人机共生的数字图书馆",
+    "apiKeyLabel": "API 密钥",
     "apiKeyPlaceholder": "请输入 API 密钥",
+    "loginHint": "输入配置文件中设置的 BRAIN_API_KEY 进行登录",
     "submit": "登录",
     "rememberDevice": "记住此设备",
     "errorInvalidKey": "API 密钥无效",
@@ -548,6 +550,9 @@
     "noIncoming": "暂无入链",
     "noOutgoing": "暂无出链",
     "revertChanges": "撤销更改",
-    "newPageHint": "新建条目，编辑内容后保存即可创建。"
+    "newPageHint": "新建条目，编辑内容后保存即可创建。",
+    "noRelated": "暂无关联实体",
+    "viewFullGraph": "查看全图",
+    "relatedCount": "共 {{count}} 个关联实体 · 点击节点跳转"
   }
 }

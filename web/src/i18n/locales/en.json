@@ -57,7 +57,9 @@
   "login": {
     "title": "Alethia Knowledge Base",
     "subtitle": "Human-AI Symbiotic Digital Library",
+    "apiKeyLabel": "API Key",
     "apiKeyPlaceholder": "Enter API key",
+    "loginHint": "Enter the BRAIN_API_KEY from your configuration file",
     "submit": "Login",
     "rememberDevice": "Remember this device",
     "errorInvalidKey": "Invalid API key",
@@ -548,6 +550,9 @@
     "noIncoming": "No incoming links",
     "noOutgoing": "No outgoing links",
     "revertChanges": "Revert Changes",
-    "newPageHint": "New entry. Edit and save to create."
+    "newPageHint": "New entry. Edit and save to create.",
+    "noRelated": "No related entities",
+    "viewFullGraph": "View Full Graph",
+    "relatedCount": "{{count}} related entities · Click node to navigate"
   }
 }

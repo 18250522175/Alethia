@@ -154,7 +154,7 @@ export default function MiniKnowledgeGraph({
         </div>
         <div className="flex flex-col items-center justify-center py-6 text-center text-slate-400">
           <Warning size={24} className="mb-2" />
-          <p className="text-xs">暂无关联实体</p>
+          <p className="text-xs">{t('wiki.noRelated', '暂无关联实体')}</p>
         </div>
       </div>
     );
@@ -171,12 +171,12 @@ export default function MiniKnowledgeGraph({
           onClick={() => navigate('/graph')}
           className="text-xs text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 font-medium"
         >
-          查看全图 →
+          {t('wiki.viewFullGraph', '查看全图')} →
         </button>
       </div>
       <div ref={cyRef} className="h-48 w-full rounded-lg bg-slate-50 dark:bg-slate-900/50" />
       <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-        共 {entityCount} 个关联实体 · 点击节点跳转
+        {t('wiki.relatedCount', '共 {{count}} 个关联实体 · 点击节点跳转', { count: entityCount })}
       </div>
     </div>
   );

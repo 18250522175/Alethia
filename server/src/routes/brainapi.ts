@@ -6,7 +6,7 @@ import { getPool } from '../db/pool';
 import { storage } from '../storage/markdown';
 import { syncEngine } from '../storage/sync';
 import { join } from 'path';
-import { existsSync, statSync } from 'fs';
+import { existsSync, statSync, unlinkSync } from 'fs';
 import type { AskRequest, QueryParams } from '@shared/index';
 
 const app = new Hono();
@@ -731,7 +731,16 @@ app.delete('/api/library-files/:hash', async (c) => {
   try {
     const hash = c.req.param('hash');
     const pool = getPool();
+    const result = await pool.query('SELECT hash FROM library_files WHERE hash = $1', [hash]);
+    if (result.rows.length === 0) {
+      return c.json({ error: { code: 'NOT_FOUND', message: getErrorMessage('NOT_FOUND') } }, 404);
+    }
     await pool.query('DELETE FROM library_files WHERE hash = $1', [hash]);
+    // Delete the actual file from disk
+    const filePath = join(storage.getLibraryPath(), hash);
+    if (existsSync(filePath)) {
+      unlinkSync(filePath);
+    }
     return c.json({ success: true });
   } catch (err) {
     loggerInstance.error({ err }, '删除库文件失败');
