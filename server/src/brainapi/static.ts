@@ -1,6 +1,8 @@
 import { getPool } from '../db/pool';
 import logger from '../i18n/logger';
 import MarkdownIt from 'markdown-it';
+import { resolve } from 'path';
+import { storage } from '../storage/markdown';
 
 export interface StaticSiteOptions {
   outputPath?: string;
@@ -735,7 +737,23 @@ export async function generateStaticSite(options: StaticSiteOptions = {}): Promi
   } = options;
 
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const baseOutputDir = outputPath || (process.cwd() + '/exports');
+  const cwd = process.cwd();
+  let baseOutputDir: string;
+
+  if (outputPath) {
+    // 安全校验：禁止路径遍历和写入系统目录
+    if (outputPath.includes('..') || outputPath.includes('~')) {
+      throw new Error('输出路径不能包含 ".." 或 "~"');
+    }
+    const resolved = resolve(outputPath);
+    // 仅允许写入当前工作目录下的子目录
+    if (!resolved.startsWith(cwd + '/') && resolved !== cwd) {
+      throw new Error('输出路径必须在当前工作目录下');
+    }
+    baseOutputDir = resolved;
+  } else {
+    baseOutputDir = cwd + '/exports';
+  }
   const outputDir = `${baseOutputDir}/${timestamp}`;
 
   logger.info({ outputDir, includeMedia, includeGraph }, '开始生成静态站点');
@@ -786,7 +804,7 @@ export async function generateStaticSite(options: StaticSiteOptions = {}): Promi
     pagesGenerated += 3;
 
     if (includeMedia) {
-      const mediaSrc = process.cwd() + '/library/objects';
+      const mediaSrc = storage.getLibraryPath();
       const mediaDest = `${outputDir}/media/objects`;
       mediaCopied = await copyDirRecursive(mediaSrc, mediaDest);
       logger.info({ mediaCopied }, '媒体文件拷贝完成');

@@ -8,7 +8,7 @@ export function loadEnv(): EnvConfig {
   }
 
   const raw = {
-    DATABASE_URL: process.env.DATABASE_URL || 'postgres://alethia:alethia@postgres:5432/alethia',
+    DATABASE_URL: process.env.DATABASE_URL || 'postgres://alethia:CHANGE_ME@localhost:5432/alethia',
     BRAIN_PORT: process.env.BRAIN_PORT || '3000',
     BRAIN_API_KEY: process.env.BRAIN_API_KEY || '',
     LANGUAGE: process.env.LANGUAGE || 'zh-CN',
