@@ -570,8 +570,15 @@
     "filterAnomaly": "异常",
     "empty": "暂无通知",
     "markAllRead": "全部标为已读",
+    "clearAll": "清空",
     "viewAll": "查看全部",
-    "close": "关闭"
+    "close": "关闭",
+    "unreadHint": "你有 {{count}} 条未读通知",
+    "allRead": "所有通知均已读",
+    "typeReview": "审核通知",
+    "typeSystem": "系统通知",
+    "typeExtraction": "提取通知",
+    "typeAnomaly": "异常告警"
   },
   "diffCompare": {
     "expand": "展开",

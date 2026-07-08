@@ -76,7 +76,10 @@ function buildFallbackAnswer(question: string, result: RetrievalResult): string 
 
   const topResults = result.items.slice(0, 3);
   const summary = topResults
-    .map(item => `**${item.title}**\n${item.snippet.substring(0, 150)}...`)
+    .map(item => {
+      const safeSnippet = [...item.snippet].slice(0, 150).join('');
+      return `**${item.title}**\n${safeSnippet}...`;
+    })
     .join('\n\n');
 
   return `关于「${question}」，在知识库中找到了以下相关内容：\n\n${summary}\n\n*注意：当前 AI 生成服务不可用，以上为检索结果摘要。*`;

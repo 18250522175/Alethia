@@ -65,8 +65,10 @@ export async function translateEvidence(
     };
 
     results.push(entry);
-    await persistTranslation(entry);
   }
+
+  // 批量持久化所有翻译结果
+  await persistTranslationsBatch(results.slice(-pending.length));
 
   logger.info(
     { requested: spanIds.length, translated: pending.length, cached: cached.length },
@@ -236,23 +238,37 @@ function buildFallbackTranslation(span: EvidenceSpanRow, _targetLang: string): s
 }
 
 async function persistTranslation(entry: EvidenceTranslation): Promise<void> {
+  await persistTranslationsBatch([entry]);
+}
+
+async function persistTranslationsBatch(entries: EvidenceTranslation[]): Promise<void> {
+  if (entries.length === 0) return;
+
+  const spanIds: string[] = [];
+  const sourceTexts: string[] = [];
+  const translatedTexts: string[] = [];
+  const langs: string[] = [];
+  const models: string[] = [];
+
+  for (const e of entries) {
+    spanIds.push(e.spanId);
+    sourceTexts.push(e.sourceText);
+    translatedTexts.push(e.translatedText);
+    langs.push(e.lang);
+    models.push(e.model);
+  }
+
   try {
     const pool = getPool();
     await pool.query(
-      `INSERT INTO evidence_translations
-         (span_id, source_text, translated_text, lang, model, created_at, expires_at)
-       VALUES ($1, $2, $3, $4, $5, NOW(), NOW() + ($6::int || ' days')::interval)`,
-      [
-        entry.spanId,
-        entry.sourceText,
-        entry.translatedText,
-        entry.lang,
-        entry.model,
-        CACHE_TTL_DAYS
-      ]
+      `INSERT INTO evidence_translations (span_id, source_text, translated_text, lang, model, created_at, expires_at)
+       SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[], $4::text[], $5::text[])
+       AS t(span_id, source_text, translated_text, lang, model)
+       CROSS JOIN (VALUES (NOW(), NOW() + ($6::int || ' days')::interval)) AS ts(created_at, expires_at)`,
+      [spanIds, sourceTexts, translatedTexts, langs, models, CACHE_TTL_DAYS]
     );
   } catch (err) {
-    logger.warn({ err, spanId: entry.spanId }, '写入翻译缓存失败');
+    logger.warn({ err, count: entries.length }, '批量写入翻译缓存失败');
   }
 }
 

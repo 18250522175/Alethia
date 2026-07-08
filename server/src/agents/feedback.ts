@@ -52,14 +52,19 @@ async function loadMessage(conversationId: string, messageId: string): Promise<M
   try {
     const pool = getPool();
     const numericId = Number(messageId);
-    // If messageId is not a valid number, use the raw string value
     const isNumeric = !isNaN(numericId) && String(numericId) === messageId;
+
+    // messageId 必须是数字（对应 DB SERIAL id），UUID 等非数字值无法匹配
+    if (!isNumeric) {
+      logger.warn({ conversationId, messageId }, '反馈 messageId 不是有效数字 ID，无法查询消息');
+      return null;
+    }
 
     const result = await pool.query(
       `SELECT id, conversation_id, role, content
        FROM conversation_logs
        WHERE conversation_id = $1 AND id = $2`,
-      [conversationId, isNumeric ? numericId : messageId]
+      [conversationId, numericId]
     );
 
     if (result.rows.length === 0) return null;

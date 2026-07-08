@@ -238,7 +238,7 @@ class BrainAPI {
       const pool = getPool();
 
       const [nodesResult, edgesResult, pendingResult, ghostResult, versionsResult, observedResult,
-             brokenResult, orphanedResult, trendResult, evalResult] = await Promise.all([
+             brokenResult, orphanedResult, trendResult, evalResult, contextResult, cacheResult] = await Promise.all([
         pool.query('SELECT COUNT(*) as count FROM pages'),
         pool.query('SELECT COUNT(*) as count FROM links'),
         pool.query(`SELECT
@@ -262,7 +262,17 @@ class BrainAPI {
                     GROUP BY DATE(created_at)
                     ORDER BY day`),
         pool.query(`SELECT COUNT(*) FILTER (WHERE passed = true) as passed, COUNT(*) as total
-                    FROM eval_results WHERE created_at > NOW() - INTERVAL '30 days'`)
+                    FROM eval_results WHERE created_at > NOW() - INTERVAL '30 days'`),
+        pool.query(`SELECT unnest(contexts) as context, COUNT(*) as activity
+                    FROM pages
+                    WHERE contexts IS NOT NULL AND array_length(contexts, 1) > 0
+                    GROUP BY context
+                    ORDER BY activity DESC
+                    LIMIT 10`),
+        pool.query(`SELECT
+                      COUNT(*) FILTER (WHERE created_at < NOW() - INTERVAL '1 hour') as cached,
+                      COUNT(*) as total
+                    FROM evidence_translations`)
       ]);
 
       const env = loadEnv();
@@ -281,7 +291,10 @@ class BrainAPI {
           pages: parseInt(nodesResult.rows[0].count),
           trend: trendResult.rows.map((r: any) => ({ date: r.day, count: parseInt(r.cnt) }))
         },
-        contextHeatmap: [],
+        contextHeatmap: contextResult.rows.map((r: any) => ({
+          context: r.context,
+          activity: parseInt(r.activity)
+        })),
         reviewBacklog: {
           green: parseInt(pendingResult.rows[0].green || '0'),
           yellow: parseInt(pendingResult.rows[0].yellow || '0'),
@@ -301,7 +314,11 @@ class BrainAPI {
           activeVersions: parseInt(versionsResult.rows[0].active || '0'),
           archivedVersions: parseInt(versionsResult.rows[0].archived || '0')
         },
-        cacheHitRate: 0,
+        cacheHitRate: (() => {
+          const cached = parseInt(cacheResult.rows[0]?.cached || '0');
+          const total = parseInt(cacheResult.rows[0]?.total || '0');
+          return total > 0 ? cached / total : 0;
+        })(),
         brokenEvidenceChains: parseInt(brokenResult.rows[0].count || '0'),
         orphanedFiles: parseInt(orphanedResult.rows[0].count || '0'),
         observedFiles: parseInt(observedResult.rows[0].count || '0'),

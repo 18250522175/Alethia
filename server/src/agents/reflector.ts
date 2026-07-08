@@ -15,7 +15,7 @@ export interface ReflectionResult {
 
 const reflectorPrompt = loadPrompt('reflector.zh-CN.md');
 const MAX_ROUNDS = 5;
-const MAX_DURATION_MS = 3000;
+const MAX_DURATION_MS = 15000;
 
 export class Reflector {
   private roundCount = 0;

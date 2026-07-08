@@ -67,6 +67,7 @@ export async function getGraphEdges(limit: number = 500): Promise<{ source: stri
     const result = await pool.query(
       `SELECT source_slug, target_slug, relation, orphaned
        FROM links
+       ORDER BY created_at DESC
        LIMIT $1`,
       [limit]
     );

@@ -11,29 +11,44 @@ export interface WebContentResult {
  * 抓取网页并提取正文：
  * - 去除 script/style/nav/header/footer 等噪声标签
  * - 保留 p / h1-h6 / ul / ol / table / code / pre 的内容
+ * - 支持指数退避重试（最多 3 次）
  */
 export async function fetchWebContent(url: string): Promise<WebContentResult> {
   const warnings: string[] = [];
+  const maxRetries = 3;
+  const timeoutMs = Number(process.env.WEB_FETCH_TIMEOUT_MS) || 15000;
 
   let html: string;
-  try {
-    const resp = await fetch(url, {
-      headers: {
-        'User-Agent': 'AlethiaBot/5.0 (+https://github.com/alethia/kb)'
-      },
-      signal: AbortSignal.timeout(
-        Number(process.env.WEB_FETCH_TIMEOUT_MS) || 15000
-      ),
-      redirect: 'follow'
-    });
-    if (!resp.ok) {
-      throw new Error(`HTTP ${resp.status}`);
+  let lastError: string = '';
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const resp = await fetch(url, {
+        headers: {
+          'User-Agent': 'AlethiaBot/5.0 (+https://github.com/alethia/kb)'
+        },
+        signal: AbortSignal.timeout(timeoutMs),
+        redirect: 'follow'
+      });
+      if (!resp.ok) {
+        throw new Error(`HTTP ${resp.status}`);
+      }
+      html = await resp.text();
+      lastError = '';
+      break;
+    } catch (err) {
+      lastError = err instanceof Error ? err.message : String(err);
+      if (attempt < maxRetries - 1) {
+        const delay = Math.pow(2, attempt) * 1000;
+        warnings.push(`获取网页失败（第 ${attempt + 1} 次尝试）：${lastError}，${delay / 1000}s 后重试...`);
+        await new Promise(r => setTimeout(r, delay));
+      }
     }
-    html = await resp.text();
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    warnings.push(`获取网页失败：${msg}`);
-    logger.warn({ err, url }, '获取网页内容失败');
+  }
+
+  if (lastError) {
+    warnings.push(`获取网页失败：${lastError}`);
+    logger.warn({ url, lastError, attempts: maxRetries }, '获取网页内容失败');
     return { title: '', text: '', warnings };
   }
 

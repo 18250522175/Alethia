@@ -570,8 +570,15 @@
     "filterAnomaly": "Anomaly",
     "empty": "No notifications",
     "markAllRead": "Mark all as read",
+    "clearAll": "Clear all",
     "viewAll": "View all",
-    "close": "Close"
+    "close": "Close",
+    "unreadHint": "You have {{count}} unread notifications",
+    "allRead": "All notifications read",
+    "typeReview": "Review notice",
+    "typeSystem": "System notice",
+    "typeExtraction": "Extraction notice",
+    "typeAnomaly": "Anomaly alert"
   },
   "diffCompare": {
     "expand": "Expand",

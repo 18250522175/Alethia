@@ -31,11 +31,11 @@ export default function NotificationsPage() {
       : notifications.filter((n) => n.type === activeTab);
 
   const tabs: { key: TabType; label: string; icon: React.ReactNode }[] = [
-    { key: 'all', label: '全部', icon: <Bell size={16} /> },
-    { key: 'review', label: '审核', icon: <ShieldCheck size={16} /> },
-    { key: 'system', label: '系统', icon: <Info size={16} /> },
-    { key: 'extraction', label: '补提取', icon: <FileText size={16} /> },
-    { key: 'anomaly', label: '异常', icon: <Warning size={16} /> },
+    { key: 'all', label: t('notification.filterAll'), icon: <Bell size={16} /> },
+    { key: 'review', label: t('notification.filterReview'), icon: <ShieldCheck size={16} /> },
+    { key: 'system', label: t('notification.filterSystem'), icon: <Info size={16} /> },
+    { key: 'extraction', label: t('notification.filterExtraction'), icon: <FileText size={16} /> },
+    { key: 'anomaly', label: t('notification.filterAnomaly'), icon: <Warning size={16} /> },
   ];
 
   const getUnreadByType = (type: TabType): number => {
@@ -51,11 +51,11 @@ export default function NotificationsPage() {
     const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
-    if (diffMins < 1) return '刚刚';
-    if (diffMins < 60) return `${diffMins} 分钟前`;
-    if (diffHours < 24) return `${diffHours} 小时前`;
-    if (diffDays < 7) return `${diffDays} 天前`;
-    return date.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' });
+    if (diffMins < 1) return t('common.justNow');
+    if (diffMins < 60) return t('common.minutesAgo', { count: diffMins });
+    if (diffHours < 24) return t('common.hoursAgo', { count: diffHours });
+    if (diffDays < 7) return t('common.daysAgo', { count: diffDays });
+    return date.toLocaleDateString();
   };
 
   const getTypeIcon = (type: NotificationType) => {
@@ -86,10 +86,10 @@ export default function NotificationsPage() {
 
   const getTypeName = (type: NotificationType): string => {
     switch (type) {
-      case 'review': return '审核通知';
-      case 'system': return '系统通知';
-      case 'extraction': return '提取通知';
-      case 'anomaly': return '异常告警';
+      case 'review': return t('notification.typeReview');
+      case 'system': return t('notification.typeSystem');
+      case 'extraction': return t('notification.typeExtraction');
+      case 'anomaly': return t('notification.typeAnomaly');
     }
   };
 
@@ -114,10 +114,10 @@ export default function NotificationsPage() {
           <div>
             <h1 className="flex items-center gap-2 text-2xl font-bold">
               <Bell size={28} className="text-primary-500" />
-              通知中心
+              {t('notification.title')}
             </h1>
             <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-              {unreadCount > 0 ? `你有 ${unreadCount} 条未读通知` : '所有通知均已读'}
+              {unreadCount > 0 ? t('notification.unreadHint', { count: unreadCount }) : t('notification.allRead')}
             </p>
           </div>
         </div>
@@ -166,7 +166,7 @@ export default function NotificationsPage() {
               className="btn btn-secondary gap-1.5 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Check size={14} />
-              全部标为已读
+              {t('notification.markAllRead')}
             </button>
             <button
               onClick={clearAll}
@@ -174,7 +174,7 @@ export default function NotificationsPage() {
               className="btn btn-ghost gap-1.5 text-xs text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Trash size={14} />
-              清空
+              {t('notification.clearAll')}
             </button>
           </div>
         </div>
@@ -183,7 +183,7 @@ export default function NotificationsPage() {
           {filteredNotifications.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-slate-500 dark:text-slate-400">
               <CheckCircle size={48} weight="thin" />
-              <p className="mt-3 text-sm">暂无通知</p>
+              <p className="mt-3 text-sm">{t('notification.empty')}</p>
             </div>
           ) : (
             <ul className="divide-y divide-slate-200 dark:divide-slate-700">

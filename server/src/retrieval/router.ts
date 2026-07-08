@@ -15,24 +15,23 @@ function classifyIntent(query: string): { intent: Intent; tier: Tier } {
   const lower = query.toLowerCase().trim();
   const length = query.length;
 
-  // Chinese keywords
-  if (length < 10 && /是什么|什么是|定义|概念/.test(query)) {
+  if (length < 10 && /是什么|什么是|定义|概念|what is|define|definition|meaning/i.test(lower)) {
     return { intent: 'factual', tier: 'T0' };
   }
 
-  if (/比较|区别|关系|联系|综合|对比|compare|difference|relationship|versus|vs\./.test(lower)) {
+  if (/比较|区别|关系|联系|综合|对比|compare|difference|relationship|versus|vs\./i.test(lower)) {
     return { intent: 'cross_domain', tier: 'T2' };
   }
 
-  if (/文件|文档|pdf|来源|原始|file|document|\.pdf|\.doc|source/.test(lower)) {
+  if (/文件|文档|pdf|来源|原始|file|document|\.pdf|\.doc|source/i.test(lower)) {
     return { intent: 'file_search', tier: 'T1' };
   }
 
-  if (/概述|总结|介绍|综述|全局|所有|overview|summary|introduction|introduce/.test(lower)) {
+  if (/概述|总结|介绍|综述|全局|所有|overview|summary|introduction|introduce/i.test(lower)) {
     return { intent: 'topic', tier: 'T1' };
   }
 
-  if (/为什么|如何|怎么|怎样|why|how|explain|what is/.test(lower)) {
+  if (/为什么|如何|怎么|怎样|why|how|explain/i.test(lower)) {
     return { intent: 'ai_qa', tier: 'T2' };
   }
 

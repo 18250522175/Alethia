@@ -226,43 +226,12 @@ const TOOLS: ToolEntry[] = [
       return jsonTextResult(data);
     }
   },
-  {
-    definition: {
-      name: 'get_graph_data',
-      description: '获取知识图谱数据（get_graph 的别名）',
-      inputSchema: {
-        type: 'object',
-        properties: {}
-      }
-    },
-    handler: async () => {
-      const data = await brainAPI.getGraphData();
-      return jsonTextResult(data);
-    }
-  },
 
   // —— 待审核变更 ——
   {
     definition: {
       name: 'get_diffs',
       description: '获取待审核的自动变更列表',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          tier: { type: 'string', description: '按风险层级过滤（green / yellow / red）' }
-        }
-      }
-    },
-    handler: async (args) => {
-      const diffs = await brainAPI.getPendingDiffs();
-      const filtered = args.tier ? diffs.filter((d: any) => d.tier === args.tier) : diffs;
-      return jsonTextResult({ items: filtered, total: filtered.length });
-    }
-  },
-  {
-    definition: {
-      name: 'get_pending_diffs',
-      description: '获取待审核的自动变更列表（get_diffs 的别名）',
       inputSchema: {
         type: 'object',
         properties: {
