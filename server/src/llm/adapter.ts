@@ -57,6 +57,10 @@ export class BaseOpenAICompatibleAdapter extends BaseLLMAdapter {
     this.defaultModel = defaultModel;
   }
 
+  setDefaultModel(model: string): void {
+    this.defaultModel = model;
+  }
+
   async chat(req: LLMRequest): Promise<LLMResponse> {
     const startTime = Date.now();
     const model = req.model || this.defaultModel;

@@ -153,7 +153,11 @@ export const EnvConfigSchema = z.object({
   HF_API_KEY: z.string().default(''),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   BRAIN_CORS_ORIGINS: z.string().default(''),
-  LIBRARY_PATH: z.string().default('/data/library')
+  LIBRARY_PATH: z.string().default('/data/library'),
+  WIKI_PATH: z.string().default(''),
+  RAW_PATH: z.string().default(''),
+  SUMMARIES_PATH: z.string().default(''),
+  CHANGELOG_PATH: z.string().default('')
 });
 
 export type EnvConfig = z.infer<typeof EnvConfigSchema>;

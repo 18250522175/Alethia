@@ -33,7 +33,11 @@ export function loadEnv(): EnvConfig {
     HF_API_KEY: process.env.HF_API_KEY || '',
     NODE_ENV: process.env.NODE_ENV || 'development',
     BRAIN_CORS_ORIGINS: process.env.BRAIN_CORS_ORIGINS || '',
-    LIBRARY_PATH: process.env.LIBRARY_PATH || '/data/library'
+    LIBRARY_PATH: process.env.LIBRARY_PATH || '/data/library',
+    WIKI_PATH: process.env.WIKI_PATH || '',
+    RAW_PATH: process.env.RAW_PATH || '',
+    SUMMARIES_PATH: process.env.SUMMARIES_PATH || '',
+    CHANGELOG_PATH: process.env.CHANGELOG_PATH || ''
   };
 
   const result = EnvConfigSchema.safeParse(raw);

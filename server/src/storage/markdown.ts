@@ -14,12 +14,12 @@ export class MarkdownStorage {
 
   constructor() {
     const env = loadEnv();
-    this.rootPath = process.cwd();
-    this.wikiPath = join(this.rootPath, 'wiki');
-    this.rawPath = join(this.rootPath, 'raw');
-    this.summariesPath = join(this.rootPath, 'summaries');
-    this.changelogPath = join(this.rootPath, 'changelog');
-    this.libraryPath = join(this.rootPath, 'library', 'objects');
+    this.rootPath = env.LIBRARY_PATH ? env.LIBRARY_PATH.replace(/\/library\/?.*$/, '') : process.cwd();
+    this.wikiPath = env.WIKI_PATH || join(this.rootPath, 'wiki');
+    this.rawPath = env.RAW_PATH || join(this.rootPath, 'raw');
+    this.summariesPath = env.SUMMARIES_PATH || join(this.rootPath, 'summaries');
+    this.changelogPath = env.CHANGELOG_PATH || join(this.rootPath, 'changelog');
+    this.libraryPath = env.LIBRARY_PATH || join(this.rootPath, 'library', 'objects');
 
     this.ensureDirs();
   }

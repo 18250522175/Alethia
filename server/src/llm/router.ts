@@ -63,6 +63,11 @@ class LLMRouter {
       throw new Error(`未找到适配器 ${assignment.adapterId}`);
     }
 
+    // Update adapter's default model to match the current assignment
+    if (typeof (adapter as any).setDefaultModel === 'function') {
+      (adapter as any).setDefaultModel(assignment.model);
+    }
+
     return adapter;
   }
 

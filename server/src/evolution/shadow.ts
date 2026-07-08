@@ -192,9 +192,26 @@ function jaccardSimilarity(a: string, b: string): number {
 }
 
 function tokenize(text: string): Set<string> {
+  const lower = text.toLowerCase();
+  const hasCJK = /[\u4e00-\u9fff\u3400-\u4dbf]/.test(lower);
+
+  if (hasCJK) {
+    // For CJK text, use character bigrams for meaningful similarity comparison
+    const tokens = new Set<string>();
+    const chars = lower.replace(/[^\u4e00-\u9fff\u3400-\u4dbf\p{L}\p{N}]+/gu, '').split('');
+    for (let i = 0; i < chars.length - 1; i++) {
+      tokens.add(chars[i] + chars[i + 1]);
+    }
+    // Also add single-character tokens for short texts
+    for (const ch of chars) {
+      tokens.add(ch);
+    }
+    return tokens;
+  }
+
+  // For Latin text, use word-level tokenization
   return new Set(
-    text
-      .toLowerCase()
+    lower
       .replace(/[^\p{L}\p{N}]+/gu, ' ')
       .split(' ')
       .filter((t) => t.length > 0)
