@@ -1302,4 +1302,24 @@ app.delete('/api/saved-searches/:name', async (c) => {
   }
 });
 
+// 静态站点导出文件（供 nginx /exports/ 代理访问）
+app.get('/exports/*', async (c) => {
+  try {
+    const exportsDir = join(process.cwd(), 'exports');
+    const filePath = join(exportsDir, c.req.param('*'));
+    // 防止路径遍历
+    if (!filePath.startsWith(exportsDir)) {
+      return c.json({ error: { code: 'FORBIDDEN', message: 'Access denied' } }, 403);
+    }
+    if (!existsSync(filePath)) {
+      return c.json({ error: { code: 'NOT_FOUND', message: getErrorMessage('NOT_FOUND') } }, 404);
+    }
+    const file = Bun.file(filePath);
+    return new Response(file);
+  } catch (err) {
+    loggerInstance.error({ err }, '读取导出文件失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
 export default app;

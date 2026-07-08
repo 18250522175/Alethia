@@ -13,8 +13,6 @@ WORKDIR /app
 COPY package.json tsconfig.base.json ./
 COPY shared/package.json ./shared/package.json
 COPY server/package.json ./server/package.json
-COPY web/package.json ./web/package.json
-
 # 安装全部依赖（包括 devDependencies，用于构建）
 RUN bun install
 
@@ -38,8 +36,6 @@ WORKDIR /app
 COPY package.json tsconfig.base.json ./
 COPY shared/package.json ./shared/package.json
 COPY server/package.json ./server/package.json
-COPY web/package.json ./web/package.json
-
 # 仅安装生产依赖（保留 native/WASM 模块的可解析路径，避免打包后失效）
 RUN bun install --production
 
@@ -61,7 +57,7 @@ ENV EMBEDDING_PROVIDER=local
 ENV NLI_PROVIDER=local
 
 # 数据卷：wiki、library、changelog、raw、summaries 持久化
-VOLUME ["/app/wiki", "/app/server/data/library", "/app/server/data/changelog", "/app/server/data/raw", "/app/server/data/summaries"]
+VOLUME ["/app/server/wiki", "/app/server/library/objects", "/app/server/changelog", "/app/server/raw", "/app/server/summaries"]
 
 # 安全: 创建非 root 用户运行服务
 RUN addgroup --system app && adduser --system --ingroup app app
@@ -76,4 +72,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD wget -q -O- http://localhost:3000/health > /dev/null 2>&1 || exit 1
 
 # 启动编译产物（bun build 保留源目录结构：src/index.ts → dist/src/index.js）
-CMD ["bun", "run", "dist/src/index.js"]
+CMD ["bun", "dist/src/index.js"]
