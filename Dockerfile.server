@@ -9,12 +9,12 @@ ENV BUN_REGISTRY=https://registry.npmmirror.com
 
 WORKDIR /app
 
-# 拷贝 workspace 配置与各 package 的 manifest（不再复制 bun.lock）
-COPY package.json tsconfig.base.json ./
+# 拷贝 workspace 配置与 bun.lock（锁定依赖版本，确保构建可重现）
+COPY package.json tsconfig.base.json bun.lock ./
 COPY shared/package.json ./shared/package.json
 COPY server/package.json ./server/package.json
 # 安装全部依赖（包括 devDependencies，用于构建）
-RUN bun install
+RUN bun install --frozen-lockfile
 
 # 拷贝源码
 COPY shared ./shared
@@ -32,12 +32,12 @@ ENV BUN_REGISTRY=https://registry.npmmirror.com
 
 WORKDIR /app
 
-# 拷贝 workspace 配置（用于解析 workspace 依赖）
-COPY package.json tsconfig.base.json ./
+# 拷贝 workspace 配置（用于解析 workspace 依赖，含 bun.lock 锁定版本）
+COPY package.json tsconfig.base.json bun.lock ./
 COPY shared/package.json ./shared/package.json
 COPY server/package.json ./server/package.json
 # 仅安装生产依赖（保留 native/WASM 模块的可解析路径，避免打包后失效）
-RUN bun install --production
+RUN bun install --frozen-lockfile --production
 
 # 拷贝构建产物与运行期需要的非 JS 资源
 COPY --from=builder /app/server/dist /app/server/dist

@@ -5,11 +5,19 @@
 name: alethia
 
 services:
-  # === PostgreSQL + pgvector ===
+  # === PostgreSQL 数据库（含 pgvector 扩展） ===
   postgres:
     image: pgvector/pgvector:pg16
     container_name: alethia-postgres
     restart: unless-stopped
+    command:
+      - "postgres"
+      - "-c shared_buffers=256MB"
+      - "-c effective_cache_size=768MB"
+      - "-c work_mem=16MB"
+      - "-c maintenance_work_mem=64MB"
+      - "-c random_page_cost=1.1"
+      - "-c max_connections=50"
     environment:
       # 强制要求显式设置 POSTGRES_PASSWORD，避免弱默认密码
       POSTGRES_USER: ${POSTGRES_USER:-alethia}
@@ -72,6 +80,8 @@ services:
       RERANKER_ENABLED: ${RERANKER_ENABLED:-false}
       # @xenova/transformers 模型缓存持久化
       HF_HOME: /app/server/.cache/huggingface
+      # tesseract.js OCR 语言数据缓存持久化
+      TESSDATA_PREFIX: /app/server/.cache/tessdata
       # 大模型密钥（按需填写）
       BAILIAN_API_KEY: ${BAILIAN_API_KEY:-}
       BAILIAN_BASE_URL: ${BAILIAN_BASE_URL:-}
@@ -103,6 +113,7 @@ services:
       - raw_data:/app/server/raw
       - summaries_data:/app/server/summaries
       - model_cache:/app/server/.cache/huggingface
+      - tessdata:/app/server/.cache/tessdata
     # 3000 端口不直接暴露，统一通过 nginx (80) 访问
     # 如需直连调试，取消下方注释
     # ports:
@@ -201,6 +212,7 @@ volumes:
   raw_data:
   summaries_data:
   model_cache:
+  tessdata:
 
 networks:
   frontend:
