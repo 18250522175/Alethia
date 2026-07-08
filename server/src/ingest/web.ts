@@ -21,7 +21,9 @@ export async function fetchWebContent(url: string): Promise<WebContentResult> {
       headers: {
         'User-Agent': 'AlethiaBot/5.0 (+https://github.com/alethia/kb)'
       },
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(
+        Number(process.env.WEB_FETCH_TIMEOUT_MS) || 15000
+      ),
       redirect: 'follow'
     });
     if (!resp.ok) {
@@ -60,17 +62,17 @@ export function extractHtmlContent(html: string): { title: string; text: string 
     .replace(/<!DOCTYPE[^>]*>/gi, '')
     .replace(/<!--[\s\S]*?-->/g, '');
 
+  // 先移除噪声标签（script/style/nav 等），再截取 body，避免 body 外的噪声标签漏网
+  body = body.replace(
+    /<(script|style|nav|header|footer|aside|form|iframe|noscript)\b[^>]*>[\s\S]*?<\/\1>/gi,
+    ''
+  );
+
   // 截取 body
   const bodyMatch = body.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
   if (bodyMatch) {
     body = bodyMatch[1];
   }
-
-  // 移除噪声标签整体内容
-  body = body.replace(
-    /<(script|style|nav|header|footer|aside|form|iframe|noscript)\b[^>]*>[\s\S]*?<\/\1>/gi,
-    ''
-  );
 
   // 标题 → Markdown
   body = body.replace(/<h([1-6])[^>]*>([\s\S]*?)<\/h\1>/gi, (_, level: string, content: string) => {

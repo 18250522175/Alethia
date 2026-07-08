@@ -145,17 +145,33 @@ function parseDiffArray(content: string): any[] {
     const arrayMatch = trimmed.match(/\[[\s\S]*\]/);
     if (arrayMatch) {
       const parsed = JSON.parse(arrayMatch[0]);
-      return Array.isArray(parsed) ? parsed : [];
+      if (Array.isArray(parsed)) {
+        return parsed.filter(isValidDiffCandidate);
+      }
+      return [];
     }
     const objMatch = trimmed.match(/\{[\s\S]*\}/);
     if (objMatch) {
       const parsed = JSON.parse(objMatch[0]);
-      return Array.isArray(parsed) ? parsed : [parsed];
+      if (Array.isArray(parsed)) {
+        return parsed.filter(isValidDiffCandidate);
+      }
+      return isValidDiffCandidate(parsed) ? [parsed] : [];
     }
   } catch {
     logger.warn('无法解析事实抽取响应为 JSON');
   }
   return [];
+}
+
+/** 过滤掉 LLM 返回的错误对象（如 {"error": "..."}），仅保留有效 diff 候选项 */
+function isValidDiffCandidate(obj: any): boolean {
+  if (!obj || typeof obj !== 'object') return false;
+  // 排除 LLM 错误响应
+  if ('error' in obj) return false;
+  // 必须有 field 字段
+  if (!('field' in obj) || typeof obj.field !== 'string' || obj.field.trim().length === 0) return false;
+  return true;
 }
 
 async function persistPendingDiffs(fileHash: string, candidates: any[]): Promise<number> {

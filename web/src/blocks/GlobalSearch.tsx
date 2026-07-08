@@ -19,7 +19,7 @@ export default function GlobalSearch({ onSearch, placeholder }: GlobalSearchProp
 
   const handleClear = () => {
     setValue('');
-    onSearch('');
+    // 不触发 onSearch('')，由父组件自行处理空输入状态
   };
 
   return (

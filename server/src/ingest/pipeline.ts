@@ -89,7 +89,7 @@ export async function ingestFile(filePath: string, mime?: string): Promise<Inges
 
   const fileHash = computeFileHash(buffer);
 
-  // 注册库文件（状态: new）
+  // 注册库文件（状态: new），失败则中止处理
   try {
     await registerLibraryFile({
       hash: fileHash,
@@ -99,7 +99,16 @@ export async function ingestFile(filePath: string, mime?: string): Promise<Inges
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    warnings.push(`注册库文件失败：${msg}`);
+    errors.push(`注册库文件失败：${msg}`);
+    logger.error({ err, fileHash }, '注册库文件失败，中止处理');
+    return {
+      fileHash,
+      mime: detectedMime,
+      text: `[注册失败] ${msg}`,
+      sections: [],
+      errors,
+      warnings
+    };
   }
 
   let text = '';
@@ -185,6 +194,7 @@ export async function ingestFile(filePath: string, mime?: string): Promise<Inges
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     errors.push(`处理失败：${msg}`);
+    text = `[处理失败] ${msg}`;
     logger.error({ err, filePath, mime: detectedMime }, '摄入处理失败');
   }
 

@@ -102,6 +102,28 @@ function parseCsvLine(line: string): string[] {
  * JSON → 格式化代码块。
  */
 function jsonToCodeBlock(json: string): string {
+  const MAX_JSON_LENGTH = 1_000_000; // 1MB 截断阈值
+
+  if (json.length > MAX_JSON_LENGTH) {
+    const truncated = json.slice(0, MAX_JSON_LENGTH);
+    try {
+      const obj = JSON.parse(truncated);
+      return (
+        '```json\n' +
+        JSON.stringify(obj, null, 2) +
+        `\n// ⚠️ JSON 过大（${(json.length / 1024 / 1024).toFixed(1)}MB），已截断至前 1MB` +
+        '\n```'
+      );
+    } catch {
+      return (
+        '```json\n' +
+        truncated +
+        `\n// ⚠️ JSON 过大（${(json.length / 1024 / 1024).toFixed(1)}MB），已截断至前 1MB，且无法解析为有效 JSON` +
+        '\n```'
+      );
+    }
+  }
+
   try {
     const obj = JSON.parse(json);
     return '```json\n' + JSON.stringify(obj, null, 2) + '\n```';

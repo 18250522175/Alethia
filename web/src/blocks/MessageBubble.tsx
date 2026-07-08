@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 import { Brain, Tag, Coins, ThumbsUp, ThumbsDown } from '@phosphor-icons/react';
 
 export interface ChatMessage {

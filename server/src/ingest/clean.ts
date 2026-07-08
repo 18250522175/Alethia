@@ -34,8 +34,9 @@ export function computeFileHash(buffer: Buffer | string): string {
 }
 
 /**
- *// 注册库文件，状态初始化为 `new`，并写入 library_files 表。
-// observed_files 仅由 observe.ts 在证据引用时写入，不在此处预填充。
+ * 注册库文件，状态初始化为 `new`，并写入 library_files 表。
+ * observed_files 仅由 observe.ts 在证据引用时写入，不在此处预填充。
+ */
 export async function registerLibraryFile(params: {
   hash: string;
   mime: string;

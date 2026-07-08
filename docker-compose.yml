@@ -164,8 +164,8 @@ services:
     networks:
       - frontend
     healthcheck:
-      # 不仅检查 nginx 自身，也通过 /health 反代确认后端可达
-      test: ["CMD-SHELL", "wget -q -O- http://localhost/health > /dev/null 2>&1 || exit 1"]
+      # 仅检查 nginx 自身是否存活，不依赖后端
+      test: ["CMD-SHELL", "wget -q -O- http://localhost/ > /dev/null 2>&1 || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -206,6 +206,49 @@ services:
           memory: 256M
           cpus: "0.5"
 
+  # === PostgreSQL 定时备份 ===
+  # 每日凌晨 2:00 执行 pg_dump，备份保留最近 7 天
+  backup:
+    image: postgres:16-alpine
+    container_name: alethia-backup
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGHOST: postgres
+      PGUSER: ${POSTGRES_USER:-alethia}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD 必须在 .env 中设置}
+      PGDATABASE: ${POSTGRES_DB:-alethia}
+      TZ: Asia/Shanghai
+    volumes:
+      - backup_data:/backup
+    entrypoint: |
+      /bin/sh -c '
+      while true; do
+        sleep 3600;
+        HOUR=$$(date +%H);
+        if [ "$$HOUR" = "02" ]; then
+          FILE="/backup/alethia_$$(date +%Y%m%d_%H%M%S).sql.gz";
+          pg_dump --no-owner --no-acl | gzip > "$$FILE";
+          echo "$$(date): Backup created: $$FILE";
+          find /backup -name "alethia_*.sql.gz" -mtime +7 -delete;
+        fi;
+      done
+      '
+    networks:
+      - backend
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: "0.25"
+
 volumes:
   postgres_data:
   wiki_data:
@@ -215,6 +258,7 @@ volumes:
   summaries_data:
   model_cache:
   tessdata:
+  backup_data:
 
 networks:
   frontend:

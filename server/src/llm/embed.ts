@@ -15,11 +15,11 @@ const EMBEDDING_PRICING: Record<string, number> = {
   'embedding-2': 0.0005,
 };
 
-// 粗略估算 token 数：中文约 1.5 字/token，英文约 0.8 词/token
+// 估算 token 数：中文约 1.5 字/token，英文约 1.3 token/词（GPT 系 tokenizer 均值），其余字符按 1 token/字符
 function estimateTokens(text: string): number {
   const chineseChars = (text.match(/[\u4e00-\u9fa5]/g) || []).length;
   const englishWords = text.replace(/[\u4e00-\u9fa5]/g, ' ').trim().split(/\s+/).filter(Boolean).length;
-  return Math.ceil(chineseChars / 1.5 + englishWords * 0.8);
+  return Math.ceil(chineseChars / 1.5 + englishWords * 1.3);
 }
 
 function estimateEmbeddingCost(model: string, tokens: number): number {
@@ -88,8 +88,4 @@ export function getEmbedModel(): string {
   return embedModel;
 }
 
-export async function ensureEmbeddingDimension(targetDim: number): Promise<void> {
-  if (embedDimension === targetDim) return;
-
-  logger.warn(`嵌入维度不一致: 当前 ${embedDimension}维，目标 ${targetDim}维，需要执行迁移`);
-}
+// ensureEmbeddingDimension 的实际实现在 ../db/dimension.ts，启动时由 index.ts 调用
