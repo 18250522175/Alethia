@@ -4,6 +4,8 @@ import logger from '../i18n/logger';
 const WIKILINK_REGEX = /\[\[([^\[\]]+)\]\]/g;
 // 英文显式命名实体（连续大写开头词），例如 "Apple Inc"、"Barack Obama"
 const EXPLICIT_ENTITY_REGEX = /[A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)*/g;
+// 中文命名实体：连续的中文字符（2-8 个）作为候选实体
+const CHINESE_ENTITY_REGEX = /[\u4e00-\u9fff]{2,8}/g;
 
 interface UserRuleRow {
   pattern: string;
@@ -34,6 +36,17 @@ export function extractEntities(text: string): string[] {
     }
   }
   EXPLICIT_ENTITY_REGEX.lastIndex = 0;
+
+  // 中文命名实体提取（连续中文字符）
+  while ((match = CHINESE_ENTITY_REGEX.exec(text)) !== null) {
+    const name = match[0].trim();
+    // 过滤常见停用词/虚词
+    const stopWords = new Set(['这是', '一个', '可以', '我们', '他们', '你们', '这个', '那个', '什么', '怎么', '如果', '因为', '所以', '但是', '而且', '或者', '已经', '没有', '不是', '就是', '还是', '只是', '不过', '然后', '虽然', '因此', '于是', '并且', '以及', '关于', '对于', '按照', '通过', '为了', '作为', '由于', '根据', '其中', '所有', '这些', '那些', '哪些', '一些', '这样', '那样', '如何', '为什么', '是否', '能否', '可以', '能够', '需要', '应该', '必须', '可能', '一定', '非常', '比较', '特别', '很多', '很少', '更多', '更少', '之前', '之后', '以后', '以前', '目前', '现在', '今天', '昨天', '明天', '今年', '去年', '明年']);
+    if (name.length >= 2 && !stopWords.has(name)) {
+      entities.add(name);
+    }
+  }
+  CHINESE_ENTITY_REGEX.lastIndex = 0;
 
   return Array.from(entities);
 }

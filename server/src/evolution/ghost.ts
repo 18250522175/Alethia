@@ -33,26 +33,38 @@ export async function ghostDetectAndMark(): Promise<{
 
   logger.info({ count: detected }, '发现新的幽灵链接，开始处理');
 
+  // 按 source_slug 分组，批处理同一源文件的 wiki 更新
+  const bySource = new Map<string, OrphanLinkRow[]>();
   for (const link of orphanLinks) {
-    try {
-      await insertGhostRelation(pool, link);
+    const group = bySource.get(link.source_slug) || [];
+    group.push(link);
+    bySource.set(link.source_slug, group);
+  }
 
-      const updated = await appendOpenThreadToWiki(link.source_slug, link.target_slug);
-      if (updated) sourcesUpdated++;
-
-      const diffCreated = await insertPendingDiff(pool, link);
-      if (diffCreated) diffsCreated++;
-
-      logger.debug(
-        { source: link.source_slug, target: link.target_slug },
-        '幽灵链接处理完成'
-      );
-    } catch (err) {
-      logger.warn(
-        { err, source: link.source_slug, target: link.target_slug },
-        '处理幽灵链接失败，跳过'
-      );
+  for (const [sourceSlug, links] of bySource.entries()) {
+    // 先写入所有 ghost_relations 和 pending_diffs
+    for (const link of links) {
+      try {
+        await insertGhostRelation(pool, link);
+        const diffCreated = await insertPendingDiff(pool, link);
+        if (diffCreated) diffsCreated++;
+      } catch (err) {
+        logger.warn(
+          { err, source: link.source_slug, target: link.target_slug },
+          '处理幽灵链接失败，跳过'
+        );
+      }
     }
+
+    // 批量更新 wiki 文件（同一源文件只读写一次）
+    const targetSlugs = links.map(l => l.target_slug);
+    const updated = await appendOpenThreadsToWiki(sourceSlug, targetSlugs);
+    if (updated) sourcesUpdated++;
+
+    logger.debug(
+      { source: sourceSlug, targets: targetSlugs },
+      '幽灵链接批处理完成'
+    );
   }
 
   logger.info(
@@ -91,7 +103,8 @@ async function insertGhostRelation(
 ): Promise<void> {
   await pool.query(
     `INSERT INTO ghost_relations (source_slug, target_name, discovered_at, status)
-     VALUES ($1, $2, NOW(), 'pending')`,
+     VALUES ($1, $2, NOW(), 'pending')
+     ON CONFLICT DO NOTHING`,
     [link.source_slug, link.target_slug]
   );
 }
@@ -108,9 +121,9 @@ function findWikiFileForSlug(slug: string): string | null {
   return null;
 }
 
-async function appendOpenThreadToWiki(
+async function appendOpenThreadsToWiki(
   sourceSlug: string,
-  targetSlug: string
+  targetSlugs: string[]
 ): Promise<boolean> {
   const wikiFile = findWikiFileForSlug(sourceSlug);
   if (!wikiFile) {
@@ -118,18 +131,23 @@ async function appendOpenThreadToWiki(
     return false;
   }
 
-  const taskLine = `- [ ] 调查指向 [[${targetSlug}]] 的悬空链接`;
   let content = storage.readFile(wikiFile);
+  let anyAdded = false;
 
-  if (content.includes(taskLine)) {
-    logger.debug({ slug: sourceSlug, target: targetSlug }, 'Open Threads 任务已存在，跳过');
-    return false;
+  for (const targetSlug of targetSlugs) {
+    const taskLine = `- [ ] 调查指向 [[${targetSlug}]] 的悬空链接`;
+    if (content.includes(taskLine)) {
+      continue;
+    }
+    content = appendToOpenThreadsSection(content, taskLine);
+    anyAdded = true;
   }
 
-  content = appendToOpenThreadsSection(content, taskLine);
-  storage.atomicWrite(wikiFile, content);
-  logger.debug({ slug: sourceSlug, target: targetSlug }, '已追加 Open Threads 任务');
-  return true;
+  if (anyAdded) {
+    storage.atomicWrite(wikiFile, content);
+    logger.debug({ slug: sourceSlug, targets: targetSlugs }, '已追加 Open Threads 任务');
+  }
+  return anyAdded;
 }
 
 function appendToOpenThreadsSection(content: string, line: string): string {

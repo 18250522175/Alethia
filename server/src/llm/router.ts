@@ -78,6 +78,26 @@ class LLMRouter {
 
   setModelAssignment(assignment: Record<string, { adapterId: string; model: string }>): void {
     this.modelAssignment = { ...assignment };
+    // 通知所有 adapter 更新 defaultModel
+    for (const [task, { adapterId, model }] of Object.entries(this.modelAssignment)) {
+      const adapter = this.adapters.get(adapterId);
+      if (adapter && typeof (adapter as any).setDefaultModel === 'function') {
+        (adapter as any).setDefaultModel(model);
+      }
+    }
+  }
+
+  /**
+   * 重新初始化所有适配器（用于运行时更新 API Key 或端点）。
+   * 重新读取环境变量，销毁旧适配器并创建新实例。
+   */
+  reinitializeAdapters(): void {
+    logger.info('正在重新初始化所有 LLM 适配器...');
+    this.adapters.clear();
+    this.initializeAdapters();
+    // 重新应用当前模型分配
+    this.setModelAssignment(this.modelAssignment);
+    logger.info('LLM 适配器重新初始化完成');
   }
 
   resetToRecommended(): void {

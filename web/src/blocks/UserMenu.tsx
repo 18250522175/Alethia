@@ -12,7 +12,7 @@ export default function UserMenu({ onLogout, onSettings }: UserMenuProps) {
   const { t } = useTranslation();
   const { token } = useAuth();
   const [open, setOpen] = useState(false);
-  const userId = token ? token.slice(0, 8) : '--------';
+  const apiKeyMasked = token ? `${token.slice(0, 4)}${'*'.repeat(Math.max(4, token.length - 4))}` : '--';
 
   const handleSettings = () => {
     setOpen(false);
@@ -41,7 +41,7 @@ export default function UserMenu({ onLogout, onSettings }: UserMenuProps) {
               {t('settings.apiKey')}
             </div>
             <div className="font-mono text-sm text-slate-700 dark:text-slate-200">
-              {userId}…
+              {apiKeyMasked}
             </div>
           </div>
           <button

@@ -3,6 +3,7 @@ import type { RRFResult } from './rrf';
 const sourceWeights: Record<string, number> = {
   pdf: 1.0,
   docx: 0.95,
+  markdown: 0.95,
   audio: 0.9,
   video: 0.85,
   web: 0.7,

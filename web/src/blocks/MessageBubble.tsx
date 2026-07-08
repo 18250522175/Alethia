@@ -89,12 +89,13 @@ export default function MessageBubble({ message, onFeedback }: MessageBubbleProp
                 <div className="flex flex-wrap items-center gap-1">
                   <Tag size={12} />
                   {message.relatedEntities.slice(0, 3).map((e, i) => (
-                    <span
+                    <Link
                       key={i}
-                      className="rounded bg-primary-100 px-1.5 py-0.5 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300"
+                      to={`/wiki/${e.slug}`}
+                      className="rounded bg-primary-100 px-1.5 py-0.5 text-primary-700 hover:bg-primary-200 dark:bg-primary-900/30 dark:text-primary-300 dark:hover:bg-primary-900/50 transition-colors"
                     >
                       {e.title}
-                    </span>
+                    </Link>
                   ))}
                 </div>
               )}

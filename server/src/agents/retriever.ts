@@ -27,8 +27,19 @@ export async function retrieve(plan: RetrievalPlan): Promise<RetrievalResult> {
 
   let graphContext: string[] = [];
   if (queryResult.items.length > 0) {
-    const links = await graphTraverse(queryResult.items[0].slug, 2);
-    graphContext = links.map(l => l.targetSlug);
+    // 对前 N 个结果做图谱遍历（shallow=1, medium=3, deep=5）
+    const traverseCount = plan.depth === 'shallow' ? 1 : plan.depth === 'medium' ? 3 : 5;
+    const slugsToTraverse = queryResult.items.slice(0, traverseCount).map(i => i.slug);
+    const allLinks: string[] = [];
+    for (const slug of slugsToTraverse) {
+      const links = await graphTraverse(slug, 2);
+      for (const l of links) {
+        if (!allLinks.includes(l.targetSlug)) {
+          allLinks.push(l.targetSlug);
+        }
+      }
+    }
+    graphContext = allLinks;
   }
 
   logger.info({ itemCount: queryResult.items.length, evidenceCount: evidence.length }, '检索完成');
@@ -46,13 +57,15 @@ async function getEvidenceForPages(items: QueryResultItem[]): Promise<EvidenceSp
   try {
     const pool = getPool();
     const slugs = items.map(i => i.slug);
+    const evidenceLimit = plan.depth === 'shallow' ? 10 : plan.depth === 'medium' ? 30 : 60;
     const result = await pool.query(
       `SELECT span_id, slug, source_file_hash, source_text_offset, source_text_length,
               original_location, span_text, lang, confidence, source_type
        FROM evidence_spans
        WHERE slug = ANY($1::text[])
-       LIMIT 20`,
-      [slugs]
+       ORDER BY confidence DESC
+       LIMIT $2`,
+      [slugs, evidenceLimit]
     );
 
     return result.rows.map((row: any) => ({

@@ -23,17 +23,19 @@ export async function rerank(
   }
 
   const env = loadEnv();
+  const apiUrl = (env as any).RERANK_API_URL || ZEROENTROPY_API_URL;
+  const model = (env as any).RERANK_MODEL || RERANK_MODEL;
   const documents = items.map(item => `${item.title}\n${item.snippet}`.trim());
 
   try {
-    const response = await fetch(ZEROENTROPY_API_URL, {
+    const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${env.ZERANK_API_KEY}`
       },
       body: JSON.stringify({
-        model: RERANK_MODEL,
+        model,
         query,
         documents,
         top_n: items.length

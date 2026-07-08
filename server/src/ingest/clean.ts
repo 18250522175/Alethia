@@ -34,9 +34,8 @@ export function computeFileHash(buffer: Buffer | string): string {
 }
 
 /**
- * 注册库文件，状态初始化为 `new`，并写入 library_files 表。
- * 同时通过 observed_files 建立证据双向映射（text → source_file_hash）。
- */
+ *// 注册库文件，状态初始化为 `new`，并写入 library_files 表。
+// observed_files 仅由 observe.ts 在证据引用时写入，不在此处预填充。
 export async function registerLibraryFile(params: {
   hash: string;
   mime: string;
@@ -51,17 +50,6 @@ export async function registerLibraryFile(params: {
        VALUES ($1, $2, $3, $4, 'new')
        ON CONFLICT (hash) DO NOTHING`,
       [params.hash, params.mime, params.originalName, params.size]
-    );
-
-    // 建立证据双向映射：text → source_file_hash
-    await pool.query(
-      `INSERT INTO observed_files (file_hash, reference_count, first_referenced_at, last_referenced_at)
-       VALUES ($1, 1, NOW(), NOW())
-       ON CONFLICT (file_hash)
-       DO UPDATE SET
-         reference_count = observed_files.reference_count + 1,
-         last_referenced_at = NOW()`,
-      [params.hash]
     );
 
     logger.info(

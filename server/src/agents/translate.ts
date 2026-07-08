@@ -7,14 +7,6 @@ const DEFAULT_TARGET_LANG = 'zh-CN';
 const CACHE_TTL_DAYS = 90;
 const CACHE_TTL_MS = CACHE_TTL_DAYS * 24 * 60 * 60 * 1000;
 
-const TRANSLATE_SYSTEM_PROMPT = `你是证据翻译器。请将给定的证据片段翻译为中文（zh-CN），要求：
-1. 保留专业术语的准确性，必要时在括号中保留原文
-2. 保留原文中的数字、代码、引用标记（如 [^span_id]）
-3. 仅输出翻译后的纯文本，不要附加任何解释
-
-输出 JSON 数组，每个元素形如：
-[{"spanId":"span-xxx","translatedText":"翻译内容"}]`;
-
 export async function translateEvidence(
   spanIds: string[],
   targetLang: string = DEFAULT_TARGET_LANG
@@ -179,9 +171,18 @@ async function callLlmTranslate(
     `### spanId=${s.span_id} | sourceLang=${s.lang}\n${s.span_text}`
   ).join('\n\n');
 
+  const targetLangLabel = targetLang === 'zh-CN' ? '中文（zh-CN）' : targetLang === 'en' ? 'English (en)' : targetLang;
+  const systemPrompt = `你是证据翻译器。请将给定的证据片段翻译为${targetLangLabel}，要求：
+1. 保留专业术语的准确性，必要时在括号中保留原文
+2. 保留原文中的数字、代码、引用标记（如 [^span_id]）
+3. 仅输出翻译后的纯文本，不要附加任何解释
+
+输出 JSON 数组，每个元素形如：
+[{"spanId":"span-xxx","translatedText":"翻译内容"}]`;
+
   const llmMessages: LLMMessage[] = [
-    { role: 'system', content: TRANSLATE_SYSTEM_PROMPT },
-    { role: 'user', content: `请将以下证据片段翻译为 ${targetLang}：\n\n${context}` }
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: `请将以下证据片段翻译为 ${targetLangLabel}：\n\n${context}` }
   ];
 
   try {
@@ -240,7 +241,7 @@ async function persistTranslation(entry: EvidenceTranslation): Promise<void> {
     await pool.query(
       `INSERT INTO evidence_translations
          (span_id, source_text, translated_text, lang, model, created_at, expires_at)
-       VALUES ($1, $2, $3, $4, $5, NOW(), NOW() + ($6::text || ' days')::interval)`,
+       VALUES ($1, $2, $3, $4, $5, NOW(), NOW() + ($6::int || ' days')::interval)`,
       [
         entry.spanId,
         entry.sourceText,

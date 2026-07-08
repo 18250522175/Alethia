@@ -160,12 +160,21 @@ function parseDiffArray(content: string): any[] {
 
 async function persistPendingDiffs(fileHash: string, candidates: any[]): Promise<number> {
   const pool = getPool();
-  let inserted = 0;
+  if (candidates.length === 0) return 0;
+
+  // 批量 INSERT：UNNEST 一次插入所有候选
+  const ids: string[] = [];
+  const slugs: string[] = [];
+  const types: string[] = [];
+  const payloads: string[] = [];
+  const confidences: number[] = [];
+  const impacts: string[] = [];
+  const tiers: string[] = [];
 
   for (const c of candidates) {
-    const id = randomUUID();
-    const slug = String(c.slug || deriveSlugFromSpans(fileHash));
-    const type = String(c.type || 'state');
+    ids.push(randomUUID());
+    slugs.push(String(c.slug || deriveSlugFromSpans(fileHash)));
+    types.push(String(c.type || 'state'));
     const payload = {
       field: String(c.field || ''),
       newValue: c.newValue ?? '',
@@ -173,25 +182,26 @@ async function persistPendingDiffs(fileHash: string, candidates: any[]): Promise
       context: c.context ?? '',
       evidenceSpanId: c.evidenceSpanId ?? ''
     };
-    const confidence = Number(c.confidence) || 0;
-    const impact = (c.impact === 'high' || c.impact === 'medium' || c.impact === 'low')
-      ? c.impact : 'low';
-    const tier = (c.tier === 'green' || c.tier === 'yellow' || c.tier === 'red')
-      ? c.tier : 'yellow';
-
-    try {
-      await pool.query(
-        `INSERT INTO pending_diffs (id, slug, type, payload, confidence, impact, tier, created_at, resolved)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), FALSE)`,
-        [id, slug, type, JSON.stringify(payload), confidence, impact, tier]
-      );
-      inserted++;
-    } catch (err) {
-      logger.warn({ err, id, slug }, '写入 pending_diff 失败，跳过该项');
-    }
+    payloads.push(JSON.stringify(payload));
+    confidences.push(Number(c.confidence) || 0);
+    impacts.push((c.impact === 'high' || c.impact === 'medium' || c.impact === 'low') ? c.impact : 'low');
+    tiers.push((c.tier === 'green' || c.tier === 'yellow' || c.tier === 'red') ? c.tier : 'yellow');
   }
 
-  return inserted;
+  try {
+    const result = await pool.query(
+      `INSERT INTO pending_diffs (id, slug, type, payload, confidence, impact, tier, created_at, resolved)
+       SELECT * FROM UNNEST($1::uuid[], $2::text[], $3::text[], $4::jsonb[], $5::float[], $6::text[], $7::text[])
+       AS t(id, slug, type, payload, confidence, impact, tier)
+       ON CONFLICT DO NOTHING
+       RETURNING id`,
+      [ids, slugs, types, payloads, confidences, impacts, tiers]
+    );
+    return result.rows.length;
+  } catch (err) {
+    logger.warn({ err, fileHash, count: candidates.length }, '批量写入 pending_diffs 失败');
+    return 0;
+  }
 }
 
 function deriveSlugFromSpans(fileHash: string): string {

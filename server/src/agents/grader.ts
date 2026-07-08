@@ -16,12 +16,12 @@ export interface GradeResult {
 }
 
 const DEFAULT_FALLBACK: GradeResult = {
-  factual_accuracy: 0.5,
-  coverage_completeness: 0.5,
-  source_clarity: 0.5,
-  evidence_coverage: 0.5,
-  overall: 0.5,
-  reasoning: '评分服务不可用，使用默认分数',
+  factual_accuracy: -1,
+  coverage_completeness: -1,
+  source_clarity: -1,
+  evidence_coverage: -1,
+  overall: -1,
+  reasoning: '评分服务不可用，使用哨兵值',
   isFallback: true
 };
 
@@ -39,7 +39,7 @@ export async function grade(
   ];
 
   try {
-    const adapter = llmRouter.route('qa_gen');
+    const adapter = llmRouter.route('grader');
     const response = await adapter.chat({ messages, jsonMode: true, temperature: 0.2 });
     const result = parseJSONResponse<GradeResult>(response.content, { ...DEFAULT_FALLBACK });
     return { ...result, isFallback: false };

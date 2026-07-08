@@ -23,19 +23,19 @@ export async function graphTraverse(slug: string, depth: number = 2): Promise<Li
         JOIN graph_traverse gt ON l.source_slug = gt.target_slug
         WHERE l.orphaned = false AND gt.current_depth < $2
       )
-      SELECT DISTINCT source_slug, target_slug, relation, weight, orphaned
+      SELECT DISTINCT source_slug, target_slug, relation, weight, orphaned, created_at
       FROM graph_traverse`,
       [slug, safeDepth]
     );
 
-    return result.rows.map((row: any) => ({
-      id: 0,
+    return result.rows.map((row: any, i: number) => ({
+      id: i + 1,
       sourceSlug: row.source_slug,
       targetSlug: row.target_slug,
       relation: row.relation,
       weight: parseFloat(row.weight),
       orphaned: row.orphaned,
-      createdAt: ''
+      createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : ''
     }));
   } catch (err) {
     logger.error({ err, slug }, '图谱遍历失败');
@@ -47,7 +47,7 @@ export async function getGraphNodes(limit: number = 200): Promise<{ slug: string
   try {
     const pool = getPool();
     const result = await pool.query(
-      `SELECT slug, title, type FROM pages LIMIT $1`,
+      `SELECT slug, title, type FROM pages ORDER BY updated_at DESC LIMIT $1`,
       [limit]
     );
     return result.rows.map((row: any) => ({

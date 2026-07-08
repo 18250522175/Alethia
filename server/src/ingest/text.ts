@@ -50,12 +50,17 @@ function csvToMarkdownTable(csv: string): string {
   if (lines.length === 0) return '';
 
   const rows = lines.map(l => parseCsvLine(l));
+  if (rows.length === 0) return '';
   const header = rows[0];
+  // 空表头：使用列号作为默认表头
+  const safeHeader = header.length > 0 && header.some(h => h.trim().length > 0)
+    ? header
+    : header.map((_, i) => `列${i + 1}`);
   const body = rows.slice(1);
 
   const md = [
-    `| ${header.join(' | ')} |`,
-    `| ${header.map(() => '---').join(' | ')} |`,
+    `| ${safeHeader.join(' | ')} |`,
+    `| ${safeHeader.map(() => '---').join(' | ')} |`,
     ...body.map(r => `| ${r.join(' | ')} |`)
   ];
 
