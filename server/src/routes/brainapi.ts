@@ -730,6 +730,10 @@ app.get('/api/library-files', async (c) => {
 app.delete('/api/library-files/:hash', async (c) => {
   try {
     const hash = c.req.param('hash');
+    // Validate hash to prevent path traversal
+    if (!/^[a-fA-F0-9]{8,128}$/.test(hash)) {
+      return c.json({ error: { code: 'VALIDATION_ERROR', message: getErrorMessage('VALIDATION_ERROR') } }, 400);
+    }
     const pool = getPool();
     const result = await pool.query('SELECT hash FROM library_files WHERE hash = $1', [hash]);
     if (result.rows.length === 0) {
@@ -752,6 +756,10 @@ app.delete('/api/library-files/:hash', async (c) => {
 app.get('/api/library-files/:hash', async (c) => {
   try {
     const hash = c.req.param('hash');
+    // Validate hash to prevent path traversal
+    if (!/^[a-fA-F0-9]{8,128}$/.test(hash)) {
+      return c.json({ error: { code: 'VALIDATION_ERROR', message: getErrorMessage('VALIDATION_ERROR') } }, 400);
+    }
     const result = await brainAPI.getLibraryFile(hash);
     if (!result) {
       return c.json({ error: { code: 'NOT_FOUND', message: getErrorMessage('NOT_FOUND') } }, 404);
@@ -767,6 +775,10 @@ app.get('/api/library-files/:hash', async (c) => {
 app.get('/api/library-files/:hash/content', async (c) => {
   try {
     const hash = c.req.param('hash');
+    // Validate hash to prevent path traversal
+    if (!/^[a-fA-F0-9]{8,128}$/.test(hash)) {
+      return c.json({ error: { code: 'VALIDATION_ERROR', message: getErrorMessage('VALIDATION_ERROR') } }, 400);
+    }
     const pool = getPool();
     const result = await pool.query('SELECT mime FROM library_files WHERE hash = $1', [hash]);
     if (result.rows.length === 0) {

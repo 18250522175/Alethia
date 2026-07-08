@@ -791,5 +791,15 @@
     "exportJsonTitle": "导出 JSON 数据",
     "exportJson": "导出 JSON",
     "nodeCount": "{{count}} 节点"
+  },
+  "search": {
+    "graphTitle": "知识图谱",
+    "graphDesc": "浏览全屏知识图谱",
+    "qaTitle": "AI 问答",
+    "qaDesc": "向知识库提问",
+    "reviewTitle": "待审核变更",
+    "reviewDesc": "审核 AI 生成的知识变更",
+    "dashboardTitle": "仪表盘",
+    "dashboardDesc": "查看知识库健康状态"
   }
 }

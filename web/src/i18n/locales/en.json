@@ -791,5 +791,15 @@
     "exportJsonTitle": "Export JSON Data",
     "exportJson": "Export JSON",
     "nodeCount": "{{count}} nodes"
+  },
+  "search": {
+    "graphTitle": "Knowledge Graph",
+    "graphDesc": "Browse full-screen knowledge graph",
+    "qaTitle": "AI Q&A",
+    "qaDesc": "Ask the knowledge base",
+    "reviewTitle": "Pending Changes",
+    "reviewDesc": "Review AI-generated knowledge changes",
+    "dashboardTitle": "Dashboard",
+    "dashboardDesc": "View knowledge base health status"
   }
 }

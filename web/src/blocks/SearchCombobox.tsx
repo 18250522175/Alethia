@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { MagnifyingGlass, X, Command, FileText, Graph, ChatsCircle, Hash } from '@phosphor-icons/react';
@@ -12,13 +12,6 @@ interface SearchSuggestion {
   description?: string;
   path: string;
 }
-
-const STATIC_SUGGESTIONS: SearchSuggestion[] = [
-  { id: 'graph', type: 'graph', title: '知识图谱', description: '浏览全屏知识图谱', path: '/graph' },
-  { id: 'qa', type: 'qa', title: 'AI 问答', description: '向知识库提问', path: '/qa' },
-  { id: 'review', type: 'file', title: '待审核变更', description: '审核 AI 生成的知识变更', path: '/review' },
-  { id: 'dashboard', type: 'file', title: '仪表盘', description: '查看知识库健康状态', path: '/dashboard' },
-];
 
 function getTypeIcon(type: string) {
   switch (type) {
@@ -43,6 +36,13 @@ export default function SearchCombobox() {
   const [searchResults, setSearchResults] = useState<SearchSuggestion[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const staticSuggestions = useMemo<SearchSuggestion[]>(() => [
+    { id: 'graph', type: 'graph', title: t('search.graphTitle'), description: t('search.graphDesc'), path: '/graph' },
+    { id: 'qa', type: 'qa', title: t('search.qaTitle'), description: t('search.qaDesc'), path: '/qa' },
+    { id: 'review', type: 'file', title: t('search.reviewTitle'), description: t('search.reviewDesc'), path: '/review' },
+    { id: 'dashboard', type: 'file', title: t('search.dashboardTitle'), description: t('search.dashboardDesc'), path: '/dashboard' },
+  ], [t]);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -71,8 +71,8 @@ export default function SearchCombobox() {
   }, [query]);
 
   const filteredSuggestions = query === ''
-    ? STATIC_SUGGESTIONS
-    : [...searchResults.slice(0, 5), ...STATIC_SUGGESTIONS.filter(s =>
+    ? staticSuggestions
+    : [...searchResults.slice(0, 5), ...staticSuggestions.filter(s =>
         s.title.toLowerCase().includes(query.toLowerCase()) ||
         s.description?.toLowerCase().includes(query.toLowerCase())
       )].slice(0, 8);
