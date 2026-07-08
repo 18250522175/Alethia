@@ -6,8 +6,18 @@ import logger from '../i18n/logger';
 const app = new Hono();
 
 app.get('/api/llm/adapters', (c) => {
-  const adapters = llmRouter.getAdapterStatuses();
-  return c.json({ adapters });
+  try {
+    const adapters = llmRouter.getAdapterStatuses();
+    return c.json({ adapters });
+  } catch (err) {
+    logger.error({ err }, '获取 LLM 适配器列表失败');
+    return c.json({
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: getErrorMessage('INTERNAL_ERROR')
+      }
+    }, 500);
+  }
 });
 
 app.post('/api/llm/test', async (c) => {
@@ -20,7 +30,7 @@ app.post('/api/llm/test', async (c) => {
       return c.json({
         error: {
           code: 'NOT_FOUND',
-          message: `未找到适配器: ${adapterId}`
+          message: getErrorMessage('NOT_FOUND')
         }
       }, 404);
     }
