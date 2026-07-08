@@ -217,6 +217,10 @@ class BudgetManager {
       );
       this.dailyUsed = 0;
       this.currentDay = day;
+      // Persist the reset to database
+      this.persistDailyReset(day).catch(err => {
+        logger.error({ err }, '持久化日预算重置失败');
+      });
       if (this.tripped && this.monthlyUsed < this.monthlyBudget) {
         this.tripped = false;
         logger.info('新的一天开始，日预算熔断已解除');
@@ -229,6 +233,28 @@ class BudgetManager {
       );
       this.monthlyUsed = 0;
       this.currentMonth = month;
+      // Persist the reset to database
+      this.persistMonthlyReset(month).catch(err => {
+        logger.error({ err }, '持久化月预算重置失败');
+      });
+    }
+  }
+
+  private async persistDailyReset(day: string): Promise<void> {
+    const pool = getPool();
+    try {
+      await pool.query('DELETE FROM budget_usage WHERE key = $1', [`daily:${day}`]);
+    } catch (err) {
+      logger.error({ err }, '清除日预算记录失败');
+    }
+  }
+
+  private async persistMonthlyReset(month: string): Promise<void> {
+    const pool = getPool();
+    try {
+      await pool.query('DELETE FROM budget_usage WHERE key = $1', [`monthly:${month}`]);
+    } catch (err) {
+      logger.error({ err }, '清除月预算记录失败');
     }
   }
 

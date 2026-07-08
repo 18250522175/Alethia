@@ -243,7 +243,7 @@ export const api = {
     });
   },
 
-  queryKnowledge(query: string, options?: { intent?: string; topK?: number; contexts?: string[] }) {
+  queryKnowledge(query: string, options?: { intent?: string; topK?: number; contexts?: string[]; withRerank?: boolean }) {
     return request<QueryResult>('/query', {
       method: 'POST',
       body: JSON.stringify({ query, ...options })

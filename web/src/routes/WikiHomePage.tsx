@@ -167,12 +167,12 @@ export default function WikiHomePage() {
     <div className="space-y-6 animate-fade-in">
       <section className="rounded-2xl bg-gradient-to-r from-primary-600 to-knowledge-600 p-8 text-white">
         <h1 className="text-2xl font-bold">
-          {getGreeting()}！欢迎回到你的知识库
+          {getGreeting()}！{t('home.welcomeBack')}
         </h1>
         <p className="mt-2 text-primary-100">
           {featured.length > 0
-            ? `你的知识库有 ${featured.length} 个精选条目，知识图谱有 ${graphNodes.length} 个节点。`
-            : '开始构建你的知识库吧。'}
+            ? t('home.librarySummary', { featured: featured.length, nodes: graphNodes.length })
+            : t('home.startBuilding')}
         </p>
         <form onSubmit={handleSearch} className="mt-6 flex gap-3">
           <div className="relative flex-1 max-w-md">

@@ -138,7 +138,7 @@ export async function generateWeeklyReport(): Promise<WeeklyReport> {
   let summary = generateSummary(metrics, highlights);
 
   try {
-    const adapter = llmRouter.getAdapter('moonshot');
+    const adapter = llmRouter.route('narrate');
     const statuses = llmRouter.getAdapterStatuses();
     const moonshotStatus = statuses.find(s => s.id === 'moonshot');
     if (adapter && moonshotStatus?.apiKeyConfigured) {
@@ -221,7 +221,8 @@ export async function runWeeklySkillOptimization(): Promise<{ optimized: number;
   try {
     const lowConfidenceResult = await pool.query(
       `SELECT DISTINCT slug FROM conversation_logs 
-       WHERE confidence < 0.5 AND ts >= (NOW() - INTERVAL '7 days') 
+       WHERE ts >= (NOW() - INTERVAL '7 days') 
+       AND slug IS NOT NULL AND slug != ''
        LIMIT 10`
     );
 

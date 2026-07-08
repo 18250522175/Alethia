@@ -143,6 +143,13 @@ function revertDelete(filePath: string, payload: any): boolean {
 
 function resolveFilePath(target: string): string {
   if (isAbsolute(target)) return target;
+
+  // Check if target could be a library file (hashes are hex strings)
+  if (/^[a-fA-F0-9]{8,128}$/.test(target)) {
+    const libPath = join(storage.getLibraryPath(), target);
+    if (existsSync(libPath)) return libPath;
+  }
+
   const wikiPath = storage.getWikiPath();
   return join(wikiPath, target);
 }

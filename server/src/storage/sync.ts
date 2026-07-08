@@ -67,10 +67,11 @@ export class SyncEngine {
     const hash = createHash('sha256').update(parsed.rawMd).digest('hex');
 
     await client.query(`
-      INSERT INTO pages (slug, path, type, contexts, aliases, raw_md, parsed_json, content_md, hash, updated_at)
-      VALUES ($1, $2, $3, $4::text[], $5::text[], $6, $7::jsonb, $8, $9, NOW())
+      INSERT INTO pages (slug, path, title, type, contexts, aliases, raw_md, parsed_json, content_md, hash, updated_at)
+      VALUES ($1, $2, $3, $4, $5::text[], $6::text[], $7, $8::jsonb, $9, $10, NOW())
       ON CONFLICT (slug) DO UPDATE SET
         path = EXCLUDED.path,
+        title = EXCLUDED.title,
         type = EXCLUDED.type,
         contexts = EXCLUDED.contexts,
         aliases = EXCLUDED.aliases,
@@ -82,6 +83,7 @@ export class SyncEngine {
     `, [
       parsed.slug,
       parsed.path,
+      parsed.title || parsed.slug,
       parsed.type,
       parsed.contexts,
       parsed.aliases,
@@ -388,6 +390,7 @@ export class SyncEngine {
     const client = await pool.connect();
 
     try {
+      await client.query('BEGIN');
       await client.query('TRUNCATE TABLE page_embeddings CASCADE');
       await client.query('TRUNCATE TABLE page_fts CASCADE');
       await client.query('TRUNCATE TABLE links CASCADE');
@@ -398,7 +401,12 @@ export class SyncEngine {
       await client.query('TRUNCATE TABLE clusters CASCADE');
       await client.query('TRUNCATE TABLE cluster_members CASCADE');
       await client.query('TRUNCATE TABLE pages CASCADE');
+      await client.query('COMMIT');
       logger.info('所有缓存表已清空');
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => {});
+      logger.error({ err }, '清空缓存表失败，已回滚');
+      throw err;
     } finally {
       client.release();
     }

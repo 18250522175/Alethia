@@ -110,6 +110,9 @@
     "draftGenerated": "草稿已生成，您可以预览后创建条目或重新生成。",
     "regenerate": "重新生成",
     "createPage": "创建条目",
+    "welcomeBack": "欢迎回到你的知识库",
+    "librarySummary": "你的知识库有 {{featured}} 个精选条目，知识图谱有 {{nodes}} 个节点。",
+    "startBuilding": "开始构建你的知识库吧。",
     "portalType": {
       "concept": "核心概念",
       "process": "流程方法",

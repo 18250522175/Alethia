@@ -556,40 +556,10 @@ class BrainAPI {
 
   // Task 7.8: 归档活跃版本超过 50 条的 slug 最早 N-20 条记录
   async archiveVersions(entitySlug?: string): Promise<{ archived: number }> {
-    const pool = getPool();
-    let archivedCount = 0;
-
     try {
-      const query = entitySlug
-        ? `SELECT slug, COUNT(*) as cnt FROM knowledge_versions
-           WHERE slug = $1 AND archived = false
-           GROUP BY slug HAVING COUNT(*) > 50`
-        : `SELECT slug, COUNT(*) as cnt FROM knowledge_versions
-           WHERE archived = false
-           GROUP BY slug HAVING COUNT(*) > 50`;
-
-      const result = await pool.query(query, entitySlug ? [entitySlug] : []);
-
-      for (const row of result.rows) {
-        const count = parseInt(row.cnt, 10);
-        const limit = Math.max(count - 20, 0);
-        if (limit <= 0) continue;
-
-        const toArchive = await pool.query(
-          `UPDATE knowledge_versions SET archived = true
-           WHERE id IN (
-             SELECT id FROM knowledge_versions
-             WHERE slug = $1 AND archived = false
-             ORDER BY ts ASC LIMIT $2
-           )
-           RETURNING id`,
-          [row.slug, limit]
-        );
-        archivedCount += toArchive.rowCount || 0;
-      }
-
-      logger.info({ archivedCount }, '版本归档完成');
-      return { archived: archivedCount };
+      const { archiveVersions: fullArchive } = await import('../evolution/archive');
+      const result = await fullArchive(entitySlug);
+      return { archived: result.archived };
     } catch (err) {
       logger.error({ err }, '版本归档失败');
       return { archived: 0 };
@@ -1224,6 +1194,17 @@ ${relationsBlock}
     } catch (err) {
       logger.error({ err }, '设置日预算失败');
       return { success: false, dailyBudget: 0 };
+    }
+  }
+
+  async setMonthlyBudget(amount: number): Promise<{ success: boolean; monthlyBudget: number }> {
+    try {
+      budgetManager.setMonthlyBudget(amount);
+      const snapshot = budgetManager.getSnapshot();
+      return { success: true, monthlyBudget: snapshot.monthlyBudget };
+    } catch (err) {
+      logger.error({ err }, '设置月预算失败');
+      return { success: false, monthlyBudget: 0 };
     }
   }
 

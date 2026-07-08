@@ -110,6 +110,9 @@
     "draftGenerated": "Draft generated. You can preview it before creating the entry or regenerate.",
     "regenerate": "Regenerate",
     "createPage": "Create Entry",
+    "welcomeBack": "Welcome back to your knowledge base",
+    "librarySummary": "Your knowledge base has {{featured}} featured entries and {{nodes}} nodes in the knowledge graph.",
+    "startBuilding": "Start building your knowledge base.",
     "portalType": {
       "concept": "Core Concepts",
       "process": "Processes",

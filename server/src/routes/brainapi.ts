@@ -918,6 +918,34 @@ app.post('/api/settings/daily-budget', async (c) => {
   }
 });
 
+// Budget: 设置月预算
+app.post('/api/settings/monthly-budget', async (c) => {
+  try {
+    const body = await c.req.json().catch(() => ({}));
+    const { amount } = body;
+
+    if (amount === undefined || typeof amount !== 'number' || amount < 0) {
+      return c.json({
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: getErrorMessage('VALIDATION_ERROR')
+        }
+      }, 400);
+    }
+
+    const result = await brainAPI.setMonthlyBudget(amount);
+    return c.json(result);
+  } catch (err) {
+    loggerInstance.error({ err }, '设置月预算失败');
+    return c.json({
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: getErrorMessage('INTERNAL_ERROR')
+      }
+    }, 500);
+  }
+});
+
 // Budget: 获取剩余预算
 app.get('/api/budget/remaining', async (c) => {
   try {

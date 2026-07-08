@@ -52,11 +52,14 @@ async function loadMessage(conversationId: string, messageId: string): Promise<M
   try {
     const pool = getPool();
     const numericId = Number(messageId);
+    // If messageId is not a valid number, use the raw string value
+    const isNumeric = !isNaN(numericId) && String(numericId) === messageId;
+
     const result = await pool.query(
       `SELECT id, conversation_id, role, content
        FROM conversation_logs
        WHERE conversation_id = $1 AND id = $2`,
-      [conversationId, numericId]
+      [conversationId, isNumeric ? numericId : messageId]
     );
 
     if (result.rows.length === 0) return null;
