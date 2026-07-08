@@ -2,6 +2,7 @@ import { basename } from 'path';
 import matter from 'gray-matter';
 import { storage } from './markdown';
 import { getPool } from '../db/pool';
+import type { PoolClient } from 'pg';
 import logger from '../i18n/logger';
 
 export interface ParsedCluster {
@@ -12,7 +13,8 @@ export interface ParsedCluster {
   content: string;
 }
 
-const WIKILINK_REGEX = /\[\[([^\]|]+)/g;
+// 不使用 g 标志，避免并发场景下 lastIndex 竞态
+const WIKILINK_PATTERN = /\[\[([^\]|]+)/;
 
 export function parseSummaryFile(filePath: string, content: string): ParsedCluster {
   const clusterId = basename(filePath, '.md');
@@ -23,8 +25,9 @@ export function parseSummaryFile(filePath: string, content: string): ParsedClust
   const lifecycle = data.lifecycle || 'emerging';
 
   const members: string[] = [];
-  let match: RegExpExecArray | null;
-  while ((match = WIKILINK_REGEX.exec(body)) !== null) {
+  // 使用 matchAll 替代 exec 循环，避免 lastIndex 竞态
+  const matches = body.matchAll(/\[\[([^\]|]+)/g);
+  for (const match of matches) {
     const slug = match[1].trim();
     if (slug && !members.includes(slug)) {
       members.push(slug);
@@ -34,7 +37,7 @@ export function parseSummaryFile(filePath: string, content: string): ParsedClust
   return { clusterId, name, members, lifecycle, content: body.trim() };
 }
 
-export async function syncSummaries(): Promise<{ clusters: number; members: number }> {
+export async function syncSummaries(existingClient?: PoolClient): Promise<{ clusters: number; members: number }> {
   const files = storage.listSummaryFiles();
 
   if (files.length === 0) {
@@ -42,7 +45,8 @@ export async function syncSummaries(): Promise<{ clusters: number; members: numb
   }
 
   const pool = getPool();
-  const client = await pool.connect();
+  const client = existingClient || await pool.connect();
+  let shouldRelease = !existingClient;
 
   let clusterCount = 0;
   let memberCount = 0;
@@ -67,12 +71,13 @@ export async function syncSummaries(): Promise<{ clusters: number; members: numb
         if (parsed.members.length > 0) {
           await client.query('DELETE FROM cluster_members WHERE cluster_id = $1', [parsed.clusterId]);
 
-          for (const slug of parsed.members) {
-            await client.query(
-              'INSERT INTO cluster_members (cluster_id, slug) VALUES ($1, $2)',
-              [parsed.clusterId, slug]
-            );
-          }
+          // 批量 INSERT 替代逐条 INSERT，减少数据库往返
+          const clusterIds = parsed.members.map(() => parsed.clusterId);
+          await client.query(
+            `INSERT INTO cluster_members (cluster_id, slug)
+             SELECT * FROM unnest($1::text[], $2::text[])`,
+            [clusterIds, parsed.members]
+          );
           memberCount += parsed.members.length;
         }
       } catch (err) {
@@ -82,7 +87,9 @@ export async function syncSummaries(): Promise<{ clusters: number; members: numb
 
     logger.info(`摘要同步完成: ${clusterCount} 集群, ${memberCount} 成员`);
   } finally {
-    client.release();
+    if (shouldRelease) {
+      client.release();
+    }
   }
 
   return { clusters: clusterCount, members: memberCount };

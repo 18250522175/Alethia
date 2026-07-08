@@ -22,6 +22,20 @@ const LIBRARY_EXTRACTION_PROMPT = `请从以下文本中提取知识实体和关
 文本内容：
 `;
 
+/**
+ * 根据关系类型计算链接权重。
+ * 语义紧密的关系（如 "is-a"、"定义"）权重较高，
+ * 松散关联（如 "相关"、"参考"）权重较低。
+ */
+function calcLinkWeight(relation: string): number {
+  const r = relation.toLowerCase();
+  if (r.includes('is-a') || r.includes('定义') || r.includes('等价') || r.includes('实例')) return 0.9;
+  if (r.includes('包含') || r.includes('依赖') || r.includes('继承') || r.includes('实现')) return 0.8;
+  if (r.includes('关联') || r.includes('影响') || r.includes('导致') || r.includes('引用')) return 0.6;
+  if (r.includes('相关') || r.includes('参考') || r.includes('参见')) return 0.4;
+  return 0.5;
+}
+
 export class SyncEngine {
   async syncAll(): Promise<{ pages: number; links: number; timeline: number; versions: number; clusters: number }> {
     const wikiFiles = storage.listWikiFiles();
@@ -55,12 +69,12 @@ export class SyncEngine {
       }
 
       logger.info(`同步完成: ${pageCount} 页, ${linkCount} 链接, ${timelineCount} 时间线, ${versionCount} 版本`);
+
+      const summaryResult = await syncSummaries(client);
+      return { pages: pageCount, links: linkCount, timeline: timelineCount, versions: versionCount, clusters: summaryResult.clusters };
     } finally {
       client.release();
     }
-
-    const summaryResult = await syncSummaries();
-    return { pages: pageCount, links: linkCount, timeline: timelineCount, versions: versionCount, clusters: summaryResult.clusters };
   }
 
   private async syncPage(client: any, parsed: ParsedPage): Promise<void> {
@@ -96,8 +110,8 @@ export class SyncEngine {
     const pageResult = await client.query('SELECT id FROM pages WHERE slug = $1', [parsed.slug]);
     const pageId = pageResult.rows[0].id;
 
-    const aliasText = parsed.aliases.length > 0 ? parsed.aliases.join(' ') : '';
-    const sourceText = `${parsed.title}\n${parsed.state}\n${parsed.assessment}\n${parsed.contentMd}\n${aliasText}`;
+    const aliasText = (parsed.aliases && parsed.aliases.length > 0) ? parsed.aliases.join(' ') : '';
+    const sourceText = `${parsed.title || ''}\n${parsed.state || ''}\n${parsed.assessment || ''}\n${parsed.contentMd || ''}\n${aliasText}`;
     await client.query(`
       INSERT INTO page_fts (page_id, tsv, source_text)
       VALUES ($1, to_tsvector('simple', $2), $2)
@@ -115,6 +129,7 @@ export class SyncEngine {
     await client.query('DELETE FROM links WHERE source_slug = $1', [parsed.slug]);
 
     for (const rel of parsed.relations) {
+      const weight = calcLinkWeight(rel.relation);
       await client.query(`
         INSERT INTO links (source_slug, target_slug, relation, weight, orphaned, created_at)
         VALUES ($1, $2, $3, $4, $5, NOW())
@@ -122,8 +137,8 @@ export class SyncEngine {
         parsed.slug,
         rel.targetSlug,
         rel.relation,
-        1.0,
-        true
+        weight,
+        false
       ]);
     }
 
