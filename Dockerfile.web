@@ -3,15 +3,22 @@
 
 # === 阶段 1：构建 ===
 FROM oven/bun:1.1 AS builder
+
+# 设置镜像源
+ENV BUN_REGISTRY=https://registry.npmmirror.com
+
 WORKDIR /app
 
-COPY package.json bun.lock tsconfig.base.json ./
+# 拷贝所有 workspace 的 package.json（bun 需要解析 workspace 树）
+COPY package.json tsconfig.base.json ./
 COPY shared/package.json ./shared/package.json
+COPY server/package.json ./server/package.json
 COPY web/package.json ./web/package.json
 
-# 仅安装 web + shared 依赖
-RUN bun install --frozen-lockfile --filter @alethia/web... --filter @alethia/shared...
+# 安装所有依赖（简单可靠，避免 filter 过滤带来的问题）
+RUN bun install
 
+# 拷贝源码
 COPY shared ./shared
 COPY web ./web
 

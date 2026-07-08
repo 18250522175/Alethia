@@ -3,16 +3,20 @@
 
 # === 阶段 1：构建 ===
 FROM oven/bun:1.1 AS builder
+
+# 设置 npm 镜像源（加速依赖下载）
+ENV BUN_REGISTRY=https://registry.npmmirror.com
+
 WORKDIR /app
 
-# 拷贝 workspace 配置与各 package 的 manifest
-COPY package.json bun.lock tsconfig.base.json ./
+# 拷贝 workspace 配置与各 package 的 manifest（不再复制 bun.lock）
+COPY package.json tsconfig.base.json ./
 COPY shared/package.json ./shared/package.json
 COPY server/package.json ./server/package.json
 COPY web/package.json ./web/package.json
 
-# 安装全部依赖（构建期需要 devDependencies 提供 types 等）
-RUN bun install --frozen-lockfile --filter @alethia/server... --filter @alethia/shared...
+# 安装全部依赖（包括 devDependencies，用于构建）
+RUN bun install
 
 # 拷贝源码
 COPY shared ./shared
@@ -24,16 +28,20 @@ RUN cd server && bun run build
 
 # === 阶段 2：运行 ===
 FROM oven/bun:1.1 AS runtime
+
+# 同样设置镜像源
+ENV BUN_REGISTRY=https://registry.npmmirror.com
+
 WORKDIR /app
 
 # 拷贝 workspace 配置（用于解析 workspace 依赖）
-COPY package.json bun.lock tsconfig.base.json ./
+COPY package.json tsconfig.base.json ./
 COPY shared/package.json ./shared/package.json
 COPY server/package.json ./server/package.json
 COPY web/package.json ./web/package.json
 
 # 仅安装生产依赖（保留 native/WASM 模块的可解析路径，避免打包后失效）
-RUN bun install --frozen-lockfile --production --filter @alethia/server... --filter @alethia/shared...
+RUN bun install --production
 
 # 拷贝构建产物与运行期需要的非 JS 资源
 COPY --from=builder /app/server/dist /app/server/dist
