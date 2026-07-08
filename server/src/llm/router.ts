@@ -40,7 +40,8 @@ class LLMRouter {
 
     for (const config of adapterConfigs) {
       const apiKey = (env as any)[config.apiKeyEnv] || '';
-      const adapter = new config.cls(apiKey, config.defaultModel);
+      const baseURLOverride = (env as any)[`${config.id.toUpperCase()}_BASE_URL`] || '';
+      const adapter = new config.cls(apiKey, config.defaultModel, baseURLOverride || undefined);
       this.adapters.set(config.id, adapter);
     }
 

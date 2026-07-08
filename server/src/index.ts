@@ -200,11 +200,38 @@ async function bootstrap() {
   const port = env.BRAIN_PORT;
   loggerInstance.info(`服务启动完成，监听端口: ${port}`);
 
-  Bun.serve({
+  const server = Bun.serve({
     fetch: app.fetch,
     port: port,
     hostname: '0.0.0.0'
   });
+
+  // 优雅关闭处理
+  let isShuttingDown = false;
+  const gracefulShutdown = async (signal: string) => {
+    if (isShuttingDown) return;
+    isShuttingDown = true;
+    loggerInstance.info(`收到 ${signal} 信号，开始优雅关闭...`);
+
+    // 1. 停止接受新连接
+    server.stop();
+    loggerInstance.info('HTTP 服务已停止接受新连接');
+
+    // 2. 关闭数据库连接池
+    try {
+      const { closePool } = await import('./db/pool');
+      await closePool();
+      loggerInstance.info('数据库连接池已关闭');
+    } catch (err) {
+      loggerInstance.warn({ err }, '关闭数据库连接池时出错');
+    }
+
+    loggerInstance.info('Alethia 服务已安全关闭');
+    process.exit(0);
+  };
+
+  process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+  process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 }
 
 bootstrap().catch((err) => {

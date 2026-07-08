@@ -179,6 +179,22 @@ async function runGhostCleanup(): Promise<{ detected: number; marked: number }> 
 }
 
 /**
+ * 定时任务分布式锁：通过 PostgreSQL advisory lock 确保多副本下只有一个实例执行。
+ * 锁 key 使用 cron 任务名称的 hash 值，锁在事务提交或连接释放时自动释放。
+ */
+async function acquireCronLock(taskName: string): Promise<boolean> {
+  try {
+    const pool = getPool();
+    const lockKey = Array.from(taskName).reduce((acc, c) => acc + c.charCodeAt(0), 0);
+    const result = await pool.query('SELECT pg_try_advisory_lock($1) AS acquired', [lockKey]);
+    return result.rows[0]?.acquired === true;
+  } catch (err) {
+    logger.warn({ err, taskName }, '获取分布式锁失败，默认跳过');
+    return false;
+  }
+}
+
+/**
  * 在模块加载时注册 Bun.cron 定时任务（每晚 02:00 触发）。
  * 若当前运行时不支持 Bun.cron，则仅导出 runDreamCycle 供手动调用。
  */
@@ -187,11 +203,18 @@ function registerCron(): void {
     const bunCron = (globalThis as any).Bun?.cron;
     if (typeof bunCron === 'function') {
       bunCron('0 2 * * *', () => {
-        runDreamCycle().catch((err) => {
-          logger.error({ err }, 'Dream Cycle 定时执行失败');
+        // 使用 PostgreSQL advisory lock 防止多副本重复执行
+        acquireCronLock('dream_cycle').then(acquired => {
+          if (!acquired) {
+            logger.debug('Dream Cycle: 未获取分布式锁，跳过（其他实例已执行）');
+            return;
+          }
+          runDreamCycle().catch((err) => {
+            logger.error({ err }, 'Dream Cycle 定时执行失败');
+          });
         });
       });
-      logger.info('Dream Cycle 定时任务已注册（每晚 02:00）');
+      logger.info('Dream Cycle 定时任务已注册（每晚 02:00，含分布式锁）');
       return;
     }
     logger.warn('当前运行时不支持 Bun.cron，请手动调用 runDreamCycle()');

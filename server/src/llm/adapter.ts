@@ -47,12 +47,13 @@ export class BaseOpenAICompatibleAdapter extends BaseLLMAdapter {
     displayName: string,
     baseURL: string,
     apiKey: string,
-    defaultModel: string
+    defaultModel: string,
+    baseURLOverride?: string
   ) {
     super();
     this.id = id;
     this.displayName = displayName;
-    this.baseURL = baseURL;
+    this.baseURL = baseURLOverride || baseURL;
     this.apiKey = apiKey;
     this.defaultModel = defaultModel;
   }

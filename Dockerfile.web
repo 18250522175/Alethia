@@ -2,7 +2,7 @@
 # 多阶段构建：bun 构建 → nginx 静态服务
 
 # === 阶段 1：构建 ===
-FROM oven/bun:1.1 AS builder
+FROM oven/bun:1.1.42 AS builder
 
 # 设置镜像源
 ENV BUN_REGISTRY=https://registry.npmmirror.com

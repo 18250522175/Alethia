@@ -247,24 +247,46 @@ export async function runWeeklySkillOptimization(): Promise<{ optimized: number;
   return { optimized, suggestions };
 }
 
+/**
+ * 定时任务分布式锁：通过 PostgreSQL advisory lock 确保多副本下只有一个实例执行。
+ */
+async function acquireCronLock(taskName: string): Promise<boolean> {
+  try {
+    const pool = getPool();
+    const lockKey = Array.from(taskName).reduce((acc, c) => acc + c.charCodeAt(0), 0);
+    const result = await pool.query('SELECT pg_try_advisory_lock($1) AS acquired', [lockKey]);
+    return result.rows[0]?.acquired === true;
+  } catch (err) {
+    logger.warn({ err, taskName }, '获取分布式锁失败，默认跳过');
+    return false;
+  }
+}
+
 function registerWeeklyCron(): void {
   try {
     const bunCron = (globalThis as any).Bun?.cron;
     if (typeof bunCron === 'function') {
       bunCron('0 3 * * 1', () => {
-        generateWeeklyReport().then((report) => {
-          logger.info({ report }, '每周简报已生成');
-        }).catch((err) => {
-          logger.error({ err }, '每周简报生成失败');
-        });
+        // 使用 PostgreSQL advisory lock 防止多副本重复执行
+        acquireCronLock('weekly_report').then(acquired => {
+          if (!acquired) {
+            logger.debug('每周简报: 未获取分布式锁，跳过（其他实例已执行）');
+            return;
+          }
+          generateWeeklyReport().then((report) => {
+            logger.info({ report }, '每周简报已生成');
+          }).catch((err) => {
+            logger.error({ err }, '每周简报生成失败');
+          });
 
-        runWeeklySkillOptimization().then((result) => {
-          logger.info({ result }, '每周技能优化已完成');
-        }).catch((err) => {
-          logger.error({ err }, '每周技能优化失败');
+          runWeeklySkillOptimization().then((result) => {
+            logger.info({ result }, '每周技能优化已完成');
+          }).catch((err) => {
+            logger.error({ err }, '每周技能优化失败');
+          });
         });
       });
-      logger.info('每周简报定时任务已注册（每周一 03:00）');
+      logger.info('每周简报定时任务已注册（每周一 03:00，含分布式锁）');
       return;
     }
     logger.warn('当前运行时不支持 Bun.cron，请手动调用 generateWeeklyReport()');

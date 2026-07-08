@@ -2,7 +2,7 @@
 # 多阶段构建：打包 TypeScript → 运行编译产物
 
 # === 阶段 1：构建 ===
-FROM oven/bun:1.1 AS builder
+FROM oven/bun:1.1.42 AS builder
 
 # 设置 npm 镜像源（加速依赖下载）
 ENV BUN_REGISTRY=https://registry.npmmirror.com
@@ -25,7 +25,7 @@ COPY wiki ./wiki
 RUN cd server && bun run build
 
 # === 阶段 2：运行 ===
-FROM oven/bun:1.1 AS runtime
+FROM oven/bun:1.1.42 AS runtime
 
 # 同样设置镜像源
 ENV BUN_REGISTRY=https://registry.npmmirror.com
