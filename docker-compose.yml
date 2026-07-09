@@ -12,22 +12,28 @@ services:
     restart: unless-stopped
     command:
       - "postgres"
-      - "-c shared_buffers=256MB"
-      - "-c effective_cache_size=768MB"
-      - "-c work_mem=16MB"
-      - "-c maintenance_work_mem=64MB"
-      - "-c random_page_cost=1.1"
-      - "-c max_connections=50"
+      - "-c"
+      - "ssl=off"
+      - "-c"
+      - "shared_buffers=256MB"
+      - "-c"
+      - "effective_cache_size=768MB"
+      - "-c"
+      - "work_mem=16MB"
+      - "-c"
+      - "maintenance_work_mem=64MB"
+      - "-c"
+      - "random_page_cost=1.1"
+      - "-c"
+      - "max_connections=50"
     environment:
-      # 强制要求显式设置 POSTGRES_PASSWORD，避免弱默认密码
       POSTGRES_USER: ${POSTGRES_USER:-alethia}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD 必须在 .env 中设置（参考 .env.example）}
       POSTGRES_DB: ${POSTGRES_DB:-alethia}
+      POSTGRES_HOST_AUTH_METHOD: scram-sha-256
       TZ: Asia/Shanghai
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    # 不再向宿主暴露 5432，仅 server/init 通过 backend 网络访问
-    # 本地调试时取消下方注释即可
     # ports:
     #   - "5432:5432"
     healthcheck:
@@ -78,13 +84,9 @@ services:
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-all-MiniLM-L6-v2}
       NLI_PROVIDER: ${NLI_PROVIDER:-local}
       RERANKER_ENABLED: ${RERANKER_ENABLED:-false}
-      # @xenova/transformers 模型缓存持久化
       HF_HOME: /app/server/.cache/huggingface
-      # tesseract.js OCR 语言数据缓存持久化
       TESSDATA_PREFIX: /app/server/.cache/tessdata
-      # 数据存储路径（与 Volume 挂载保持一致）
       LIBRARY_PATH: /app/server/library/objects
-      # 大模型密钥（按需填写）
       BAILIAN_API_KEY: ${BAILIAN_API_KEY:-}
       BAILIAN_BASE_URL: ${BAILIAN_BASE_URL:-}
       ZHIPU_API_KEY: ${ZHIPU_API_KEY:-}
@@ -116,10 +118,8 @@ services:
       - summaries_data:/app/server/summaries
       - model_cache:/app/server/.cache/huggingface
       - tessdata:/app/server/.cache/tessdata
-    # 3000 端口不直接暴露，统一通过 nginx (80) 访问
-    # 如需直连调试，取消下方注释
-    # ports:
-    #   - "3000:3000"
+    ports:
+      - "3000:3000"
     logging:
       driver: "json-file"
       options:
@@ -128,8 +128,9 @@ services:
     networks:
       - frontend
       - backend
+    # 使用 Node.js 原生 HTTP 请求进行健康检查，无需安装额外工具
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O- http://localhost:3000/health > /dev/null 2>&1 || exit 1"]
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -155,7 +156,6 @@ services:
         condition: service_healthy
     ports:
       - "80:80"
-      # 如需 HTTPS，请使用反向代理（如 Traefik/Caddy）或在此处挂载证书
     logging:
       driver: "json-file"
       options:
@@ -164,7 +164,6 @@ services:
     networks:
       - frontend
     healthcheck:
-      # 仅检查 nginx 自身是否存活，不依赖后端
       test: ["CMD-SHELL", "wget -q -O- http://localhost/ > /dev/null 2>&1 || exit 1"]
       interval: 30s
       timeout: 5s
@@ -176,7 +175,6 @@ services:
           cpus: "0.25"
 
   # === 一次性初始化任务 ===
-  # 执行数据库迁移 + 种子数据
   init:
     build:
       context: .
@@ -207,7 +205,6 @@ services:
           cpus: "0.5"
 
   # === PostgreSQL 定时备份 ===
-  # 每日凌晨 2:00 执行 pg_dump，备份保留最近 7 天
   backup:
     image: postgres:16-alpine
     container_name: alethia-backup
