@@ -252,10 +252,10 @@ CREATE INDEX IF NOT EXISTS idx_library_files_status ON library_files (status);
 CREATE INDEX IF NOT EXISTS idx_observed_files_ref_count ON observed_files (reference_count DESC);
 
 -- 外键约束：确保引用完整性
-ALTER TABLE links ADD CONSTRAINT IF NOT EXISTS fk_links_source_slug FOREIGN KEY (source_slug) REFERENCES pages(slug) ON DELETE CASCADE;
-ALTER TABLE links ADD CONSTRAINT IF NOT EXISTS fk_links_target_slug FOREIGN KEY (target_slug) REFERENCES pages(slug) ON DELETE CASCADE;
-ALTER TABLE evidence_spans ADD CONSTRAINT IF NOT EXISTS fk_evidence_spans_slug FOREIGN KEY (slug) REFERENCES pages(slug) ON DELETE CASCADE;
-ALTER TABLE pending_diffs ADD CONSTRAINT IF NOT EXISTS fk_pending_diffs_slug FOREIGN KEY (slug) REFERENCES pages(slug) ON DELETE CASCADE;
-ALTER TABLE knowledge_versions ADD CONSTRAINT IF NOT EXISTS fk_knowledge_versions_slug FOREIGN KEY (slug) REFERENCES pages(slug) ON DELETE CASCADE;
-ALTER TABLE timeline_entries ADD CONSTRAINT IF NOT EXISTS fk_timeline_slug FOREIGN KEY (slug) REFERENCES pages(slug) ON DELETE CASCADE;
-ALTER TABLE semantic_rings ADD CONSTRAINT IF NOT EXISTS fk_semantic_rings_slug FOREIGN KEY (slug) REFERENCES pages(slug) ON DELETE CASCADE;
+ALTER TABLE links ADD CONSTRAINT fk_links_source_slug FOREIGN KEY (source_slug) REFERENCES pages(slug) ON DELETE CASCADE;
+ALTER TABLE links ADD CONSTRAINT fk_links_target_slug FOREIGN KEY (target_slug) REFERENCES pages(slug) ON DELETE CASCADE;
+ALTER TABLE evidence_spans ADD CONSTRAINT fk_evidence_spans_slug FOREIGN KEY (slug) REFERENCES pages(slug) ON DELETE CASCADE;
+ALTER TABLE pending_diffs ADD CONSTRAINT fk_pending_diffs_slug FOREIGN KEY (slug) REFERENCES pages(slug) ON DELETE CASCADE;
+ALTER TABLE knowledge_versions ADD CONSTRAINT fk_knowledge_versions_slug FOREIGN KEY (slug) REFERENCES pages(slug) ON DELETE CASCADE;
+ALTER TABLE timeline_entries ADD CONSTRAINT fk_timeline_slug FOREIGN KEY (slug) REFERENCES pages(slug) ON DELETE CASCADE;
+ALTER TABLE semantic_rings ADD CONSTRAINT fk_semantic_rings_slug FOREIGN KEY (slug) REFERENCES pages(slug) ON DELETE CASCADE;
