@@ -156,7 +156,7 @@ async function gradeOutput(actual: string, expected: string): Promise<boolean> {
 
   // LLM 语义判定（失败时降级为词重叠相似度）
   try {
-    const adapter = llmRouter.route('contradiction');
+    const adapter = llmRouter.route('qa_gen');
     const llmMessages: LLMMessage[] = [
       { role: 'system', content: GRADER_PROMPT },
       {

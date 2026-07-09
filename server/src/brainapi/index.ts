@@ -216,20 +216,26 @@ class BrainAPI {
     tokens: number,
     cost: number
   ): Promise<void> {
+    const pool = getPool();
+    const client = await pool.connect();
     try {
-      const pool = getPool();
-      await pool.query(
+      await client.query('BEGIN');
+      await client.query(
         `INSERT INTO conversation_logs (conversation_id, role, content, tokens, cost)
          VALUES ($1, 'user', $2, 0, 0)`,
         [conversationId, question]
       );
-      await pool.query(
+      await client.query(
         `INSERT INTO conversation_logs (conversation_id, role, content, tokens, cost)
          VALUES ($1, 'assistant', $2, $3, $4)`,
         [conversationId, answer, tokens, cost]
       );
+      await client.query('COMMIT');
     } catch (err) {
+      await client.query('ROLLBACK').catch(() => {});
       logger.warn({ err }, '保存对话记录失败');
+    } finally {
+      client.release();
     }
   }
 
@@ -423,17 +429,20 @@ class BrainAPI {
 
           const versionId = randomUUID();
           const maxVersionResult = await client.query(
-            `SELECT COALESCE(MAX(version), 0) as max_version FROM knowledge_versions WHERE slug = $1`,
+            `SELECT COALESCE(MAX(version), 0)::bigint as max_version FROM knowledge_versions WHERE slug = $1`,
             [diff.slug]
           );
           const nextVersion = (maxVersionResult.rows[0]?.max_version || 0) + 1;
+          // 防止 INTEGER 溢出（上限 2,147,483,647）
+          if (nextVersion > 2147483647) {
+            await client.query('ROLLBACK');
+            throw new Error(`实体 ${diff.slug} 版本号已达 INTEGER 上限，请先执行归档操作`);
+          }
           await client.query(
             `INSERT INTO knowledge_versions (id, slug, version, content, batch_id, created_at)
              VALUES ($1, $2, $3, $4, $5, NOW())`,
             [versionId, diff.slug, nextVersion, newContent.slice(0, 5000), `diff-${diffId}`]
           );
-
-          await syncEngine.syncAll();
         }
       } else {
         const payload = diff.payload || {};
@@ -443,12 +452,20 @@ class BrainAPI {
         }
         storage.writeFile(targetFile, newContent);
         modifiedFiles.push(`${diff.slug}.md`);
-
-        await syncEngine.syncAll();
       }
 
       await client.query('COMMIT');
       logger.info({ diffId, modifiedFiles }, '变更已成功应用');
+
+      // syncAll 必须在事务 COMMIT 后调用，避免跨连接死锁和事务隔离问题
+      if (modifiedFiles.length > 0) {
+        try {
+          await syncEngine.syncAll();
+        } catch (syncErr) {
+          logger.error({ syncErr, diffId }, 'syncAll 失败（文件已写入，事务已提交）');
+        }
+      }
+
       return {
         diffId,
         applied: true,
@@ -943,11 +960,11 @@ ${relationsBlock}
             const targetFile = join(wikiPath, `${row.slug}.md`);
             if (existsSync(targetFile)) {
               const currentContent = storage.readFile(targetFile);
-              // 使用词级 Jaccard 相似度替代简单的长度比
-              const currentWords = new Set(currentContent.toLowerCase().split(/\s+/).filter(w => w.length > 1));
-              const expectedWords = new Set(row.expected_output.toLowerCase().split(/\s+/).filter(w => w.length > 1));
-              const intersection = new Set([...currentWords].filter(w => expectedWords.has(w)));
-              const union = new Set([...currentWords, ...expectedWords]);
+              // 使用 CJK 感知的 Jaccard 相似度（中英文通用）
+              const currentTokens = tokenizeForSimilarity(currentContent);
+              const expectedTokens = tokenizeForSimilarity(row.expected_output);
+              const intersection = new Set([...currentTokens].filter(t => expectedTokens.has(t)));
+              const union = new Set([...currentTokens, ...expectedTokens]);
               const similarity = union.size > 0 ? intersection.size / union.size : 0;
               passed = similarity >= 0.3;
               score = similarity;
@@ -1099,7 +1116,7 @@ ${relationsBlock}
         pool.query(
           `SELECT conversation_id, content, ts, role
            FROM conversation_logs
-           WHERE content ILIKE $1
+           WHERE content ILIKE $1 AND role = 'user'
            ORDER BY ts DESC
            OFFSET $2 LIMIT $3`,
           [queryString, offset, limit]
@@ -1124,7 +1141,7 @@ ${relationsBlock}
       const files = fileResult.rows.map((r: any) => ({
         hash: r.hash, originalName: r.original_name, mime: r.mime, size: r.size, status: r.status
       }));
-      const conversations = convResult.rows.filter((r: any) => r.role === 'user').map((r: any) => ({
+      const conversations = convResult.rows.map((r: any) => ({
         id: r.conversation_id, question: r.content, answer: '', ts: r.ts
       }));
 
@@ -1971,6 +1988,34 @@ function applyContentChange(currentContent: string, payload: any, _type?: string
 
 function generateConversationId(): string {
   return `conv-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+}
+
+/**
+ * CJK 感知的文本分词，用于 Jaccard 相似度计算。
+ * 中文使用字符级 bigram，英文使用空格分词。
+ */
+function tokenizeForSimilarity(text: string): Set<string> {
+  const lower = text.toLowerCase();
+  const hasCJK = /[\u4e00-\u9fff\u3400-\u4dbf]/.test(lower);
+
+  if (hasCJK) {
+    const tokens = new Set<string>();
+    const chars = lower.replace(/[^\u4e00-\u9fff\u3400-\u4dbf\p{L}\p{N}]+/gu, '').split('');
+    for (let i = 0; i < chars.length - 1; i++) {
+      tokens.add(chars[i] + chars[i + 1]);
+    }
+    for (const ch of chars) {
+      tokens.add(ch);
+    }
+    return tokens;
+  }
+
+  return new Set(
+    lower
+      .replace(/[^\p{L}\p{N}]+/gu, ' ')
+      .split(' ')
+      .filter((t) => t.length > 0)
+  );
 }
 
 export const brainAPI = new BrainAPI();

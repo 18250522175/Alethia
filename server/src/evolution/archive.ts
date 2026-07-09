@@ -252,7 +252,7 @@ function replaceVersionHistorySection(content: string, newBody: string): string 
   let replaced = false;
 
   for (const line of lines) {
-    if (/^##\s+Version History\s*$/.test(line)) {
+    if (/^##\s+(Version History|版本历史)\s*$/.test(line)) {
       inVersionSection = true;
       replaced = true;
       out.push(line);
