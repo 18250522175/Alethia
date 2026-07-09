@@ -2,10 +2,12 @@
 # 多阶段构建：打包 TypeScript → 运行编译产物
 
 # === 阶段 1：构建 ===
-FROM oven/bun:1.1.42 AS builder
+FROM oven/bun:1.3.14 AS builder
 
 # 设置 npm 镜像源（加速依赖下载）
 ENV BUN_REGISTRY=https://registry.npmmirror.com
+# sharp 原生二进制镜像环境变量，绕过 GitHub 下载限制
+ENV SHARP_BINARY_HOST=https://registry.npmmirror.com/-/binary/sharp-libvips/
 
 WORKDIR /app
 
@@ -13,8 +15,10 @@ WORKDIR /app
 COPY package.json tsconfig.base.json bun.lock ./
 COPY shared/package.json ./shared/package.json
 COPY server/package.json ./server/package.json
-# 安装全部依赖（包括 devDependencies，用于构建）
-RUN bun install --frozen-lockfile
+COPY web/package.json ./web/package.json
+# 安装全部依赖（命令内显式带变量，双重保障生效）
+RUN SHARP_BINARY_HOST=https://registry.npmmirror.com/-/binary/sharp-libvips/ \
+    bun install --frozen-lockfile --registry https://registry.npmmirror.com
 
 # 拷贝源码
 COPY shared ./shared
@@ -25,10 +29,12 @@ COPY wiki ./wiki
 RUN cd server && bun run build
 
 # === 阶段 2：运行 ===
-FROM oven/bun:1.1.42 AS runtime
+FROM oven/bun:1.3.14 AS runtime
 
 # 同样设置镜像源
 ENV BUN_REGISTRY=https://registry.npmmirror.com
+# 运行时阶段同样配置 sharp 二进制镜像
+ENV SHARP_BINARY_HOST=https://registry.npmmirror.com/-/binary/sharp-libvips/
 
 WORKDIR /app
 
@@ -36,8 +42,10 @@ WORKDIR /app
 COPY package.json tsconfig.base.json bun.lock ./
 COPY shared/package.json ./shared/package.json
 COPY server/package.json ./server/package.json
-# 仅安装生产依赖（保留 native/WASM 模块的可解析路径，避免打包后失效）
-RUN bun install --frozen-lockfile --production
+COPY web/package.json ./web/package.json
+# 仅安装生产依赖（显式带变量保障生效）
+RUN SHARP_BINARY_HOST=https://registry.npmmirror.com/-/binary/sharp-libvips/ \
+    bun install --frozen-lockfile --production --registry https://registry.npmmirror.com
 
 # 拷贝构建产物与运行期需要的非 JS 资源
 COPY --from=builder /app/server/dist /app/server/dist
@@ -59,9 +67,13 @@ ENV NLI_PROVIDER=local
 # 数据卷：wiki、library、changelog、raw、summaries 持久化
 VOLUME ["/app/server/wiki", "/app/server/library/objects", "/app/server/changelog", "/app/server/raw", "/app/server/summaries"]
 
-# 安全: 创建非 root 用户运行服务
-RUN addgroup --system app && adduser --system --ingroup app app
-RUN chown -R app:app /app
+# 安全: 安装 adduser 工具并创建非 root 用户运行服务
+RUN apt update && apt install -y --no-install-recommends adduser curl \
+    && addgroup --system app \
+    && adduser --system --ingroup app app \
+    && chown -R app:app /app \
+    && rm -rf /var/lib/apt/lists/*
+
 USER app
 
 WORKDIR /app/server
@@ -69,7 +81,7 @@ EXPOSE 3000
 
 # 健康检查：每 30s 探测 /health（oven/bun 镜像无 curl，用 wget）
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD wget -q -O- http://localhost:3000/health > /dev/null 2>&1 || exit 1
+  CMD curl -sf http://127.0.0.1:3000/health > /dev/null || exit 1
 
 # 启动编译产物（bun build 保留源目录结构：src/index.ts → dist/src/index.js）
 CMD ["bun", "dist/src/index.js"]
