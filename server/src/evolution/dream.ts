@@ -180,18 +180,13 @@ async function runGhostCleanup(): Promise<{ detected: number; marked: number }> 
 
 /**
  * 定时任务分布式锁：通过 PostgreSQL advisory lock 确保多副本下只有一个实例执行。
- * 锁 key 使用 cron 任务名称的 hash 值，锁在事务提交或连接释放时自动释放。
+ * 使用 pool.connect() 获取专用连接，锁在连接释放时自动释放。
+ * 调用方必须在使用完毕后释放 client。
  */
-async function acquireCronLock(taskName: string): Promise<boolean> {
-  try {
-    const pool = getPool();
-    const lockKey = Array.from(taskName).reduce((acc, c) => acc + c.charCodeAt(0), 0);
-    const result = await pool.query('SELECT pg_try_advisory_lock($1) AS acquired', [lockKey]);
-    return result.rows[0]?.acquired === true;
-  } catch (err) {
-    logger.warn({ err, taskName }, '获取分布式锁失败，默认跳过');
-    return false;
-  }
+async function acquireCronLockOnClient(client: any, taskName: string): Promise<boolean> {
+  const lockKey = Array.from(taskName).reduce((acc, c) => acc + c.charCodeAt(0), 0);
+  const result = await client.query('SELECT pg_try_advisory_lock($1) AS acquired', [lockKey]);
+  return result.rows[0]?.acquired === true;
 }
 
 /**
@@ -202,17 +197,21 @@ function registerCron(): void {
   try {
     const bunCron = (globalThis as any).Bun?.cron;
     if (typeof bunCron === 'function') {
-      bunCron('0 2 * * *', () => {
-        // 使用 PostgreSQL advisory lock 防止多副本重复执行
-        acquireCronLock('dream_cycle').then(acquired => {
+      bunCron('0 2 * * *', async () => {
+        const pool = getPool();
+        const client = await pool.connect();
+        try {
+          const acquired = await acquireCronLockOnClient(client, 'dream_cycle');
           if (!acquired) {
             logger.debug('Dream Cycle: 未获取分布式锁，跳过（其他实例已执行）');
             return;
           }
-          runDreamCycle().catch((err) => {
-            logger.error({ err }, 'Dream Cycle 定时执行失败');
-          });
-        });
+          await runDreamCycle();
+        } catch (err) {
+          logger.error({ err }, 'Dream Cycle 定时执行失败');
+        } finally {
+          client.release();
+        }
       });
       logger.info('Dream Cycle 定时任务已注册（每晚 02:00，含分布式锁）');
       return;
