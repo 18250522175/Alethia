@@ -15,18 +15,10 @@ CREATE TABLE IF NOT EXISTS eval_results (
 );
 
 -- 创建 budget_usage 表（预算管理功能需要）
+-- 使用 key-value 模式：key 为 "daily:2026-07-10" 或 "monthly:2026-07"
+-- 通过 ON CONFLICT (key) DO UPDATE 实现原子累加
 CREATE TABLE IF NOT EXISTS budget_usage (
-  id SERIAL PRIMARY KEY,
-  provider VARCHAR(64) NOT NULL,
-  model VARCHAR(128) NOT NULL,
-  tokens INTEGER NOT NULL,
-  cost DOUBLE PRECISION NOT NULL,
-  endpoint VARCHAR(255),
-  target VARCHAR(256),
-  period VARCHAR(10) NOT NULL DEFAULT 'daily',
-  recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  key VARCHAR(256) UNIQUE NOT NULL,
+  cost DOUBLE PRECISION NOT NULL DEFAULT 0,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-
-CREATE INDEX IF NOT EXISTS idx_budget_usage_provider_model ON budget_usage(provider, model);
-CREATE INDEX IF NOT EXISTS idx_budget_usage_period ON budget_usage(period);
-CREATE INDEX IF NOT EXISTS idx_budget_usage_recorded_at ON budget_usage(recorded_at);
