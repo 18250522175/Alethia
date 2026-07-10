@@ -78,8 +78,16 @@ export class MarkdownStorage {
       }
     } catch (err) {
       if (existsSync(backupPath)) {
-        writeFileSync(filePath, readFileSync(backupPath));
-        unlinkSync(backupPath);
+        try {
+          writeFileSync(filePath, readFileSync(backupPath));
+        } catch (_) {
+          // 恢复备份失败，确保备份文件被清理
+        }
+        try {
+          unlinkSync(backupPath);
+        } catch (_) {
+          // 清理备份文件失败，继续抛出原始错误
+        }
       }
       throw err;
     }

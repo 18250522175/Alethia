@@ -196,7 +196,7 @@ app.get('/api/conversations', async (c) => {
       SELECT conversation_id, 
              MAX(CASE WHEN role = 'user' THEN content END) as last_question,
              MAX(CASE WHEN role = 'assistant' THEN content END) as last_answer,
-             MAX(ts) as updated_at,
+             MAX(created_at) as updated_at,
              BOOL_OR(compressed) as compressed,
              SUM(tokens) as total_tokens,
              SUM(cost) as total_cost

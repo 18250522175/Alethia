@@ -51,7 +51,7 @@ export async function generateWeeklyReport(): Promise<WeeklyReport> {
          SUM(CASE WHEN op = 'update' THEN 1 ELSE 0 END) as updated,
          SUM(CASE WHEN op = 'delete' THEN 1 ELSE 0 END) as deleted
        FROM auto_change_log
-       WHERE target_type = 'page' AND ts >= $1 AND ts <= $2`,
+       WHERE target_type = 'page' AND created_at >= $1 AND created_at <= $2`,
       [weekStart.toISOString(), weekEnd.toISOString()]
     ),
     pool.query(
@@ -68,11 +68,11 @@ export async function generateWeeklyReport(): Promise<WeeklyReport> {
       [weekStart.toISOString(), weekEnd.toISOString()]
     ),
     pool.query(
-      `SELECT COUNT(DISTINCT conversation_id) as count FROM conversation_logs WHERE ts >= $1 AND ts <= $2`,
+      `SELECT COUNT(DISTINCT conversation_id) as count FROM conversation_logs WHERE created_at >= $1 AND created_at <= $2`,
       [weekStart.toISOString(), weekEnd.toISOString()]
     ),
     pool.query(
-      `SELECT COALESCE(SUM(tokens_used), 0) as total_tokens, COALESCE(SUM(estimated_cost), 0) as total_cost FROM conversation_logs WHERE ts >= $1 AND ts <= $2`,
+      `SELECT COALESCE(SUM(tokens), 0) as total_tokens, COALESCE(SUM(cost), 0) as total_cost FROM conversation_logs WHERE created_at >= $1 AND created_at <= $2`,
       [weekStart.toISOString(), weekEnd.toISOString()]
     ),
     pool.query(
@@ -80,7 +80,7 @@ export async function generateWeeklyReport(): Promise<WeeklyReport> {
       [weekStart.toISOString(), weekEnd.toISOString()]
     ),
     pool.query(
-      `SELECT op, target, ts, payload FROM auto_change_log WHERE ts >= $1 AND ts <= $2 ORDER BY ts DESC LIMIT 20`,
+      `SELECT op, target, created_at as ts, payload FROM auto_change_log WHERE created_at >= $1 AND created_at <= $2 ORDER BY created_at DESC LIMIT 20`,
       [weekStart.toISOString(), weekEnd.toISOString()]
     )
   ]);
@@ -221,7 +221,7 @@ export async function runWeeklySkillOptimization(): Promise<{ optimized: number;
   try {
     const lowConfidenceResult = await pool.query(
       `SELECT DISTINCT slug FROM conversation_logs 
-       WHERE ts >= (NOW() - INTERVAL '7 days') 
+       WHERE created_at >= (NOW() - INTERVAL '7 days') 
        AND slug IS NOT NULL AND slug != ''
        LIMIT 10`
     );

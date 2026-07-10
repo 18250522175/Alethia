@@ -469,7 +469,7 @@ class BrainAPI {
       return {
         diffId,
         applied: true,
-        newVersion: 1,
+        newVersion: nextVersion,
         modifiedFiles
       };
     } catch (err) {
@@ -1114,10 +1114,10 @@ ${relationsBlock}
           [queryString, offset, limit]
         ),
         pool.query(
-          `SELECT conversation_id, content, ts, role
+          `SELECT conversation_id, content, created_at as ts, role
            FROM conversation_logs
            WHERE content ILIKE $1 AND role = 'user'
-           ORDER BY ts DESC
+           ORDER BY created_at DESC
            OFFSET $2 LIMIT $3`,
           [queryString, offset, limit]
         ),

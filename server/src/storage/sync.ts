@@ -173,7 +173,7 @@ export class SyncEngine {
       const versionNum = parsed.versionHistory.length - i;
 
       await client.query(`
-        INSERT INTO knowledge_versions (slug, version, ts, change_summary, archived)
+        INSERT INTO knowledge_versions (slug, version, created_at, change_summary, archived)
         VALUES ($1, $2, $3::timestamptz, $4, false)
         ON CONFLICT ON CONSTRAINT idx_knowledge_versions_unique DO NOTHING
       `, [

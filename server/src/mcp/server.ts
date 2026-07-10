@@ -733,7 +733,7 @@ const TOOLS: ToolEntry[] = [
   {
     definition: {
       name: 'get_timeline',
-      description: '获取知识版本时间线（按 ts 倒序）',
+      description: '获取知识版本时间线（按创建时间倒序）',
       inputSchema: {
         type: 'object',
         properties: {
@@ -748,12 +748,12 @@ const TOOLS: ToolEntry[] = [
       let result;
       if (args.slug) {
         result = await pool.query(
-          'SELECT * FROM knowledge_versions WHERE slug = $1 ORDER BY ts DESC LIMIT $2',
+          'SELECT * FROM knowledge_versions WHERE slug = $1 ORDER BY created_at DESC LIMIT $2',
           [args.slug, limit]
         );
       } else {
         result = await pool.query(
-          'SELECT * FROM knowledge_versions ORDER BY ts DESC LIMIT $1',
+          'SELECT * FROM knowledge_versions ORDER BY created_at DESC LIMIT $1',
           [limit]
         );
       }
