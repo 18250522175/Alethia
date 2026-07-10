@@ -721,7 +721,8 @@
     "dropToUpload": "释放以上传文件",
     "searching": "搜索中…",
     "noMatch": "无匹配结果",
-    "aliases": "别名: {{aliases}}"
+    "aliases": "别名: {{aliases}}",
+    "aliasMatch": "别名"
   },
   "changelog": {
     "subtitle": "查看最近 24 小时的自动变更记录，支持按批次回滚",

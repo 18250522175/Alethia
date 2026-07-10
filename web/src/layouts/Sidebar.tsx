@@ -1,4 +1,4 @@
-import { House, Graph, CheckCircle, ChatsCircle, Gauge, Clock, ClockCounterClockwise, Gear, BookOpen, Brain, CaretDown, CaretRight, Ghost, Eye, MagnifyingGlass, Bell, Flask } from '@phosphor-icons/react';
+import { House, Graph, CheckCircle, ChatsCircle, Gauge, Clock, ClockCounterClockwise, Gear, BookOpen, Brain, CaretDown, CaretRight, Ghost, Eye, MagnifyingGlass, Bell, Flask, Notebook, UploadSimple } from '@phosphor-icons/react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
@@ -184,7 +184,9 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
     { path: '/search', icon: MagnifyingGlass, label: t('nav.search', '搜索') },
     { path: '/notifications', icon: Bell, label: t('nav.notifications', '通知'), badge: notificationCount > 0 ? String(notificationCount) : undefined, badgeColor: 'blue' },
     { path: '/eval-report', icon: Flask, label: t('nav.evalReport', '评测报告') },
-    { path: '/library', icon: BookOpen, label: t('nav.library', '资料库') }
+    { path: '/library', icon: BookOpen, label: t('nav.library', '资料库') },
+    { path: '/notes', icon: Notebook, label: t('nav.notes', '笔记') },
+    { path: '/upload', icon: UploadSimple, label: t('nav.upload', '上传') }
   ];
 
   const healthQuery = useQuery({

@@ -76,7 +76,15 @@ export interface IntegrationSettings {
   mcpHttpEnabled: boolean;
   mcpHttpPort: number;
   corsAllowedOrigins: string[];
-  llmAdapters: Record<AdapterId, { apiKey: string; enabled: boolean; defaultModel: string }>;
+  llmAdapters: Record<AdapterId, { 
+    apiKey: string; 
+    enabled: boolean; 
+    defaultModel: string;
+    temperature?: number;
+    maxTokens?: number;
+    topP?: number;
+    baseUrl?: string;
+  }>;
   reranker: { enabled: boolean; apiKey: string };
   nliProvider: 'hf-inference' | 'local';
   hfApiKey: string;
@@ -88,10 +96,17 @@ export interface ExperimentalSettings {
   autoTranscribeMedia: boolean;
 }
 
+export interface LLMGlobalConfig {
+  defaultTemperature: number;
+  defaultMaxTokens: number;
+  defaultTopP: number;
+}
+
 export interface Settings {
   appearance: AppearanceSettings;
   general: GeneralSettings;
   language: Language;
+  llmConfig: LLMGlobalConfig;
   budget: BudgetSettings;
   security: SecuritySettings;
   privacy: PrivacySettings;
@@ -126,6 +141,11 @@ export const defaultSettings: Settings = {
     timeFormat: '24h'
   },
   language: 'zh-CN',
+  llmConfig: {
+    defaultTemperature: 0.7,
+    defaultMaxTokens: 4096,
+    defaultTopP: 0.9
+  },
   budget: {
     dailyBudget: 5,
     monthlyBudget: 50,

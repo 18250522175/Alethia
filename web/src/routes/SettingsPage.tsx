@@ -29,6 +29,7 @@ const sections = [
   { id: 'language', icon: Translate },
   { id: 'budget', icon: Wallet },
   { id: 'models', icon: Brain },
+  { id: 'llm-config', icon: Brain },
   { id: 'embedding', icon: Database },
   { id: 'reranking', icon: ArrowDown },
   { id: 'nli', icon: ClipboardText },
@@ -174,6 +175,9 @@ export default function SettingsPage() {
           )}
           {activeSection === 'models' && (
             <ModelAllocationSettings settings={localSettings} onChange={handleChange} />
+          )}
+          {activeSection === 'llm-config' && (
+            <LLMConfigSettings settings={localSettings} onChange={handleChange} />
           )}
           {activeSection === 'embedding' && (
             <EmbeddingSettings settings={localSettings} onChange={handleChange} />
@@ -624,7 +628,30 @@ function EmbeddingSettings({ settings, onChange }: SettingsSectionProps) {
             <option value="bge-large-zh">BAAI/bge-large-zh-v1.5（中文）</option>
             <option value="text-embedding-3">text-embedding-3-large（OpenAI）</option>
             <option value="gte-large">thenlper/gte-large</option>
+            <option value="custom">{t('settings.customModel', '自定义模型...')}</option>
           </select>
+        </div>
+        {(settings.embedding?.model === 'custom') && (
+          <div>
+            <label className="mb-2 block text-sm font-medium">{t('settings.customModelName', '自定义模型名称')}</label>
+            <input
+              type="text"
+              value={settings.embedding?.customModel || ''}
+              onChange={e => onChange('embedding.customModel', e.target.value)}
+              placeholder="e.g. sentence-transformers/all-MiniLM-L6-v2"
+              className="input max-w-md font-mono text-sm"
+            />
+          </div>
+        )}
+        <div>
+          <label className="mb-2 block text-sm font-medium">{t('settings.embeddingBaseUrl', '嵌入模型 Base URL')}</label>
+          <input
+            type="text"
+            value={settings.embedding?.baseUrl || ''}
+            onChange={e => onChange('embedding.baseUrl', e.target.value)}
+            placeholder={t('settings.embeddingBaseUrlPlaceholder', '默认端点（留空使用官方）')}
+            className="input max-w-md font-mono text-sm"
+          />
         </div>
         <div>
           <label className="mb-2 block text-sm font-medium">{t('settings.dimensions')}</label>
@@ -951,6 +978,185 @@ function AdvancedSettings({ settings, onChange }: SettingsSectionProps) {
           />
         </div>
       </div>
+    </div>
+  );
+}
+
+function LLMConfigSettings({ settings, onChange }: SettingsSectionProps) {
+  const { t } = useTranslation();
+  const [showKeys, setShowKeys] = useState<Record<string, boolean>>({});
+
+  const toggleShowKey = (adapterId: string) => {
+    setShowKeys(prev => ({ ...prev, [adapterId]: !prev[adapterId] }));
+  };
+
+  const adapterList: Array<{ id: string; name: string; defaultModel: string }> = [
+    { id: 'bailian', name: '阿里云百炼（通义千问）', defaultModel: 'qwen-turbo' },
+    { id: 'zhipu', name: '智谱 AI（ChatGLM）', defaultModel: 'glm-4-flash' },
+    { id: 'moonshot', name: '月之暗面（Kimi）', defaultModel: 'moonshot-v1-8k' },
+    { id: 'ernie', name: '百度文心一言', defaultModel: 'ernie-speed-128k' },
+    { id: 'spark', name: '科大讯飞星火', defaultModel: 'spark-lite' },
+    { id: 'hunyuan', name: '腾讯混元', defaultModel: 'hunyuan-lite' },
+    { id: 'minimax', name: 'MiniMax', defaultModel: 'abab6.5-chat' },
+    { id: 'deepseek', name: 'DeepSeek', defaultModel: 'deepseek-chat' },
+    { id: 'yi', name: '零一万物 Yi', defaultModel: 'yi-large' },
+    { id: 'baichuan', name: '百川智能', defaultModel: 'Baichuan2-Turbo' },
+  ];
+
+  return (
+    <div className="space-y-6">
+      {/* Global Parameters */}
+      <div className="card p-6">
+        <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold">
+          <SlidersHorizontal size={20} className="text-primary-500" />
+          {t('settings.llmGlobalTitle', '全局参数')}
+        </h2>
+        <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
+          {t('settings.llmGlobalDesc', '这些参数将作为所有模型的默认值，可在各厂商配置中覆盖。')}
+        </p>
+        <div className="grid gap-6 sm:grid-cols-3">
+          <div>
+            <label className="mb-2 flex items-center justify-between text-sm font-medium">
+              <span>{t('settings.temperature', '温度')}</span>
+              <span className="text-xs text-slate-500">{(settings.llmConfig?.defaultTemperature ?? 0.7).toFixed(2)}</span>
+            </label>
+            <input
+              type="range"
+              min={0}
+              max={2}
+              step={0.01}
+              value={settings.llmConfig?.defaultTemperature ?? 0.7}
+              onChange={e => onChange('llmConfig.defaultTemperature', parseFloat(e.target.value))}
+              className="w-full"
+            />
+            <p className="mt-1 text-xs text-slate-400">{t('settings.temperatureHint', '越低越确定，越高越有创意')}</p>
+          </div>
+          <div>
+            <label className="mb-2 block text-sm font-medium">
+              {t('settings.maxTokens', '上下文窗口')}
+            </label>
+            <select
+              value={settings.llmConfig?.defaultMaxTokens ?? 4096}
+              onChange={e => onChange('llmConfig.defaultMaxTokens', parseInt(e.target.value))}
+              className="input w-full"
+            >
+              <option value={1024}>1,024</option>
+              <option value={2048}>2,048</option>
+              <option value={4096}>4,096</option>
+              <option value={8192}>8,192</option>
+              <option value={16384}>16,384</option>
+              <option value={32768}>32,768</option>
+              <option value={65536}>65,536</option>
+              <option value={131072}>131,072</option>
+            </select>
+          </div>
+          <div>
+            <label className="mb-2 flex items-center justify-between text-sm font-medium">
+              <span>{t('settings.topP', 'Top P')}</span>
+              <span className="text-xs text-slate-500">{(settings.llmConfig?.defaultTopP ?? 0.9).toFixed(2)}</span>
+            </label>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.01}
+              value={settings.llmConfig?.defaultTopP ?? 0.9}
+              onChange={e => onChange('llmConfig.defaultTopP', parseFloat(e.target.value))}
+              className="w-full"
+            />
+            <p className="mt-1 text-xs text-slate-400">{t('settings.topPHint', '核采样概率阈值')}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Adapter Cards */}
+      {adapterList.map(adapter => {
+        const adapterConfig = settings.integration?.llmAdapters?.[adapter.id] || {};
+        const isEnabled = adapterConfig.enabled || false;
+        return (
+          <div key={adapter.id} className={`card p-6 transition-all ${isEnabled ? 'border-primary-300 dark:border-primary-700' : ''}`}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="flex items-center gap-2 text-base font-semibold">
+                <Brain size={18} className={isEnabled ? 'text-primary-500' : 'text-slate-400'} />
+                {adapter.name}
+              </h3>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <span className="text-xs text-slate-500">{t('settings.enabled', '启用')}</span>
+                <input
+                  type="checkbox"
+                  checked={isEnabled}
+                  onChange={e => onChange(`integration.llmAdapters.${adapter.id}.enabled`, e.target.checked)}
+                  className="h-4 w-4 rounded"
+                />
+              </label>
+            </div>
+            {isEnabled && (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-500">
+                    {t('settings.apiKey', 'API Key')}
+                  </label>
+                  <div className="flex gap-1">
+                    <input
+                      type={showKeys[adapter.id] ? 'text' : 'password'}
+                      value={adapterConfig.apiKey || ''}
+                      onChange={e => onChange(`integration.llmAdapters.${adapter.id}.apiKey`, e.target.value)}
+                      placeholder={t('settings.apiKeyPlaceholder', '输入 API Key')}
+                      className="input flex-1 font-mono text-sm"
+                    />
+                    <button
+                      onClick={() => toggleShowKey(adapter.id)}
+                      className="btn btn-secondary px-2 text-xs"
+                      title={showKeys[adapter.id] ? t('settings.hide', '隐藏') : t('settings.show', '显示')}
+                    >
+                      {showKeys[adapter.id] ? '***' : 'abc'}
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-500">
+                    {t('settings.baseUrl', 'Base URL')}
+                  </label>
+                  <input
+                    type="text"
+                    value={adapterConfig.baseUrl || ''}
+                    onChange={e => onChange(`integration.llmAdapters.${adapter.id}.baseUrl`, e.target.value)}
+                    placeholder={t('settings.baseUrlPlaceholder', '默认端点（留空使用官方）')}
+                    className="input w-full font-mono text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-500">
+                    {t('settings.model', '模型')}
+                  </label>
+                  <input
+                    type="text"
+                    value={adapterConfig.defaultModel || adapter.defaultModel}
+                    onChange={e => onChange(`integration.llmAdapters.${adapter.id}.defaultModel`, e.target.value)}
+                    placeholder={adapter.defaultModel}
+                    className="input w-full text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 flex items-center justify-between text-xs font-medium text-slate-500">
+                    <span>{t('settings.temperature', '温度')}</span>
+                    <span className="text-[10px]">{(adapterConfig.temperature ?? settings.llmConfig?.defaultTemperature ?? 0.7).toFixed(2)}</span>
+                  </label>
+                  <input
+                    type="range"
+                    min={0}
+                    max={2}
+                    step={0.01}
+                    value={adapterConfig.temperature ?? settings.llmConfig?.defaultTemperature ?? 0.7}
+                    onChange={e => onChange(`integration.llmAdapters.${adapter.id}.temperature`, parseFloat(e.target.value))}
+                    className="w-full"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

@@ -548,6 +548,9 @@ export default function MarkdownEditor({ value, onChange }: MarkdownEditorProps)
                             <span className={`badge text-[10px] ${getNamespaceBadgeClass(item.namespace)}`}>
                               {item.namespace}
                             </span>
+                            {item.matchType === 'alias' && (
+                              <span className="badge badge-green text-[10px] ml-1">{t('editor.aliasMatch')}</span>
+                            )}
                           </div>
                           {item.aliases.length > 0 && (
                             <div className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">

@@ -721,7 +721,8 @@
     "dropToUpload": "Drop to upload",
     "searching": "Searching...",
     "noMatch": "No matches",
-    "aliases": "Aliases: {{aliases}}"
+    "aliases": "Aliases: {{aliases}}",
+    "aliasMatch": "Alias"
   },
   "changelog": {
     "subtitle": "View automatic change records from the last 24 hours, with batch rollback support",

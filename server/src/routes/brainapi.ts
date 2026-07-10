@@ -6,7 +6,7 @@ import { getPool } from '../db/pool';
 import { storage } from '../storage/markdown';
 import { syncEngine } from '../storage/sync';
 import { join } from 'path';
-import { existsSync, statSync, unlinkSync } from 'fs';
+import { existsSync, statSync, unlinkSync, mkdirSync, readFileSync, writeFileSync, readdirSync, renameSync } from 'fs';
 import type { AskRequest, QueryParams } from '@shared/index';
 
 const app = new Hono();
@@ -1318,6 +1318,175 @@ app.get('/exports/*', async (c) => {
     return new Response(file);
   } catch (err) {
     loggerInstance.error({ err }, '读取导出文件失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+// Notes API
+const NOTES_PATH = join(process.cwd(), '..', 'notes');
+
+// Ensure notes directories exist
+function ensureNotesDirs() {
+  for (const dir of ['inbox', 'drafts', 'ready-for-review']) {
+    const p = join(NOTES_PATH, dir);
+    if (!existsSync(p)) mkdirSync(p, { recursive: true });
+  }
+}
+
+app.get('/api/notes', async (c) => {
+  try {
+    ensureNotesDirs();
+    const items: any[] = [];
+    const folders = ['inbox', 'drafts', 'ready-for-review'];
+    for (const folder of folders) {
+      const dirPath = join(NOTES_PATH, folder);
+      if (!existsSync(dirPath)) continue;
+      const files = readdirSync(dirPath).filter(f => f.endsWith('.md'));
+      for (const file of files) {
+        const filePath = join(dirPath, file);
+        const stat = statSync(filePath);
+        items.push({
+          path: `${folder}/${file}`,
+          name: file.replace('.md', ''),
+          folder,
+          status: folder === 'ready-for-review' ? 'ready' : 'draft',
+          updatedAt: stat.mtime.toISOString()
+        });
+      }
+    }
+    return c.json({ items, total: items.length });
+  } catch (err) {
+    loggerInstance.error({ err }, '获取笔记列表失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+app.get('/api/notes/:path', async (c) => {
+  try {
+    const notePath = c.req.param('path');
+    if (notePath.includes('..')) {
+      return c.json({ error: { code: 'FORBIDDEN', message: 'Invalid path' } }, 403);
+    }
+    const fullPath = join(NOTES_PATH, notePath);
+    if (!existsSync(fullPath)) {
+      return c.json({ error: { code: 'NOT_FOUND', message: getErrorMessage('NOT_FOUND') } }, 404);
+    }
+    const content = readFileSync(fullPath, 'utf-8');
+    const stat = statSync(fullPath);
+    const folder = notePath.split('/')[0];
+    return c.json({ content, status: folder === 'ready-for-review' ? 'ready' : 'draft', updatedAt: stat.mtime.toISOString() });
+  } catch (err) {
+    loggerInstance.error({ err }, '获取笔记内容失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+app.post('/api/notes', async (c) => {
+  try {
+    const body = await c.req.json().catch(() => ({}));
+    const folder = body.folder || 'drafts';
+    if (!['inbox', 'drafts', 'ready-for-review'].includes(folder)) {
+      return c.json({ error: { code: 'VALIDATION_ERROR', message: 'Invalid folder' } }, 400);
+    }
+    ensureNotesDirs();
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const fileName = `note-${timestamp}.md`;
+    const filePath = join(NOTES_PATH, folder, fileName);
+    const content = `# 新笔记\n\n> 创建于 ${new Date().toLocaleString('zh-CN')}\n\n`;
+    writeFileSync(filePath, content, 'utf-8');
+    return c.json({ success: true, path: `${folder}/${fileName}` });
+  } catch (err) {
+    loggerInstance.error({ err }, '创建笔记失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+app.put('/api/notes/:path', async (c) => {
+  try {
+    const notePath = c.req.param('path');
+    if (notePath.includes('..')) {
+      return c.json({ error: { code: 'FORBIDDEN', message: 'Invalid path' } }, 403);
+    }
+    const body = await c.req.json().catch(() => ({}));
+    const { content } = body;
+    if (content === undefined) {
+      return c.json({ error: { code: 'VALIDATION_ERROR', message: getErrorMessage('VALIDATION_ERROR') } }, 400);
+    }
+    const fullPath = join(NOTES_PATH, notePath);
+    writeFileSync(fullPath, content, 'utf-8');
+    return c.json({ success: true });
+  } catch (err) {
+    loggerInstance.error({ err }, '保存笔记失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+app.delete('/api/notes/:path', async (c) => {
+  try {
+    const notePath = c.req.param('path');
+    if (notePath.includes('..')) {
+      return c.json({ error: { code: 'FORBIDDEN', message: 'Invalid path' } }, 403);
+    }
+    const fullPath = join(NOTES_PATH, notePath);
+    if (existsSync(fullPath)) {
+      unlinkSync(fullPath);
+    }
+    return c.json({ success: true });
+  } catch (err) {
+    loggerInstance.error({ err }, '删除笔记失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+app.put('/api/notes/:path/status', async (c) => {
+  try {
+    const notePath = c.req.param('path');
+    if (notePath.includes('..')) {
+      return c.json({ error: { code: 'FORBIDDEN', message: 'Invalid path' } }, 403);
+    }
+    const body = await c.req.json().catch(() => ({}));
+    const { status } = body;
+    if (!['draft', 'ready'].includes(status)) {
+      return c.json({ error: { code: 'VALIDATION_ERROR', message: 'Invalid status' } }, 400);
+    }
+    const oldPath = join(NOTES_PATH, notePath);
+    const fileName = notePath.split('/').pop() || '';
+    const targetFolder = status === 'ready' ? 'ready-for-review' : 'drafts';
+    const newPath = join(NOTES_PATH, targetFolder, fileName);
+    if (existsSync(oldPath) && oldPath !== newPath) {
+      ensureNotesDirs();
+      renameSync(oldPath, newPath);
+    }
+    return c.json({ success: true });
+  } catch (err) {
+    loggerInstance.error({ err }, '更新笔记状态失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+app.post('/api/notes/:path/extract', async (c) => {
+  try {
+    const notePath = c.req.param('path');
+    if (notePath.includes('..')) {
+      return c.json({ error: { code: 'FORBIDDEN', message: 'Invalid path' } }, 403);
+    }
+    const fullPath = join(NOTES_PATH, notePath);
+    if (!existsSync(fullPath)) {
+      return c.json({ error: { code: 'NOT_FOUND', message: getErrorMessage('NOT_FOUND') } }, 404);
+    }
+    const content = readFileSync(fullPath, 'utf-8');
+    const result = await brainAPI.extractFacts(content, notePath);
+    // Move note to library after extraction
+    const fileName = notePath.split('/').pop() || '';
+    const libraryPath = join(NOTES_PATH, '..', 'library', 'objects', fileName);
+    const libraryDir = join(NOTES_PATH, '..', 'library', 'objects');
+    if (!existsSync(libraryDir)) mkdirSync(libraryDir, { recursive: true });
+    if (existsSync(fullPath)) {
+      renameSync(fullPath, libraryPath);
+    }
+    return c.json({ success: true, diffs: result });
+  } catch (err) {
+    loggerInstance.error({ err }, '提取笔记失败');
     return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
   }
 });

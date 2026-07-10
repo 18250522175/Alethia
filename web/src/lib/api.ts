@@ -832,7 +832,43 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ amount })
     });
-  }
+  },
+
+  // Notes API
+  listNotes() {
+    return request<{ items: Array<{ path: string; name: string; folder: string; status: string; updatedAt: string }> }>('/notes');
+  },
+  getNote(path: string) {
+    return request<{ content: string; status: string; updatedAt: string }>(`/notes/${encodeURIComponent(path)}`);
+  },
+  createNote(folder: string) {
+    return request<{ success: boolean; path: string }>('/notes', {
+      method: 'POST',
+      body: JSON.stringify({ folder })
+    });
+  },
+  saveNote(path: string, content: string) {
+    return request<{ success: boolean }>(`/notes/${encodeURIComponent(path)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ content })
+    });
+  },
+  deleteNote(path: string) {
+    return request<{ success: boolean }>(`/notes/${encodeURIComponent(path)}`, {
+      method: 'DELETE'
+    });
+  },
+  updateNoteStatus(path: string, status: string) {
+    return request<{ success: boolean }>(`/notes/${encodeURIComponent(path)}/status`, {
+      method: 'PUT',
+      body: JSON.stringify({ status })
+    });
+  },
+  extractNote(path: string) {
+    return request<{ success: boolean; diffs?: any[] }>(`/notes/${encodeURIComponent(path)}/extract`, {
+      method: 'POST'
+    });
+  },
 };
 
 export default api;
