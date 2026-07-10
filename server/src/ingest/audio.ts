@@ -1,8 +1,11 @@
-import { execSync } from 'child_process';
+import { exec, execSync } from 'child_process';
+import { promisify } from 'util';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import logger from '../i18n/logger';
+
+const execAsync = promisify(exec);
 
 export interface AudioSegment {
   start: number;
@@ -45,7 +48,7 @@ function findWhisper(): string | null {
  * 转录音频文件，输出带时间码的转录文本：`[00:00:00] 文本`。
  * 缺失 whisper 时返回警告 + 空结果。
  */
-export async function transcribeAudio(filePath: string): Promise<TranscribeResult> {
+export async function transcribeAudio(filePath: string, maxRetries: number = 2): Promise<TranscribeResult> {
   const warnings: string[] = [];
   const whisperBin = findWhisper();
 
@@ -56,38 +59,50 @@ export async function transcribeAudio(filePath: string): Promise<TranscribeResul
   }
 
   const tmpDir = mkdtempSync(join(tmpdir(), 'alethia-whisper-'));
+
   try {
-    const baseName = join(tmpDir, 'out');
-    execSync(
-      `"${whisperBin}" "${filePath}" --output_format json -of "${baseName}"`,
-      {
-        encoding: 'utf-8',
-        maxBuffer: 100 * 1024 * 1024,
-        stdio: ['ignore', 'pipe', 'pipe']
+    for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
+      try {
+        const baseName = join(tmpDir, 'out');
+        await execAsync(
+          `"${whisperBin}" "${filePath}" --output_format json -of "${baseName}"`,
+          {
+            encoding: 'utf-8',
+            maxBuffer: 100 * 1024 * 1024,
+            stdio: ['ignore', 'pipe', 'pipe']
+          }
+        );
+
+        const outputFile = baseName + '.json';
+        if (!existsSync(outputFile)) {
+          throw new Error('whisper 未生成 JSON 输出文件');
+        }
+
+        const data = JSON.parse(readFileSync(outputFile, 'utf-8'));
+        const segments: AudioSegment[] = (data.segments || []).map((s: any) => ({
+          start: typeof s.start === 'number' ? s.start : 0,
+          end: typeof s.end === 'number' ? s.end : 0,
+          text: String(s.text || '').trim()
+        }));
+
+        const text = segments
+          .map(s => `[${formatTimecode(s.start)}] ${s.text}`)
+          .join('\n');
+
+        return { text, segments, warnings };
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (attempt <= maxRetries) {
+          warnings.push(`音频转录第 ${attempt} 次尝试失败：${msg}（将重试）`);
+          logger.warn({ err, filePath, attempt }, `音频转录第 ${attempt} 次尝试失败，将重试`);
+          await new Promise(r => setTimeout(r, 1000 * attempt));
+        } else {
+          warnings.push(`音频转录失败（已重试 ${maxRetries} 次）：${msg}`);
+          logger.error({ err, filePath }, '音频转录失败');
+          return { text: '', segments: [], warnings };
+        }
       }
-    );
-
-    const outputFile = baseName + '.json';
-    if (!existsSync(outputFile)) {
-      throw new Error('whisper 未生成 JSON 输出文件');
     }
-
-    const data = JSON.parse(readFileSync(outputFile, 'utf-8'));
-    const segments: AudioSegment[] = (data.segments || []).map((s: any) => ({
-      start: typeof s.start === 'number' ? s.start : 0,
-      end: typeof s.end === 'number' ? s.end : 0,
-      text: String(s.text || '').trim()
-    }));
-
-    const text = segments
-      .map(s => `[${formatTimecode(s.start)}] ${s.text}`)
-      .join('\n');
-
-    return { text, segments, warnings };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    warnings.push(`音频转录失败：${msg}`);
-    logger.error({ err, filePath }, '音频转录失败');
     return { text: '', segments: [], warnings };
   } finally {
     rmSync(tmpDir, { recursive: true, force: true });

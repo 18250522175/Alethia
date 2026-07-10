@@ -869,6 +869,19 @@ export const api = {
       method: 'POST'
     });
   },
+
+  getPrompts() {
+    return request<{ items: Array<{ name: string; title: string; description: string }> }>('/prompts');
+  },
+  getPrompt(name: string) {
+    return request<string>(`/prompts/${encodeURIComponent(name)}`);
+  },
+  savePrompt(name: string, content: string) {
+    return request<{ success: boolean }>(`/prompts/${encodeURIComponent(name)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ content })
+    });
+  },
 };
 
 export default api;

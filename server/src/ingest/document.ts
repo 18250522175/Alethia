@@ -1,4 +1,5 @@
 import { cleanText } from './clean';
+import { processImage } from './image';
 
 export interface PdfResult {
   text: string;
@@ -19,9 +20,6 @@ export interface PptxResult {
   slides: string[];
 }
 
-/**
- * PDF 解析（动态加载 pdf-parse）。
- */
 export async function parsePdf(buffer: Buffer): Promise<PdfResult> {
   let pdfParse: any;
   try {
@@ -34,20 +32,80 @@ export async function parsePdf(buffer: Buffer): Promise<PdfResult> {
 
   const data = await pdfParse(buffer);
   const rawText: string = data?.text || '';
-  const text = cleanText(formulaToLatex(rawText));
-  // pdf-parse 不分页，按 form feed (\f) 切分
+  
+  let text = cleanText(formulaToLatex(rawText));
   const pages = rawText
     .split('\f')
     .map(p => cleanText(formulaToLatex(p)))
     .filter(Boolean);
 
+  const ocrResult = await processPdfWithOcr(buffer);
+  if (ocrResult && ocrResult.text) {
+    if (!text || text.trim().length < 100) {
+      text = ocrResult.text;
+    } else {
+      text = [text, ocrResult.text].filter(Boolean).join('\n\n');
+    }
+    ocrResult.pages.forEach((p: string, i: number) => {
+      if (pages[i]) {
+        pages[i] = [pages[i], p].filter(Boolean).join('\n\n');
+      } else {
+        pages.push(p);
+      }
+    });
+  }
+
   return { text, pages };
 }
 
-/**
- * DOCX 解析（动态加载 mammoth）。
- * 表格由 mammoth 自动转换为 HTML。
- */
+async function processPdfWithOcr(buffer: Buffer): Promise<{ text: string; pages: string[] } | null> {
+  try {
+    // @ts-ignore
+    const pdfjs: any = await import('pdfjs-dist/legacy/build/pdf.js');
+    
+    const pdf = await pdfjs.getDocument({
+      data: buffer,
+      disableWorker: true
+    }).promise;
+    
+    const pages: string[] = [];
+    let fullText = '';
+    
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const viewport = page.getViewport({ scale: 2.0 });
+      // @ts-ignore
+      const canvas = await import('canvas');
+      const { createCanvas, loadImage } = canvas.default || canvas;
+      
+      const cvs = createCanvas(viewport.width, viewport.height);
+      const ctx = cvs.getContext('2d');
+      
+      const renderTask = page.render({
+        canvasContext: ctx,
+        viewport
+      });
+      
+      await renderTask.promise;
+      
+      const imageBuffer = cvs.toBuffer('image/jpeg');
+      const result = await processImage(imageBuffer, 'image/jpeg');
+      
+      if (result.text) {
+        const pageText = `[第 ${i} 页 OCR] ${result.text}`;
+        pages.push(pageText);
+        fullText += pageText + '\n\n';
+      }
+    }
+    
+    return { text: fullText.trim(), pages };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(`PDF OCR 处理失败（可能缺少依赖）：${msg}`);
+    return null;
+  }
+}
+
 export async function parseDocx(buffer: Buffer): Promise<DocxResult> {
   let mammoth: any;
   try {
@@ -65,10 +123,6 @@ export async function parseDocx(buffer: Buffer): Promise<DocxResult> {
   return { text, html: html?.value || '' };
 }
 
-/**
- * XLSX 解析（动态加载 xlsx）。
- * 表格数据以行数组返回，可通过 rowsToHtml 转 HTML。
- */
 export async function parseXlsx(buffer: Buffer): Promise<XlsxResult> {
   let XLSX: any;
   try {
@@ -90,9 +144,6 @@ export async function parseXlsx(buffer: Buffer): Promise<XlsxResult> {
   return { sheets };
 }
 
-/**
- * PPTX 解析（动态加载 pptxtojson）。
- */
 export async function parsePptx(buffer: Buffer): Promise<PptxResult> {
   let pptxtojson: any;
   try {
@@ -116,9 +167,6 @@ export async function parsePptx(buffer: Buffer): Promise<PptxResult> {
   };
 }
 
-/**
- * 表格行 → HTML 表格。
- */
 export function rowsToHtml(rows: string[][]): string {
   if (!rows || rows.length === 0) return '';
   const [header, ...body] = rows;
@@ -129,9 +177,6 @@ export function rowsToHtml(rows: string[][]): string {
   return `<table>${thead}${tbody}</table>`;
 }
 
-/**
- * 简单公式 → LaTeX（替换常见数学符号）。
- */
 export function formulaToLatex(text: string): string {
   const map: Record<string, string> = {
     '×': '\\times',

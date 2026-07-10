@@ -25,6 +25,8 @@ import NotificationsPage from './routes/NotificationsPage';
 import ObservedFilesPage from './routes/ObservedFilesPage';
 import NotesPage from './routes/NotesPage';
 import UploadPage from './routes/UploadPage';
+import PromptsPage from './routes/PromptsPage';
+import AliasesPage from './routes/AliasesPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();
@@ -70,6 +72,8 @@ function AppRoutes() {
         <Route path="observed-files" element={<ObservedFilesPage />} />
         <Route path="notes" element={<NotesPage />} />
         <Route path="upload" element={<UploadPage />} />
+        <Route path="prompts" element={<PromptsPage />} />
+        <Route path="aliases" element={<AliasesPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

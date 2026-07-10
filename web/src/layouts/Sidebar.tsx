@@ -1,4 +1,4 @@
-import { House, Graph, CheckCircle, ChatsCircle, Gauge, Clock, ClockCounterClockwise, Gear, BookOpen, Brain, CaretDown, CaretRight, Ghost, Eye, MagnifyingGlass, Bell, Flask, Notebook, UploadSimple } from '@phosphor-icons/react';
+import { House, Graph, CheckCircle, ChatsCircle, Gauge, Clock, ClockCounterClockwise, Gear, BookOpen, Brain, CaretDown, CaretRight, Ghost, Eye, MagnifyingGlass, Bell, Flask, Notebook, UploadSimple, Link, Sparkle } from '@phosphor-icons/react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
@@ -186,7 +186,9 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
     { path: '/eval-report', icon: Flask, label: t('nav.evalReport', '评测报告') },
     { path: '/library', icon: BookOpen, label: t('nav.library', '资料库') },
     { path: '/notes', icon: Notebook, label: t('nav.notes', '笔记') },
-    { path: '/upload', icon: UploadSimple, label: t('nav.upload', '上传') }
+    { path: '/upload', icon: UploadSimple, label: t('nav.upload', '上传') },
+    { path: '/prompts', icon: Sparkle, label: t('nav.prompts', '提示词') },
+    { path: '/aliases', icon: Link, label: t('nav.aliases', '别名') }
   ];
 
   const healthQuery = useQuery({

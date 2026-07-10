@@ -12,7 +12,6 @@ import {
   ArrowDown,
   ClipboardText,
   SlidersHorizontal,
-  Link,
   FloppyDisk,
   ArrowCounterClockwise,
   Trash,
@@ -33,7 +32,6 @@ const sections = [
   { id: 'embedding', icon: Database },
   { id: 'reranking', icon: ArrowDown },
   { id: 'nli', icon: ClipboardText },
-  { id: 'aliases', icon: Link },
   { id: 'data', icon: Folder },
   { id: 'advanced', icon: SlidersHorizontal },
 ] as const;
@@ -187,9 +185,6 @@ export default function SettingsPage() {
           )}
           {activeSection === 'nli' && (
             <NLISettings settings={localSettings} onChange={handleChange} />
-          )}
-          {activeSection === 'aliases' && (
-            <AliasSettings />
           )}
           {activeSection === 'data' && (
             <DataSettings settings={localSettings} onChange={handleChange} />
@@ -1157,79 +1152,6 @@ function LLMConfigSettings({ settings, onChange }: SettingsSectionProps) {
           </div>
         );
       })}
-    </div>
-  );
-}
-
-function AliasSettings() {
-  const { t } = useTranslation();
-  const navigate = useNavigate();
-
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['alias-conflicts'],
-    queryFn: () => api.getAliasConflicts(),
-    staleTime: 60_000
-  });
-
-  return (
-    <div className="card p-6">
-      <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold">
-        <Link size={20} className="text-primary-500" />
-        {t('aliases.title', '别名冲突管理')}
-      </h2>
-      <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
-        {t('aliases.desc', '检测多个实体共享同一别名的情况，帮助维护知识图谱的链接准确性。')}
-      </p>
-
-      {isLoading && (
-        <div className="py-8 text-center text-sm text-slate-400">{t('common.loading')}</div>
-      )}
-
-      {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400">
-          {t('aliases.loadError', '加载别名冲突列表失败')}
-        </div>
-      )}
-
-      {data && data.conflicts && data.conflicts.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-10 text-slate-400">
-          <Check size={36} className="mb-2 opacity-40" />
-          <p className="text-sm">{t('aliases.noConflicts', '没有别名冲突')}</p>
-        </div>
-      )}
-
-      {data && data.conflicts && data.conflicts.length > 0 && (
-        <div className="overflow-hidden rounded-lg border border-amber-200 dark:border-amber-800">
-          <div className="bg-amber-50 px-4 py-2 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
-            {t('aliases.conflictCount', '共 {{count}} 个别名冲突', { count: data.conflicts.length })}
-          </div>
-          <div className="divide-y divide-slate-100 dark:divide-slate-700">
-            {data.conflicts.map((conflict: { alias: string; slugs: string[] }, i: number) => (
-              <div key={i} className="px-4 py-3">
-                <div className="mb-1.5 flex items-center gap-2">
-                  <span className="rounded bg-amber-100 px-1.5 py-0.5 font-mono text-xs text-amber-700 dark:bg-amber-900/40 dark:text-amber-400">
-                    {conflict.alias}
-                  </span>
-                  <span className="text-xs text-slate-400">
-                    {t('aliases.sharedBy', '被 {{count}} 个页面共享', { count: conflict.slugs.length })}
-                  </span>
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {conflict.slugs.map((slug: string) => (
-                    <button
-                      key={slug}
-                      onClick={() => navigate(`/wiki/${encodeURIComponent(slug)}`)}
-                      className="rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-primary-600 hover:bg-primary-50 hover:text-primary-700 dark:bg-slate-700 dark:text-primary-400 dark:hover:bg-primary-900/30"
-                    >
-                      {slug}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

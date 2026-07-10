@@ -1491,4 +1491,63 @@ app.post('/api/notes/:path/extract', async (c) => {
   }
 });
 
+const PROMPTS_DIR = join(process.cwd(), 'skills', 'prompts');
+
+app.get('/api/prompts', async (c) => {
+  try {
+    const prompts: Array<{ name: string; title: string; description: string }> = [];
+    if (!existsSync(PROMPTS_DIR)) {
+      return c.json({ items: prompts });
+    }
+    const files = readdirSync(PROMPTS_DIR).filter(f => f.endsWith('.md'));
+    for (const file of files) {
+      const name = file.replace('.zh-CN.md', '');
+      const content = readFileSync(join(PROMPTS_DIR, file), 'utf-8');
+      const titleMatch = content.match(/^#\s+(.+)/);
+      const descMatch = content.match(/^-+\s*\n(.+)/);
+      prompts.push({
+        name,
+        title: titleMatch?.[1] || name,
+        description: descMatch?.[1] || ''
+      });
+    }
+    return c.json({ items: prompts });
+  } catch (err) {
+    loggerInstance.error({ err }, '获取提示词列表失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+app.get('/api/prompts/:name', async (c) => {
+  try {
+    const name = c.req.param('name');
+    const filePath = join(PROMPTS_DIR, `${name}.zh-CN.md`);
+    if (!existsSync(filePath)) {
+      return c.json({ error: { code: 'NOT_FOUND', message: getErrorMessage('NOT_FOUND') } }, 404);
+    }
+    const content = readFileSync(filePath, 'utf-8');
+    return c.text(content);
+  } catch (err) {
+    loggerInstance.error({ err }, '获取提示词内容失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+app.put('/api/prompts/:name', async (c) => {
+  try {
+    const name = c.req.param('name');
+    const body = await c.req.json().catch(() => ({}));
+    const { content } = body;
+    if (typeof content !== 'string') {
+      return c.json({ error: { code: 'VALIDATION_ERROR', message: getErrorMessage('VALIDATION_ERROR') } }, 400);
+    }
+    const filePath = join(PROMPTS_DIR, `${name}.zh-CN.md`);
+    writeFileSync(filePath, content, 'utf-8');
+    return c.json({ success: true });
+  } catch (err) {
+    loggerInstance.error({ err }, '保存提示词失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
 export default app;

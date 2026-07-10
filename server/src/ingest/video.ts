@@ -1,20 +1,22 @@
-import { execSync } from 'child_process';
-import { mkdtempSync, rmSync } from 'fs';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+import { mkdtempSync, rmSync, readFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { basename, join } from 'path';
 import { transcribeAudio } from './audio';
+import { processImage } from './image';
 import logger from '../i18n/logger';
+
+const execAsync = promisify(exec);
 
 export interface VideoProcessResult {
   text: string;
   segments: any[];
   warnings: string[];
+  frames: string[];
 }
 
-/**
- * 检查 ffmpeg 可执行文件是否存在。
- */
-function findFfmpeg(): string | null {
+async function findFfmpeg(): Promise<string | null> {
   try {
     const bunWhich = (globalThis as any).Bun?.which;
     if (typeof bunWhich === 'function') {
@@ -25,22 +27,16 @@ function findFfmpeg(): string | null {
     /* ignore */
   }
   try {
-    const out = execSync('command -v ffmpeg 2>/dev/null', {
-      encoding: 'utf-8',
-      stdio: ['ignore', 'pipe', 'ignore']
-    }).trim();
-    return out || null;
+    const { stdout } = await execAsync('command -v ffmpeg 2>/dev/null');
+    return stdout.trim() || null;
   } catch {
     return null;
   }
 }
 
-/**
- * 视频处理：FFmpeg 提取音轨，再调用 transcribeAudio 转录。
- */
 export async function processVideo(filePath: string): Promise<VideoProcessResult> {
   const warnings: string[] = [];
-  const ffmpeg = findFfmpeg();
+  const ffmpeg = await findFfmpeg();
 
   if (!ffmpeg) {
     warnings.push('未找到 ffmpeg 可执行文件，无法提取音轨，视频转录已跳过');
@@ -52,20 +48,22 @@ export async function processVideo(filePath: string): Promise<VideoProcessResult
   const audioPath = join(tmpDir, `${basename(filePath)}.wav`);
 
   try {
-    execSync(
+    await execAsync(
       `"${ffmpeg}" -i "${filePath}" -vn -acodec pcm_s16le -ar 16000 -ac 1 "${audioPath}" -y`,
-      {
-        encoding: 'utf-8',
-        stdio: ['ignore', 'pipe', 'pipe'],
-        maxBuffer: 100 * 1024 * 1024
-      }
+      { maxBuffer: 100 * 1024 * 1024 }
     );
 
-    const result = await transcribeAudio(audioPath);
+    const audioResult = await transcribeAudio(audioPath);
+    
+    const frameDescriptions = await extractFramesAndAnalyze(filePath, ffmpeg, tmpDir);
+
+    const videoText = [audioResult.text, ...frameDescriptions].filter(Boolean).join('\n\n');
+
     return {
-      text: result.text,
-      segments: result.segments,
-      warnings: [...warnings, ...result.warnings]
+      text: videoText,
+      segments: audioResult.segments,
+      warnings: [...warnings, ...audioResult.warnings],
+      frames: frameDescriptions
     };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -75,4 +73,37 @@ export async function processVideo(filePath: string): Promise<VideoProcessResult
   } finally {
     rmSync(tmpDir, { recursive: true, force: true });
   }
+}
+
+async function extractFramesAndAnalyze(filePath: string, ffmpeg: string, tmpDir: string): Promise<string[]> {
+  const descriptions: string[] = [];
+  
+  try {
+    const frameDir = join(tmpDir, 'frames');
+    await execAsync(`mkdir -p "${frameDir}"`);
+    
+    await execAsync(
+      `"${ffmpeg}" -i "${filePath}" -vf "fps=1" -q:v 2 "${frameDir}/frame_%03d.jpg" -y`,
+      { maxBuffer: 50 * 1024 * 1024 }
+    );
+
+    const frames = (await import('fs')).default.readdirSync(frameDir).filter(f => f.endsWith('.jpg'));
+    
+    for (const frameFile of frames.slice(0, 10)) {
+      const framePath = join(frameDir, frameFile);
+      const buffer = readFileSync(framePath);
+      try {
+        const result = await processImage(buffer, 'image/jpeg');
+        if (result.description) {
+          descriptions.push(`[画面 ${frameFile}] ${result.description}`);
+        }
+      } catch (err) {
+        logger.warn({ err, framePath }, '帧分析失败，跳过');
+      }
+    }
+  } catch (err) {
+    logger.warn({ err, filePath }, '帧提取失败，仅使用音频转录');
+  }
+  
+  return descriptions;
 }
