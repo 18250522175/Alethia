@@ -262,11 +262,33 @@ class BrainAPI {
         pool.query(`SELECT COUNT(*) as count FROM pages p
                     WHERE NOT EXISTS (SELECT 1 FROM links WHERE source_slug = p.slug AND NOT orphaned)
                       AND NOT EXISTS (SELECT 1 FROM links WHERE target_slug = p.slug AND NOT orphaned)`),
-        pool.query(`SELECT DATE(created_at) as day, COUNT(*) as cnt
-                    FROM auto_change_log
-                    WHERE created_at > NOW() - INTERVAL '7 days'
+        pool.query(`WITH dates AS (
+                    SELECT generate_series(
+                      CURRENT_DATE - INTERVAL '6 days',
+                      CURRENT_DATE,
+                      '1 day'::interval
+                    )::date AS day
+                  ),
+                  page_counts AS (
+                    SELECT DATE(created_at) as day, COUNT(*) as nodes
+                    FROM pages
+                    WHERE created_at <= CURRENT_DATE
                     GROUP BY DATE(created_at)
-                    ORDER BY day`),
+                  ),
+                  link_counts AS (
+                    SELECT DATE(created_at) as day, COUNT(*) as edges
+                    FROM links
+                    WHERE created_at <= CURRENT_DATE
+                    GROUP BY DATE(created_at)
+                  )
+                  SELECT 
+                    d.day,
+                    COALESCE(SUM(pc.nodes) OVER (ORDER BY d.day), 0) as nodes,
+                    COALESCE(SUM(lc.edges) OVER (ORDER BY d.day), 0) as edges
+                  FROM dates d
+                  LEFT JOIN page_counts pc ON pc.day = d.day
+                  LEFT JOIN link_counts lc ON lc.day = d.day
+                  ORDER BY d.day`),
         pool.query(`SELECT COUNT(*) FILTER (WHERE passed = true) as passed, COUNT(*) as total
                     FROM eval_results WHERE created_at > NOW() - INTERVAL '30 days'`),
         pool.query(`SELECT unnest(contexts) as context, COUNT(*) as activity
@@ -295,7 +317,7 @@ class BrainAPI {
           nodes: parseInt(nodesResult.rows[0].count),
           edges: parseInt(edgesResult.rows[0].count),
           pages: parseInt(nodesResult.rows[0].count),
-          trend: trendResult.rows.map((r: any) => ({ date: r.day, count: parseInt(r.cnt) }))
+          trend: trendResult.rows.map((r: any) => ({ date: r.day, nodes: parseInt(r.nodes), edges: parseInt(r.edges) }))
         },
         contextHeatmap: contextResult.rows.map((r: any) => ({
           context: r.context,

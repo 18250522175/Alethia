@@ -24,13 +24,14 @@ import {
   LinearScale,
   PointElement,
   LineElement,
+  BarElement,
   ArcElement,
   Title,
   Tooltip,
   Legend,
   Filler
 } from 'chart.js';
-import { Line, Pie } from 'react-chartjs-2';
+import { Line, Bar, Pie } from 'react-chartjs-2';
 import api from '../lib/api';
 
 ChartJS.register(
@@ -38,6 +39,7 @@ ChartJS.register(
   LinearScale,
   PointElement,
   LineElement,
+  BarElement,
   ArcElement,
   Title,
   Tooltip,
@@ -100,7 +102,7 @@ export default function DashboardPage() {
     datasets: [
       {
         label: t('dashboard.pages', '页面数'),
-        data: data?.scale.trend?.map((t: any) => t.nodes) || Array(7).fill(data?.scale.pages || 0),
+        data: data?.scale.trend?.map((t) => t.nodes) || Array(7).fill(data?.scale.pages || 0),
         borderColor: '#6366f1',
         backgroundColor: 'rgba(99, 102, 241, 0.1)',
         fill: true,
@@ -108,7 +110,7 @@ export default function DashboardPage() {
       },
       {
         label: t('dashboard.edges', '关系数'),
-        data: data?.scale.trend?.map((t: any) => t.edges) || Array(7).fill(data?.scale.edges || 0),
+        data: data?.scale.trend?.map((t) => t.edges) || Array(7).fill(data?.scale.edges || 0),
         borderColor: '#06b6d4',
         backgroundColor: 'rgba(6, 182, 212, 0.1)',
         fill: true,
@@ -119,27 +121,24 @@ export default function DashboardPage() {
 
   const dailyBudget = data?.budget?.daily;
   const monthlyBudget = data?.budget?.monthly;
-  const qaCost = dailyBudget?.spent || 0;
-  const extractionCost = monthlyBudget ? (monthlyBudget.spent - qaCost) * 0.4 : 0;
-  const reviewCost = monthlyBudget ? (monthlyBudget.spent - qaCost) * 0.3 : 0;
-  const otherCost = monthlyBudget ? (monthlyBudget.spent - qaCost) * 0.3 : 0;
+  const dailySpent = dailyBudget?.spent || 0;
+  const monthlySpent = monthlyBudget?.spent || 0;
+  const monthlyRemaining = Math.max((monthlyBudget?.limit || 0) - monthlySpent, 0);
 
   const costPieData = {
-    labels: [t('dashboard.qa', '问答'), t('dashboard.extraction', '提取'), t('dashboard.review', '审核'), t('dashboard.other', '其他')],
+    labels: [t('dashboard.dailySpent', '今日花费'), t('dashboard.monthlySpent', '本月花费'), t('dashboard.monthlyRemaining', '本月剩余')],
     datasets: [
       {
-        data: [qaCost, extractionCost, reviewCost, otherCost].map(v => Math.max(v, 0.1)),
+        data: [dailySpent, monthlySpent - dailySpent, monthlyRemaining].map(v => Math.max(v, 0.01)),
         backgroundColor: [
           'rgba(99, 102, 241, 0.8)',
           'rgba(6, 182, 212, 0.8)',
-          'rgba(249, 115, 22, 0.8)',
-          'rgba(148, 163, 184, 0.8)'
+          'rgba(34, 197, 94, 0.8)'
         ],
         borderColor: [
           'rgb(99, 102, 241)',
           'rgb(6, 182, 212)',
-          'rgb(249, 115, 22)',
-          'rgb(148, 163, 184)'
+          'rgb(34, 197, 94)'
         ],
         borderWidth: 2
       }
@@ -262,9 +261,9 @@ export default function DashboardPage() {
             <div className="card p-5 lg:col-span-2">
               <div className="mb-4 flex items-center gap-2">
                 <ChartLine size={18} className="text-primary-500" />
-                <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                <button onClick={() => navigate('/timeline')} className="text-sm font-semibold text-slate-700 dark:text-slate-200 hover:text-primary-600 transition-colors">
                   {t('dashboard.trend', '增长趋势')}
-                </h3>
+                </button>
               </div>
               <div className="h-64">
                 <Line data={trendData} options={chartOptions} />
@@ -301,10 +300,10 @@ export default function DashboardPage() {
             </section>
 
             <section className="card p-5">
-              <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold">
+              <button onClick={() => navigate('/settings#budget')} className="mb-3 flex items-center gap-2 text-sm font-semibold hover:text-primary-600 transition-colors">
                 <Wallet size={18} className="text-emerald-500" />
                 {t('health.budget')}
-              </h2>
+              </button>
               <div className="space-y-3">
                 <BudgetRow
                   label={t('health.daily')}
@@ -325,10 +324,10 @@ export default function DashboardPage() {
             </section>
 
             <section className="card p-5">
-              <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold">
+              <button onClick={() => navigate('/eval-report')} className="mb-3 flex items-center gap-2 text-sm font-semibold hover:text-primary-600 transition-colors">
                 <Brain size={18} className="text-primary-500" />
                 {t('health.aIQuality', 'AI 质量')}
-              </h2>
+              </button>
               <div className="space-y-3">
                 <div>
                   <div className="mb-1 flex justify-between text-xs">
@@ -356,9 +355,74 @@ export default function DashboardPage() {
                     />
                   </div>
                 </div>
+                {data.aiQuality.trend && data.aiQuality.trend.length > 0 && (
+                  <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-700">
+                    <div className="h-20">
+                      <Line
+                        data={{
+                          labels: data.aiQuality.trend.map((t: any) => t.date),
+                          datasets: [{
+                            label: t('dashboard.correctness', '正确率'),
+                            data: data.aiQuality.trend.map((t: any) => t.rate * 100),
+                            borderColor: '#6366f1',
+                            backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                            fill: true,
+                            tension: 0.4,
+                            pointRadius: 2
+                          }]
+                        }}
+                        options={{
+                          responsive: true,
+                          maintainAspectRatio: false,
+                          plugins: { legend: { display: false } },
+                          scales: {
+                            x: { display: false },
+                            y: { min: 0, max: 100, ticks: { font: { size: 10 } }, grid: { color: 'rgba(148, 163, 184, 0.1)' } }
+                          }
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             </section>
           </div>
+
+          {data.contextHeatmap && data.contextHeatmap.length > 0 && (
+            <section className="card p-5">
+              <div className="mb-4 flex items-center gap-2">
+                <ChartLine size={18} className="text-orange-500" />
+                <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                  {t('dashboard.contextHeatmap', '上下文活跃度')}
+                </h3>
+              </div>
+              <div className="h-64">
+                <Bar
+                  data={{
+                    labels: data.contextHeatmap.map((c: any) => c.context),
+                    datasets: [{
+                      label: t('dashboard.activity', '活跃度'),
+                      data: data.contextHeatmap.map((c: any) => c.activity),
+                      backgroundColor: 'rgba(249, 115, 22, 0.6)',
+                      borderColor: 'rgb(249, 115, 22)',
+                      borderWidth: 1,
+                      borderRadius: 4
+                    }]
+                  }}
+                  options={{
+                    indexAxis: 'y' as const,
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                      x: { beginAtZero: true, grid: { color: 'rgba(148, 163, 184, 0.1)' } },
+                      y: { grid: { display: false } }
+                    }
+                  }}
+                />
+              </div>
+            </section>
+          )}
 
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             <StatCard
@@ -374,14 +438,14 @@ export default function DashboardPage() {
               label={t('health.archivedVersions')}
               value={data.archiveStatus.archivedVersions}
               color="bg-slate-500"
-              onClick={() => navigate('/wiki')}
+              onClick={() => navigate('/changelog')}
             />
             <StatCard
               icon={<Files size={20} />}
               label={t('dashboard.observedFiles', '观察文件数')}
               value={data.observedFiles}
               color="bg-cyan-500"
-              onClick={() => navigate('/library')}
+              onClick={() => navigate('/observed-files')}
             />
             <StatCard
               icon={<Warning size={20} />}
