@@ -27,6 +27,7 @@ import NotesPage from './routes/NotesPage';
 import UploadPage from './routes/UploadPage';
 import PromptsPage from './routes/PromptsPage';
 import AliasesPage from './routes/AliasesPage';
+import CognitiveMapPage from './routes/CognitiveMapPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();
@@ -74,6 +75,7 @@ function AppRoutes() {
         <Route path="upload" element={<UploadPage />} />
         <Route path="prompts" element={<PromptsPage />} />
         <Route path="aliases" element={<AliasesPage />} />
+        <Route path="cognitive-map" element={<CognitiveMapPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

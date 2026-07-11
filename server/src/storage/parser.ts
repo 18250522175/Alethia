@@ -22,6 +22,8 @@ export interface ParsedPage {
   versionHistory: ParsedVersionEntry[];
   semanticRings: string[];
   evidence: ParsedEvidence[];
+  causalEdges: ParsedCausalEdge[];
+  causalCpt: ParsedCausalCPT | null;
 }
 
 export interface ParsedRelation {
@@ -48,6 +50,23 @@ export interface ParsedEvidence {
   text: string;
 }
 
+export interface ParsedCausalEdge {
+  sourceSlug: string;
+  targetSlug: string;
+  relation: string;
+  lag: string;
+  weight: number;
+  conf: number;
+  evidence: string[];
+}
+
+export interface ParsedCausalCPT {
+  variableSlug: string;
+  parentVariables: string[];
+  states: string[];
+  table: Array<Record<string, string>>;
+}
+
 const SECTION_NAMES = [
   'State',
   'Assessment',
@@ -56,7 +75,9 @@ const SECTION_NAMES = [
   'Timeline',
   'Version History',
   'Semantic Rings Archive',
-  'Evidence'
+  'Evidence',
+  'Causal Model',
+  'Causal CPT'
 ];
 
 export class CompiledTruthParser {
@@ -77,6 +98,9 @@ export class CompiledTruthParser {
     const openThreads = this.parseOpenThreads(sections['Open Threads'] || '');
     const evidence = this.parseEvidence(sections['Evidence'] || '');
     const semanticRings = this.parseSemanticRings(sections['Semantic Rings Archive'] || '');
+    const causalEdges = this.parseCausalEdges(this.getSectionByPrefix(sections, 'Causal Model'));
+    const causalCptKey = Object.keys(sections).find(k => k.startsWith('Causal CPT')) || '';
+    const causalCpt = this.parseCausalCPT(sections[causalCptKey] || '', causalCptKey);
 
     return {
       slug,
@@ -98,7 +122,9 @@ export class CompiledTruthParser {
       timeline,
       versionHistory,
       semanticRings,
-      evidence
+      evidence,
+      causalEdges,
+      causalCpt
     };
   }
 
@@ -231,6 +257,139 @@ export class CompiledTruthParser {
     }
 
     return rings;
+  }
+
+  private getSectionByPrefix(sections: Record<string, string>, prefix: string): string {
+    for (const key of Object.keys(sections)) {
+      if (key === prefix || key.startsWith(prefix)) {
+        return sections[key];
+      }
+    }
+    return '';
+  }
+
+  private parseCausalEdges(text: string): ParsedCausalEdge[] {
+    const edges: ParsedCausalEdge[] = [];
+    const lines = text.split('\n').filter(l => l.trim().startsWith('-'));
+
+    for (const line of lines) {
+      const match = line.match(/^\s*-\s*\[([^\]]+)\]\s*--(:[a-zA-Z]+(?:\([^)]*\))?)-->\s*\[([^\]]+)\]\s*(?:\(([^)]*)\))?\s*$/);
+      if (match) {
+        const sourceName = match[1].trim();
+        const relation = match[2].replace(/^:/, '');
+        const targetName = match[3].trim();
+        const paramsStr = match[4] || '';
+
+        const sourceSlug = this.nameToSlug(sourceName);
+        const targetSlug = this.nameToSlug(targetName);
+
+        let lag = '';
+        let weight = 0;
+        let conf = 0.5;
+        const evidence: string[] = [];
+
+        if (paramsStr) {
+          const parts = paramsStr.split(',').map(s => s.trim());
+          for (const part of parts) {
+            const kv = part.match(/^(\w+)\s*:\s*(.+)$/);
+            if (kv) {
+              const k = kv[1].trim();
+              const v = kv[2].trim();
+              switch (k) {
+                case 'lag':
+                  lag = v;
+                  break;
+                case 'weight':
+                  weight = parseFloat(v) || 0;
+                  break;
+                case 'conf':
+                  conf = parseFloat(v) || 0.5;
+                  break;
+                case 'evidence':
+                  evidence.push(...v.split(',').map(s => s.trim()).filter(s => s.length > 0));
+                  break;
+              }
+            }
+          }
+        }
+
+        edges.push({
+          sourceSlug,
+          targetSlug,
+          relation,
+          lag,
+          weight,
+          conf,
+          evidence
+        });
+      }
+    }
+
+    return edges;
+  }
+
+  private parseCausalCPT(text: string, headingKey: string): ParsedCausalCPT | null {
+    if (!text.trim()) return null;
+
+    const lines = text.split('\n').filter(l => l.trim().length > 0);
+
+    // 从 heading key 提取变量名 (格式: Causal CPT (变量名))
+    const headingMatch = headingKey.match(/^Causal\s+CPT\s*\((.+)\)$/);
+    const variableName = headingMatch ? headingMatch[1].trim() : '';
+    const variableSlug = variableName ? this.nameToSlug(variableName) : '';
+
+    // 找到表格行（以 | 开头和结尾的行）
+    const tableLines = lines.filter(l => l.trim().startsWith('|') && l.trim().endsWith('|'));
+
+    if (tableLines.length < 2) return null;
+
+    // 解析表头
+    const headerCells = tableLines[0].split('|').map(c => c.trim()).filter(c => c.length > 0);
+    const separatorLine = tableLines[1];
+    // 跳过分隔行（如 |---|---|），找到数据行
+    const dataStartIndex = separatorLine.match(/^\|[\s\-:]+\|/) ? 2 : 1;
+
+    // 表头第一个是变量名或状态列，其余是父变量
+    const states: string[] = [];
+    const parentVariables: string[] = [];
+    let stateColIndex = -1;
+
+    for (let i = 0; i < headerCells.length; i++) {
+      const cell = headerCells[i];
+      if (cell.toLowerCase() === 'state' || cell === '状态') {
+        stateColIndex = i;
+      } else {
+        parentVariables.push(cell);
+      }
+    }
+
+    const table: Array<Record<string, string>> = [];
+
+    for (let i = dataStartIndex; i < tableLines.length; i++) {
+      const cells = tableLines[i].split('|').map(c => c.trim()).filter(c => c.length > 0);
+      if (cells.length < headerCells.length) continue;
+
+      const row: Record<string, string> = {};
+
+      for (let j = 0; j < headerCells.length; j++) {
+        if (j === stateColIndex) {
+          const state = cells[j];
+          if (!states.includes(state)) {
+            states.push(state);
+          }
+        }
+        row[headerCells[j]] = cells[j] || '';
+      }
+
+      table.push(row);
+    }
+
+    return {
+      variableSlug,
+      parentVariables,
+      states,
+      table
+    };
   }
 
   private nameToSlug(name: string): string {

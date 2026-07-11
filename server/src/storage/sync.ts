@@ -1,5 +1,5 @@
 import { storage } from './markdown';
-import { parser, type ParsedPage } from './parser';
+import { parser, type ParsedPage, type ParsedCausalEdge, type ParsedCausalCPT } from './parser';
 import { syncSummaries } from './summary';
 import { getPool } from '../db/pool';
 import logger from '../i18n/logger';
@@ -37,17 +37,22 @@ function calcLinkWeight(relation: string): number {
 }
 
 export class SyncEngine {
-  async syncAll(): Promise<{ pages: number; links: number; timeline: number; versions: number; clusters: number }> {
+  async syncAll(): Promise<{ pages: number; links: number; timeline: number; versions: number; clusters: number; causalEdges: number }> {
     const wikiFiles = storage.listWikiFiles();
     let pageCount = 0;
     let linkCount = 0;
     let timelineCount = 0;
     let versionCount = 0;
+    let causalEdgeCount = 0;
 
     const pool = getPool();
     const client = await pool.connect();
 
     try {
+      // 清空旧的因果缓存
+      await client.query('DELETE FROM causal_edges');
+      await client.query('DELETE FROM causal_cpt');
+
       for (const filePath of wikiFiles) {
         try {
           const content = storage.readFile(filePath);
@@ -63,15 +68,20 @@ export class SyncEngine {
 
           const versions = await this.syncVersions(client, parsed);
           versionCount += versions;
+
+          const cEdges = await this.syncCausalEdges(client, parsed);
+          causalEdgeCount += cEdges;
+
+          await this.syncCausalCPT(client, parsed);
         } catch (err) {
           logger.error({ err, filePath }, '同步文件失败');
         }
       }
 
-      logger.info(`同步完成: ${pageCount} 页, ${linkCount} 链接, ${timelineCount} 时间线, ${versionCount} 版本`);
+      logger.info(`同步完成: ${pageCount} 页, ${linkCount} 链接, ${timelineCount} 时间线, ${versionCount} 版本, ${causalEdgeCount} 因果边`);
 
       const summaryResult = await syncSummaries(client);
-      return { pages: pageCount, links: linkCount, timeline: timelineCount, versions: versionCount, clusters: summaryResult.clusters };
+      return { pages: pageCount, links: linkCount, timeline: timelineCount, versions: versionCount, clusters: summaryResult.clusters, causalEdges: causalEdgeCount };
     } finally {
       client.release();
     }
@@ -185,6 +195,84 @@ export class SyncEngine {
     }
 
     return parsed.versionHistory.length;
+  }
+
+  private async syncCausalEdges(client: any, parsed: ParsedPage): Promise<number> {
+    if (parsed.causalEdges.length === 0) return 0;
+
+    for (const edge of parsed.causalEdges) {
+      await client.query(`
+        INSERT INTO causal_edges (source_slug, target_slug, relation, lag, weight, conf, evidence, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7::text[], NOW())
+        ON CONFLICT ON CONSTRAINT causal_edges_pkey DO UPDATE SET
+          relation = EXCLUDED.relation,
+          lag = EXCLUDED.lag,
+          weight = EXCLUDED.weight,
+          conf = EXCLUDED.conf,
+          evidence = EXCLUDED.evidence,
+          updated_at = NOW()
+      `, [
+        edge.sourceSlug,
+        edge.targetSlug,
+        edge.relation,
+        edge.lag,
+        edge.weight,
+        edge.conf,
+        edge.evidence
+      ]);
+    }
+
+    return parsed.causalEdges.length;
+  }
+
+  private async syncCausalCPT(client: any, parsed: ParsedPage): Promise<void> {
+    if (!parsed.causalCpt) return;
+
+    const cpt = parsed.causalCpt;
+    const conditions: Record<string, string[]> = {};
+    const probabilities: Record<string, Record<string, number>> = {};
+
+    for (const row of cpt.table) {
+      let stateKey = '';
+      const conditionParts: string[] = [];
+
+      for (const [col, val] of Object.entries(row)) {
+        if (col.toLowerCase() === 'state' || col === '状态') {
+          stateKey = val;
+        } else if (col.toLowerCase() === 'probability' || col === '概率' || col === 'prob') {
+          // probability column handled separately
+        } else {
+          conditionParts.push(`${col}=${val}`);
+        }
+      }
+
+      const conditionKey = conditionParts.join('; ') || 'unconditional';
+      const probVal = parseFloat(row['probability'] || row['Probability'] || row['prob'] || row['Prob'] || '0');
+
+      if (stateKey) {
+        if (!probabilities[conditionKey]) {
+          probabilities[conditionKey] = {};
+        }
+        probabilities[conditionKey][stateKey] = probVal;
+      }
+
+      if (!conditions[conditionKey]) {
+        conditions[conditionKey] = conditionParts;
+      }
+    }
+
+    await client.query(`
+      INSERT INTO causal_cpt (variable_slug, conditions, probabilities, updated_at)
+      VALUES ($1, $2::jsonb, $3::jsonb, NOW())
+      ON CONFLICT (variable_slug) DO UPDATE SET
+        conditions = EXCLUDED.conditions,
+        probabilities = EXCLUDED.probabilities,
+        updated_at = NOW()
+    `, [
+      cpt.variableSlug,
+      JSON.stringify(conditions),
+      JSON.stringify(probabilities)
+    ]);
   }
 
   async rebuildGhostRelations(): Promise<number> {
@@ -415,6 +503,8 @@ export class SyncEngine {
       await client.query('TRUNCATE TABLE evidence_spans CASCADE');
       await client.query('TRUNCATE TABLE clusters CASCADE');
       await client.query('TRUNCATE TABLE cluster_members CASCADE');
+      await client.query('TRUNCATE TABLE causal_edges CASCADE');
+      await client.query('TRUNCATE TABLE causal_cpt CASCADE');
       await client.query('TRUNCATE TABLE pages CASCADE');
       await client.query('COMMIT');
       logger.info('所有缓存表已清空');

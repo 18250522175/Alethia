@@ -882,6 +882,297 @@ export const api = {
       body: JSON.stringify({ content })
     });
   },
+
+  // Causal Cognitive Map
+  getCausalGraph() {
+    return request<{
+      edges: Array<{
+        id: string;
+        source_slug: string;
+        target_slug: string;
+        relation: string;
+        lag: string;
+        weight: number;
+        conf: number;
+        evidence: unknown;
+      }>;
+      cpts: Array<{
+        id: string;
+        variable_slug: string;
+        conditions: Record<string, unknown>;
+        probabilities: unknown;
+      }>;
+    }>('/causal/graph');
+  },
+
+  getCausalNode(slug: string) {
+    return request<{
+      slug: string;
+      title: string;
+      incoming: Array<{
+        id: string;
+        source_slug: string;
+        relation: string;
+        weight: number;
+        conf: number;
+      }>;
+      outgoing: Array<{
+        id: string;
+        target_slug: string;
+        relation: string;
+        weight: number;
+        conf: number;
+      }>;
+      cpt: {
+        id: string;
+        variable_slug: string;
+        conditions: Record<string, unknown>;
+        probabilities: unknown;
+      } | null;
+    }>(`/causal/nodes/${encodeURIComponent(slug)}`);
+  },
+
+  postNlCommand(command: string, currentView: { nodes: string[]; selectedNodes: string[] }) {
+    return request<{
+      operations: Array<{
+        type: 'select' | 'pack' | 'unpack' | 'filter' | 'perspective' | 'expand' | 'layout';
+        target: string[];
+        params?: Record<string, any>;
+      }>;
+      explanation: string;
+    }>('/causal/nl-command', {
+      method: 'POST',
+      body: JSON.stringify({ command, currentView })
+    });
+  },
+
+  getCausalSuggestions(nodes?: string[], limit?: number) {
+    return request<{
+      suggestions: Array<{
+        type: string;
+        title: string;
+        description: string;
+        nodes?: string[];
+        node?: string;
+        action: string;
+        confidence: number;
+      }>;
+    }>('/causal/suggestions', {
+      params: {
+        nodes: nodes?.join(','),
+        limit: limit || 5
+      }
+    });
+  },
+
+  // Causal Reasoning API
+  postCausalReason(body: {
+    target: string;
+    intervention: { variable: string; fromState?: string; toState: string };
+    background?: Record<string, string>;
+  }) {
+    return request<{
+      baselineProbability: number;
+      interventionProbability: number;
+      delta: number;
+      confidenceInterval: [number, number];
+      method: 'cpt' | 'heuristic';
+      assumptions: string[];
+      evidence: Array<{ source: string; text: string }>;
+    }>('/causal/reason', { method: 'POST', body: JSON.stringify(body) });
+  },
+
+  postCausalCounterfactual(body: {
+    observed: Record<string, string>;
+    hypothetical: {
+      target: string;
+      intervention: { variable: string; fromState?: string; toState: string };
+      background?: Record<string, string>;
+    };
+  }) {
+    return request<{
+      baselineProbability: number;
+      interventionProbability: number;
+      delta: number;
+      confidenceInterval: [number, number];
+      method: 'cpt' | 'heuristic';
+      assumptions: string[];
+      evidence: Array<{ source: string; text: string }>;
+    }>('/causal/counterfactual', { method: 'POST', body: JSON.stringify(body) });
+  },
+
+  postCausalBackward(body: {
+    target: string;
+    desiredState: string;
+  }) {
+    return request<{
+      candidates: Array<{
+        variable: string;
+        effect: number;
+        confidence: number;
+      }>;
+    }>('/causal/backward', { method: 'POST', body: JSON.stringify(body) });
+  },
+
+  postCausalTimePulse(body: {
+    target: string;
+    intervention: { variable: string; fromState?: string; toState: string };
+    steps?: number;
+  }) {
+    return request<{
+      pulses: Array<{
+        step: number;
+        probability: number;
+        confidence: [number, number];
+      }>;
+    }>('/causal/time-pulse', { method: 'POST', body: JSON.stringify(body) });
+  },
+
+  getCausalEvidence(edgeId: number) {
+    return request<{
+      edge: {
+        id: number;
+        sourceSlug: string;
+        targetSlug: string;
+        relation: string;
+        lag: string;
+        weight: number;
+        conf: number;
+        evidence: string[];
+      };
+      evidenceSpans: Array<{
+        spanId: string;
+        source: string;
+        text: string;
+      }>;
+    }>(`/causal/evidence/${edgeId}`);
+  },
+
+  getCausalEvalCheck() {
+    return request<{
+      warnings: string[];
+      cycleNodes: string[];
+      isolatedNodes: string[];
+    }>('/causal/eval-check');
+  },
+
+  // Causal Model Versioning
+  saveCausalVersion(comment: string) {
+    return request<{
+      version_id: string;
+      comment: string;
+      edges_count: number;
+      cpts_count: number;
+      created_at: string;
+      is_active: boolean;
+    }>('/causal/version/save', { method: 'POST', body: JSON.stringify({ comment }) });
+  },
+
+  listCausalVersions() {
+    return request<{
+      versions: Array<{
+        version_id: string;
+        comment: string;
+        is_active: boolean;
+        created_at: string;
+      }>;
+    }>('/causal/version/list');
+  },
+
+  switchCausalVersion(versionId: string) {
+    return request<{
+      success: boolean;
+      version_id: string;
+      edges_count: number;
+      cpts_count: number;
+    }>('/causal/version/switch', { method: 'POST', body: JSON.stringify({ versionId }) });
+  },
+
+  compareCausalVersions(v1: string, v2: string) {
+    return request<{
+      added: Array<{
+        source_slug: string;
+        target_slug: string;
+        relation: string;
+        weight: number;
+        conf: number;
+        lag: string;
+      }>;
+      removed: Array<{
+        source_slug: string;
+        target_slug: string;
+        relation: string;
+        weight: number;
+        conf: number;
+        lag: string;
+      }>;
+      modified: Array<{
+        source: string;
+        target: string;
+        relation: string;
+        changes: Array<{ field: string; old: unknown; new: unknown }>;
+      }>;
+    }>('/causal/version/compare', { params: { v1, v2 } });
+  },
+
+  // Causal Alert API
+  createCausalAlert(body: { edgeId: number; threshold: { condition: string; value: number }; enabled: boolean }) {
+    return request<{
+      alert: {
+        id: number;
+        edge_id: number;
+        threshold: { condition: string; value: number };
+        enabled: boolean;
+        last_triggered_at: string | null;
+        created_at: string;
+      };
+    }>('/causal/alert/create', { method: 'POST', body: JSON.stringify(body) });
+  },
+
+  listCausalAlerts() {
+    return request<{
+      alerts: Array<{
+        id: number;
+        edge_id: number;
+        source_slug: string;
+        target_slug: string;
+        relation: string;
+        threshold: { condition: string; value: number };
+        enabled: boolean;
+        last_triggered_at: string | null;
+        created_at: string;
+      }>;
+    }>('/causal/alert/list');
+  },
+
+  updateCausalAlert(id: number, body: { threshold?: { condition: string; value: number }; enabled?: boolean }) {
+    return request<{
+      alert: {
+        id: number;
+        edge_id: number;
+        threshold: { condition: string; value: number };
+        enabled: boolean;
+        last_triggered_at: string | null;
+        created_at: string;
+      };
+    }>(`/causal/alert/${id}`, { method: 'PUT', body: JSON.stringify(body) });
+  },
+
+  deleteCausalAlert(id: number) {
+    return request<{ success: boolean }>(`/causal/alert/${id}`, { method: 'DELETE' });
+  },
+
+  checkCausalAlerts() {
+    return request<{
+      triggered: Array<{
+        alertId: number;
+        edgeId: number;
+        sourceSlug: string;
+        targetSlug: string;
+        message: string;
+      }>;
+    }>('/causal/alert/check', { method: 'POST' });
+  },
 };
 
 export default api;

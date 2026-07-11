@@ -11,6 +11,39 @@ import type { AskRequest, QueryParams } from '@shared/index';
 
 const app = new Hono();
 
+// ── 因果意图检测 ─────────────────────────────────────────────────────────────
+
+const CAUSAL_KEYWORDS = ['如果', '会怎样', '干预', '提高', '降低', '概率', '影响', 'what if', 'how would', 'cause', 'effect'];
+
+function detectCausalIntent(question: string): boolean {
+  return CAUSAL_KEYWORDS.some(kw => question.toLowerCase().includes(kw.toLowerCase()));
+}
+
+async function buildCausalContext(): Promise<string | undefined> {
+  try {
+    const pool = getPool();
+    const { rows: edges } = await pool.query(
+      'SELECT source_slug, target_slug, relation, weight, conf, lag FROM causal_edges ORDER BY id'
+    );
+    if (edges.length === 0) return undefined;
+
+    const lines: string[] = ['## 因果知识图谱'];
+    lines.push(`共 ${edges.length} 条因果边:`);
+    for (const edge of edges) {
+      const relLabel = (edge.relation || '').includes('causesIncrease') ? '正向因果' :
+        (edge.relation || '').includes('causesDecrease') ? '负向因果' :
+        (edge.relation || '').includes('inhibits') ? '抑制' :
+        (edge.relation || '').includes('feedbackLoop') ? '反馈回路' : edge.relation;
+      const lagStr = edge.lag ? ` (延迟: ${edge.lag})` : '';
+      const confStr = `置信度: ${((edge.conf || 0) * 100).toFixed(0)}%`;
+      lines.push(`- ${edge.source_slug} → ${edge.target_slug}: ${relLabel} (权重: ${edge.weight}) ${confStr}${lagStr}`);
+    }
+    return lines.join('\n');
+  } catch {
+    return undefined;
+  }
+}
+
 app.post('/api/ask', async (c) => {
   try {
     const body = await c.req.json().catch(() => ({}));
@@ -45,6 +78,14 @@ app.post('/api/ask', async (c) => {
         : undefined,
       enableTranslation
     };
+
+    // 因果意图检测: 如果问题包含因果关键词，附加因果图谱上下文
+    if (detectCausalIntent(trimmed)) {
+      const causalContext = await buildCausalContext();
+      if (causalContext) {
+        request.causalContext = causalContext;
+      }
+    }
 
     const response = await brainAPI.askQuestion(request);
     return c.json(response);

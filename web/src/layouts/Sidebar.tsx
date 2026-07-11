@@ -174,6 +174,7 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
   const navItems: NavItem[] = [
     { path: '/', icon: House, label: t('nav.home') },
     { path: '/graph', icon: Graph, label: t('nav.graph') },
+    { path: '/cognitive-map', icon: Brain, label: t('nav.cognitiveMap', '认知地图') },
     { path: '/review', icon: CheckCircle, label: t('nav.review'), badge: reviewCount > 0 ? String(reviewCount) : undefined, badgeColor: 'yellow' },
     { path: '/qa', icon: ChatsCircle, label: t('nav.qa') },
     { path: '/dashboard', icon: Gauge, label: t('nav.dashboard') },

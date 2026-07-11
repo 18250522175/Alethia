@@ -127,7 +127,7 @@ class BrainAPI {
       const gradeResult = await grade(request.question, retrievalResult);
       bestGrade = gradeResult;
 
-      const generationResult = await generate(request.question, retrievalResult, gradeResult);
+      const generationResult = await generate(request.question, retrievalResult, gradeResult, request.causalContext);
       finalAnswer = generationResult.answer;
       totalTokens += generationResult.tokensUsed;
       totalCost += generationResult.estimatedCost;

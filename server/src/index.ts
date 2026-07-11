@@ -12,6 +12,7 @@ import llmRoutes from './routes/llm';
 import settingsRoutes from './routes/settings';
 import healthRoutes from './routes/health';
 import brainapiRoutes from './routes/brainapi';
+import causalRoutes from './routes/causal';
 import { llmRouter } from './llm/router';
 import { budgetManager } from './evolution/budget';
 
@@ -126,6 +127,7 @@ app.route('/', llmRoutes);
 app.route('/', settingsRoutes);
 app.route('/', healthRoutes);
 app.route('/', brainapiRoutes);
+app.route('/', causalRoutes);
 
 app.onError((err, c) => {
   if (err instanceof HTTPException) {

@@ -25,7 +25,7 @@ export interface LanguageSettings {
   fallbackLanguage: string;
 }
 
-export type ModelTier = 'fact_extract' | 'whitelist_fix' | 'disambiguate' | 'nli_pre' | 'translate' | 'compress' | 'archive_summary' | 'ring_gen' | 'contradiction' | 'gap_analysis' | 'narrate' | 'qa_gen' | 'embed';
+export type ModelTier = 'fact_extract' | 'whitelist_fix' | 'disambiguate' | 'nli_pre' | 'translate' | 'compress' | 'archive_summary' | 'ring_gen' | 'contradiction' | 'gap_analysis' | 'narrate' | 'qa_gen' | 'embed' | 'nl_command';
 
 export interface ModelAssignment {
   [task: string]: { adapterId: string; model: string };
@@ -129,7 +129,8 @@ export const RECOMMENDED_MODEL_ASSIGNMENT: ModelAssignment = {
   gap_analysis: { adapterId: 'deepseek', model: 'deepseek-chat' },
   narrate: { adapterId: 'deepseek', model: 'deepseek-chat' },
   qa_gen: { adapterId: 'deepseek', model: 'deepseek-chat' },
-  embed: { adapterId: 'deepseek', model: 'text-embedding-v1' }
+  embed: { adapterId: 'deepseek', model: 'text-embedding-v1' },
+  nl_command: { adapterId: 'deepseek', model: 'deepseek-chat' }
 };
 
 export const defaultSettings: Settings = {
