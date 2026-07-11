@@ -1,5 +1,6 @@
 import { cleanText } from './clean';
 import { processImage } from './image';
+import logger from '../i18n/logger';
 
 export interface PdfResult {
   text: string;
@@ -26,7 +27,8 @@ export async function parsePdf(buffer: Buffer): Promise<PdfResult> {
     const moduleName = 'pdf-parse';
     const mod: any = await import(moduleName);
     pdfParse = mod.default || mod;
-  } catch {
+  } catch (err) {
+    logger.warn({ err }, 'pdf-parse 模块加载失败');
     throw new Error('pdf-parse 依赖缺失，无法解析 PDF');
   }
 
@@ -110,7 +112,8 @@ export async function parseDocx(buffer: Buffer): Promise<DocxResult> {
   let mammoth: any;
   try {
     mammoth = await import('mammoth');
-  } catch {
+  } catch (err) {
+    logger.warn({ err }, 'mammoth 模块加载失败');
     throw new Error('mammoth 依赖缺失，无法解析 DOCX');
   }
 
@@ -127,7 +130,8 @@ export async function parseXlsx(buffer: Buffer): Promise<XlsxResult> {
   let XLSX: any;
   try {
     XLSX = await import('xlsx');
-  } catch {
+  } catch (err) {
+    logger.warn({ err }, 'xlsx 模块加载失败');
     throw new Error('xlsx 依赖缺失，无法解析 XLSX');
   }
 
@@ -149,7 +153,8 @@ export async function parsePptx(buffer: Buffer): Promise<PptxResult> {
   try {
     const moduleName = 'pptxtojson';
     pptxtojson = await import(moduleName);
-  } catch {
+  } catch (err) {
+    logger.warn({ err }, 'pptxtojson 模块加载失败');
     throw new Error('pptxtojson 依赖缺失，无法解析 PPTX');
   }
 

@@ -37,3 +37,27 @@ export function parseJSONResponse<T>(content: string, fallback: T): T {
     return fallback;
   }
 }
+
+/**
+ * 为 Promise 添加超时控制。
+ * 如果 promise 在指定时间内未完成，则自动 reject。
+ */
+export function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      const err = new Error(`操作超时 (${label}): ${ms}ms`);
+      logger.warn({ label, timeoutMs: ms }, '操作超时');
+      reject(err);
+    }, ms);
+
+    promise
+      .then((result) => {
+        clearTimeout(timer);
+        resolve(result);
+      })
+      .catch((err) => {
+        clearTimeout(timer);
+        reject(err);
+      });
+  });
+}

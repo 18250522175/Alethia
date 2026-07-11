@@ -40,7 +40,8 @@ async function buildCausalContext(): Promise<string | undefined> {
       lines.push(`- ${edge.source_slug} → ${edge.target_slug}: ${relLabel} (权重: ${edge.weight}) ${confStr}${lagStr}`);
     }
     return lines.join('\n');
-  } catch {
+  } catch (err) {
+    loggerInstance.warn({ err }, '构建因果上下文失败');
     return undefined;
   }
 }
@@ -1443,7 +1444,8 @@ app.get('/api/notes', async (c) => {
           if (Array.isArray(frontmatterTags)) {
             tags = frontmatterTags.filter((t: unknown) => typeof t === 'string' && t.trim());
           }
-        } catch {
+        } catch (err) {
+          loggerInstance.warn({ err, file }, '解析笔记 frontmatter 失败');
           // skip files with invalid frontmatter
         }
         items.push({
@@ -1485,7 +1487,8 @@ app.get('/api/notes/tags', async (c) => {
               }
             }
           }
-        } catch {
+        } catch (err) {
+          loggerInstance.warn({ err, file }, '解析笔记标签失败');
           // skip files with invalid frontmatter
         }
       }
@@ -1517,7 +1520,8 @@ app.get('/api/notes/:path', async (c) => {
       if (Array.isArray(frontmatterTags)) {
         tags = frontmatterTags.filter((t: unknown) => typeof t === 'string' && t.trim());
       }
-    } catch {
+    } catch (err) {
+      loggerInstance.warn({ err, notePath }, '解析笔记内容失败');
       // skip invalid frontmatter
     }
     return c.json({ content, status: folder === 'ready-for-review' ? 'ready' : 'draft', updatedAt: stat.mtime.toISOString(), tags });

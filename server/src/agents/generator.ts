@@ -1,5 +1,5 @@
 import { llmRouter } from '../llm/router';
-import { loadPrompt } from './utils';
+import { loadPrompt, withTimeout } from './utils';
 import logger from '../i18n/logger';
 import type { LLMMessage, EvidenceSpan } from '@shared/index';
 import type { RetrievalResult } from './retriever';
@@ -28,11 +28,15 @@ export async function generate(
 
   try {
     const adapter = llmRouter.route('qa_gen');
-    const response = await adapter.chat({
-      messages,
-      temperature: 0.4,
-      maxTokens: 2000
-    });
+    const response = await withTimeout(
+      adapter.chat({
+        messages,
+        temperature: 0.4,
+        maxTokens: 2000
+      }),
+      5 * 60 * 1000,
+      'generate'
+    );
 
     return {
       answer: response.content,

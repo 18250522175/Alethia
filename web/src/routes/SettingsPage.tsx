@@ -980,9 +980,36 @@ function AdvancedSettings({ settings, onChange }: SettingsSectionProps) {
 function LLMConfigSettings({ settings, onChange }: SettingsSectionProps) {
   const { t } = useTranslation();
   const [showKeys, setShowKeys] = useState<Record<string, boolean>>({});
+  const [testingAdapter, setTestingAdapter] = useState<string | null>(null);
+  const [testResults, setTestResults] = useState<Record<string, { success: boolean; message: string }>>({});
 
   const toggleShowKey = (adapterId: string) => {
     setShowKeys(prev => ({ ...prev, [adapterId]: !prev[adapterId] }));
+  };
+
+  const handleTestConnection = async (adapterId: string) => {
+    const adapterConfig = settings.integration?.llmAdapters?.[adapterId] || {};
+    const apiKey = adapterConfig.apiKey || '';
+    const model = adapterConfig.defaultModel || '';
+
+    if (!apiKey.trim()) {
+      setTestResults(prev => ({ ...prev, [adapterId]: { success: false, message: '请先输入 API Key' } }));
+      return;
+    }
+
+    setTestingAdapter(adapterId);
+    try {
+      const result = await api.testLlmConnection(adapterId, apiKey, model);
+      if (result.success) {
+        setTestResults(prev => ({ ...prev, [adapterId]: { success: true, message: `连接成功 (${result.latency}ms)` } }));
+      } else {
+        setTestResults(prev => ({ ...prev, [adapterId]: { success: false, message: result.error || '连接失败' } }));
+      }
+    } catch (err: any) {
+      setTestResults(prev => ({ ...prev, [adapterId]: { success: false, message: err.message || '测试失败' } }));
+    } finally {
+      setTestingAdapter(null);
+    }
   };
 
   const adapterList: Array<{ id: string; name: string; defaultModel: string }> = [
@@ -1106,7 +1133,19 @@ function LLMConfigSettings({ settings, onChange }: SettingsSectionProps) {
                     >
                       {showKeys[adapter.id] ? '***' : 'abc'}
                     </button>
+                    <button
+                      onClick={() => handleTestConnection(adapter.id)}
+                      disabled={testingAdapter === adapter.id}
+                      className="btn btn-secondary px-2 text-xs whitespace-nowrap"
+                    >
+                      {testingAdapter === adapter.id ? '测试中...' : '测试连接'}
+                    </button>
                   </div>
+                  {testResults[adapter.id] && (
+                    <div className={`mt-1 text-xs ${testResults[adapter.id].success ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                      {testResults[adapter.id].message}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-medium text-slate-500">

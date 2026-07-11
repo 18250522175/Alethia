@@ -215,6 +215,13 @@ export const api = {
     });
   },
 
+  testLlmConnection(adapterId: string, apiKey: string, model: string) {
+    return request<{ success: boolean; latency?: number; error?: string }>('/llm/test-connection', {
+      method: 'POST',
+      body: JSON.stringify({ adapterId, apiKey, model })
+    });
+  },
+
   rebuildStruct() {
     return request<{
       pages: number;

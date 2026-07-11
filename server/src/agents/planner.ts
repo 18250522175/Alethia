@@ -1,5 +1,5 @@
 import { llmRouter } from '../llm/router';
-import { loadPrompt, parseJSONResponse } from './utils';
+import { loadPrompt, parseJSONResponse, withTimeout } from './utils';
 import logger from '../i18n/logger';
 import type { LLMMessage } from '@shared/index';
 
@@ -20,7 +20,11 @@ export async function plan(question: string): Promise<RetrievalPlan> {
 
   try {
     const adapter = llmRouter.route('qa_gen');
-    const response = await adapter.chat({ messages, jsonMode: true, temperature: 0.3 });
+    const response = await withTimeout(
+      adapter.chat({ messages, jsonMode: true, temperature: 0.3 }),
+      5 * 60 * 1000,
+      'plan'
+    );
 
     const plan = parseJSONResponse<RetrievalPlan>(response.content, fallbackPlan(question));
     logger.info({ plan }, '检索计划生成完成');

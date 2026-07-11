@@ -16,6 +16,9 @@ import causalRoutes from './routes/causal';
 import viewsRoutes from './routes/views';
 import { llmRouter } from './llm/router';
 import { budgetManager } from './evolution/budget';
+import { runHypergraphEvolution } from './evolution/hypergraph';
+import { runCausalDiscovery } from './causal/discovery';
+import { generateWeeklyReport } from './evolution/weekly';
 
 const VERSION = '5.0.0';
 
@@ -209,6 +212,36 @@ async function bootstrap() {
     port: port,
     hostname: '0.0.0.0'
   });
+
+  // 定期执行知识演化任务
+  const EVOLUTION_INTERVAL = 24 * 60 * 60 * 1000; // 24 小时
+  const WEEKLY_INTERVAL = 7 * 24 * 60 * 60 * 1000; // 7 天
+
+  const evolutionTimer = setInterval(async () => {
+    loggerInstance.info('开始执行超图演化任务...');
+    try {
+      await runHypergraphEvolution();
+      loggerInstance.info('超图演化任务完成');
+    } catch (err) {
+      loggerInstance.warn({ err }, '超图演化任务失败');
+    }
+    try {
+      await runCausalDiscovery();
+      loggerInstance.info('因果发现任务完成');
+    } catch (err) {
+      loggerInstance.warn({ err }, '因果发现任务失败');
+    }
+  }, EVOLUTION_INTERVAL);
+
+  const weeklyTimer = setInterval(async () => {
+    loggerInstance.info('开始生成周报...');
+    try {
+      await generateWeeklyReport();
+      loggerInstance.info('周报生成完成');
+    } catch (err) {
+      loggerInstance.warn({ err }, '周报生成失败');
+    }
+  }, WEEKLY_INTERVAL);
 
   // 优雅关闭处理
   let isShuttingDown = false;

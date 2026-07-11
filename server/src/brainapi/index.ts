@@ -202,7 +202,9 @@ class BrainAPI {
             entities.push({ slug: result.rows[0].slug, title: result.rows[0].title });
             seen.add(ctxSlug);
           }
-        } catch { }
+        } catch (err) {
+          logger.warn({ err }, '获取图谱上下文实体信息失败');
+        }
       }
     }
 
@@ -382,7 +384,8 @@ class BrainAPI {
         'SELECT * FROM pending_diffs WHERE resolved = false ORDER BY created_at DESC'
       );
       return result.rows;
-    } catch {
+    } catch (err) {
+      logger.warn({ err }, '获取待审核变更失败');
       return [];
     }
   }
@@ -395,7 +398,8 @@ class BrainAPI {
         getGraphEdges(1000)
       ]);
       return { nodes, edges };
-    } catch {
+    } catch (err) {
+      logger.warn({ err }, '获取图谱数据失败');
       return { nodes: [], edges: [] };
     }
   }
@@ -992,8 +996,8 @@ ${relationsBlock}
               score = similarity;
             }
           }
-        } catch {
-          // 评估失败时保持 null
+        } catch (err) {
+          logger.warn({ err, slug: row.slug }, '基准评估失败');
         }
 
         return {
@@ -1720,7 +1724,8 @@ ${relationsBlock}
             category: parsed.data.category || '其他'
           });
         }
-      } catch {
+      } catch (err) {
+        logger.warn({ err, file }, '解析片段 frontmatter 失败');
         continue;
       }
     }

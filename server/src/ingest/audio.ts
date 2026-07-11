@@ -31,7 +31,7 @@ function findWhisper(): string | null {
       if (p) return p;
     }
   } catch {
-    /* ignore */
+    /* Bun.which 不可用 */
   }
   try {
     const out = execSync('command -v whisper-cli 2>/dev/null || command -v whisper 2>/dev/null', {
@@ -39,7 +39,8 @@ function findWhisper(): string | null {
       stdio: ['ignore', 'pipe', 'ignore']
     }).trim();
     return out || null;
-  } catch {
+  } catch (err) {
+    logger.warn({ err }, 'whisper 可执行文件检测失败');
     return null;
   }
 }

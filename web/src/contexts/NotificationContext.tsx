@@ -58,7 +58,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       try {
         const result = await api.request<{ items: Notification[]; total: number }>('/notifications');
         return result.items || [];
-      } catch {
+      } catch (err) {
+        console.warn('获取通知列表失败', err);
         return [];
       }
     },
@@ -95,7 +96,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       if (!isNaN(numId)) {
         await api.markNotificationRead(numId);
       }
-    } catch {
+    } catch (err) {
+      console.warn('标记通知已读失败', err);
       // 忽略网络错误
     }
   }, []);
@@ -104,7 +106,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     setLocalNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
     try {
       await api.markAllNotificationsRead();
-    } catch {
+    } catch (err) {
+      console.warn('全部标为已读失败', err);
       // 忽略网络错误
     }
   }, []);
@@ -113,7 +116,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     setLocalNotifications([]);
     try {
       await api.clearAllNotifications();
-    } catch {
+    } catch (err) {
+      console.warn('清空通知失败', err);
       // 忽略网络错误
     }
   }, []);

@@ -56,7 +56,8 @@ async function runOcr(buffer: Buffer, _mime: string): Promise<string> {
     const lang = langData || 'chi_sim+eng';
     const result = await recognize(buffer, lang, { logger: () => {} });
     return (result?.data?.text || '').trim();
-  } catch {
+  } catch (err) {
+    logger.warn({ err }, 'OCR 语言检测失败，使用默认语言');
     const result = await recognize(buffer, 'chi_sim+eng', { logger: () => {} });
     return (result?.data?.text || '').trim();
   }
@@ -76,7 +77,8 @@ async function detectLanguage(buffer: Buffer): Promise<string | null> {
       return 'chi_sim+eng';
     }
     return 'eng';
-  } catch {
+  } catch (err) {
+    logger.warn({ err }, '图像语言检测失败，使用默认语言');
     return 'chi_sim+eng';
   }
 }
@@ -118,7 +120,7 @@ async function runVlm(buffer: Buffer, mime: string): Promise<string> {
     return (response?.content || '').trim();
   } finally {
     if (cleanup) {
-      try { cleanup(); } catch { /* ignore */ }
+      try { cleanup(); } catch (err) { logger.warn({ err }, 'VLM 临时文件清理失败'); }
     }
   }
 }
