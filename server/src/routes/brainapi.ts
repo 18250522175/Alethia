@@ -7,6 +7,7 @@ import { storage } from '../storage/markdown';
 import { syncEngine } from '../storage/sync';
 import { join } from 'path';
 import { existsSync, statSync, unlinkSync, mkdirSync, readFileSync, writeFileSync, readdirSync, renameSync } from 'fs';
+import matter from 'gray-matter';
 import type { AskRequest, QueryParams } from '@shared/index';
 
 const app = new Hono();
@@ -506,7 +507,7 @@ app.get('/api/pages', async (c) => {
   try {
     const pool = getPool();
     const result = await pool.query(
-      'SELECT slug, title, type, contexts, aliases, updated_at FROM pages ORDER BY updated_at DESC LIMIT 100'
+      `SELECT slug, COALESCE(NULLIF(title, ''), slug) AS title, type, contexts, aliases, updated_at FROM pages ORDER BY updated_at DESC LIMIT 100`
     );
     const pages = result.rows.map((r: any) => ({
       slug: r.slug,
@@ -751,7 +752,7 @@ app.get('/api/library-files', async (c) => {
   try {
     const pool = getPool();
     const result = await pool.query(
-      'SELECT hash, mime, original_name, size, status, ingested_at FROM library_files ORDER BY ingested_at DESC'
+      'SELECT hash, mime, original_name, size, status, ingested_at, tags FROM library_files ORDER BY ingested_at DESC'
     );
     const files = result.rows.map((r: any) => ({
       hash: r.hash,
@@ -759,11 +760,58 @@ app.get('/api/library-files', async (c) => {
       originalName: r.original_name,
       size: r.size,
       status: r.status,
-      ingestedAt: r.ingested_at
+      ingestedAt: r.ingested_at,
+      tags: r.tags || []
     }));
     return c.json({ items: files, total: files.length });
   } catch (err) {
     loggerInstance.error({ err }, '获取库文件列表失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+// Get all unique tags across library files
+app.get('/api/library-files/tags', async (c) => {
+  try {
+    const pool = getPool();
+    const result = await pool.query(
+      'SELECT DISTINCT unnest(tags) AS tag FROM library_files WHERE tags IS NOT NULL AND array_length(tags, 1) > 0 ORDER BY tag'
+    );
+    const tags = result.rows.map((r: any) => r.tag);
+    return c.json({ tags });
+  } catch (err) {
+    loggerInstance.error({ err }, '获取标签列表失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+// Update tags on a library file
+app.put('/api/library-files/:hash/tags', async (c) => {
+  try {
+    const hash = c.req.param('hash');
+    if (!/^[a-fA-F0-9]{8,128}$/.test(hash)) {
+      return c.json({ error: { code: 'VALIDATION_ERROR', message: getErrorMessage('VALIDATION_ERROR') } }, 400);
+    }
+    const body = await c.req.json().catch(() => ({}));
+    const { tags } = body;
+    if (!Array.isArray(tags)) {
+      return c.json({ error: { code: 'VALIDATION_ERROR', message: 'tags must be an array' } }, 400);
+    }
+    // Validate each tag is a string
+    for (const tag of tags) {
+      if (typeof tag !== 'string' || tag.trim().length === 0 || tag.length > 100) {
+        return c.json({ error: { code: 'VALIDATION_ERROR', message: 'Each tag must be a non-empty string (max 100 chars)' } }, 400);
+      }
+    }
+    const pool = getPool();
+    const result = await pool.query('SELECT hash FROM library_files WHERE hash = $1', [hash]);
+    if (result.rows.length === 0) {
+      return c.json({ error: { code: 'NOT_FOUND', message: getErrorMessage('NOT_FOUND') } }, 404);
+    }
+    await pool.query('UPDATE library_files SET tags = $1 WHERE hash = $2', [tags, hash]);
+    return c.json({ success: true, hash, tags });
+  } catch (err) {
+    loggerInstance.error({ err }, '更新文件标签失败');
     return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
   }
 });
@@ -1387,18 +1435,64 @@ app.get('/api/notes', async (c) => {
       for (const file of files) {
         const filePath = join(dirPath, file);
         const stat = statSync(filePath);
+        let tags: string[] = [];
+        try {
+          const raw = readFileSync(filePath, 'utf-8');
+          const parsed = matter(raw);
+          const frontmatterTags = parsed.data.tags;
+          if (Array.isArray(frontmatterTags)) {
+            tags = frontmatterTags.filter((t: unknown) => typeof t === 'string' && t.trim());
+          }
+        } catch {
+          // skip files with invalid frontmatter
+        }
         items.push({
           path: `${folder}/${file}`,
           name: file.replace('.md', ''),
           folder,
           status: folder === 'ready-for-review' ? 'ready' : 'draft',
-          updatedAt: stat.mtime.toISOString()
+          updatedAt: stat.mtime.toISOString(),
+          tags
         });
       }
     }
     return c.json({ items, total: items.length });
   } catch (err) {
     loggerInstance.error({ err }, '获取笔记列表失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+app.get('/api/notes/tags', async (c) => {
+  try {
+    ensureNotesDirs();
+    const allTags = new Set<string>();
+    const folders = ['inbox', 'drafts', 'ready-for-review'];
+    for (const folder of folders) {
+      const dirPath = join(NOTES_PATH, folder);
+      if (!existsSync(dirPath)) continue;
+      const files = readdirSync(dirPath).filter(f => f.endsWith('.md'));
+      for (const file of files) {
+        const filePath = join(dirPath, file);
+        try {
+          const raw = readFileSync(filePath, 'utf-8');
+          const parsed = matter(raw);
+          const tags = parsed.data.tags;
+          if (Array.isArray(tags)) {
+            for (const tag of tags) {
+              if (typeof tag === 'string' && tag.trim()) {
+                allTags.add(tag.trim());
+              }
+            }
+          }
+        } catch {
+          // skip files with invalid frontmatter
+        }
+      }
+    }
+    return c.json({ tags: Array.from(allTags).sort() });
+  } catch (err) {
+    loggerInstance.error({ err }, '获取笔记标签失败');
     return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
   }
 });
@@ -1416,7 +1510,17 @@ app.get('/api/notes/:path', async (c) => {
     const content = readFileSync(fullPath, 'utf-8');
     const stat = statSync(fullPath);
     const folder = notePath.split('/')[0];
-    return c.json({ content, status: folder === 'ready-for-review' ? 'ready' : 'draft', updatedAt: stat.mtime.toISOString() });
+    let tags: string[] = [];
+    try {
+      const parsed = matter(content);
+      const frontmatterTags = parsed.data.tags;
+      if (Array.isArray(frontmatterTags)) {
+        tags = frontmatterTags.filter((t: unknown) => typeof t === 'string' && t.trim());
+      }
+    } catch {
+      // skip invalid frontmatter
+    }
+    return c.json({ content, status: folder === 'ready-for-review' ? 'ready' : 'draft', updatedAt: stat.mtime.toISOString(), tags });
   } catch (err) {
     loggerInstance.error({ err }, '获取笔记内容失败');
     return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
@@ -1502,6 +1606,33 @@ app.put('/api/notes/:path/status', async (c) => {
     return c.json({ success: true });
   } catch (err) {
     loggerInstance.error({ err }, '更新笔记状态失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+app.put('/api/notes/:path/tags', async (c) => {
+  try {
+    const notePath = c.req.param('path');
+    if (notePath.includes('..')) {
+      return c.json({ error: { code: 'FORBIDDEN', message: 'Invalid path' } }, 403);
+    }
+    const body = await c.req.json().catch(() => ({}));
+    const { tags } = body;
+    if (!Array.isArray(tags)) {
+      return c.json({ error: { code: 'VALIDATION_ERROR', message: 'tags must be an array' } }, 400);
+    }
+    const fullPath = join(NOTES_PATH, notePath);
+    if (!existsSync(fullPath)) {
+      return c.json({ error: { code: 'NOT_FOUND', message: getErrorMessage('NOT_FOUND') } }, 404);
+    }
+    const raw = readFileSync(fullPath, 'utf-8');
+    const parsed = matter(raw);
+    parsed.data.tags = tags.filter((t: unknown) => typeof t === 'string' && t.trim());
+    const newContent = matter.stringify(parsed.content, parsed.data);
+    writeFileSync(fullPath, newContent, 'utf-8');
+    return c.json({ success: true, tags: parsed.data.tags });
+  } catch (err) {
+    loggerInstance.error({ err }, '更新笔记标签失败');
     return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
   }
 });

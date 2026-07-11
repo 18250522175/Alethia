@@ -1,9 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
-import { Brain, Spinner, Warning } from '@phosphor-icons/react';
+import { useNavigate } from 'react-router-dom';
+import { Brain, Graph, Spinner, Warning } from '@phosphor-icons/react';
 import api from '../lib/api';
 import CausalCanvas from '../components/CognitiveMap/CausalCanvas';
 
 export default function CognitiveMapPage() {
+  const navigate = useNavigate();
   const { data, isLoading, error } = useQuery({
     queryKey: ['causal-graph-meta'],
     queryFn: () => api.getCausalGraph(),
@@ -28,7 +30,7 @@ export default function CognitiveMapPage() {
       <header className="flex-shrink-0 border-b border-slate-200 bg-white px-6 py-3 dark:border-slate-700 dark:bg-slate-800">
         <div className="flex items-center gap-3">
           <Brain size={28} className="text-primary-500" />
-          <div>
+          <div className="flex-1">
             <h1 className="text-xl font-bold text-slate-900 dark:text-white">
               因果认知地图
             </h1>
@@ -45,6 +47,14 @@ export default function CognitiveMapPage() {
               )}
             </p>
           </div>
+          <button
+            onClick={() => navigate('/graph')}
+            className="btn btn-secondary gap-1.5 text-xs"
+            title="知识图谱"
+          >
+            <Graph size={14} />
+            知识图谱
+          </button>
         </div>
       </header>
 

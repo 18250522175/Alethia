@@ -16,7 +16,10 @@ import {
   Files,
   TrendUp,
   ChartLine,
-  ChartPie
+  ChartPie,
+  Compass,
+  CloudArrowUp,
+  ArrowSquareOut
 } from '@phosphor-icons/react';
 import {
   Chart as ChartJS,
@@ -461,6 +464,31 @@ export default function DashboardPage() {
             <Coins size={14} className="mr-1 inline" />
             {t('health.lastUpdated')}：{new Date(data.lastUpdated).toLocaleString('zh-CN')}
           </div>
+
+          {/* Quick Links */}
+          <section className="card p-5">
+            <h3 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-200">
+              {t('dashboard.quickLinks', '快捷导航')}
+            </h3>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => navigate('/cognitive-map')}
+                className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white p-3 text-left text-sm font-medium text-slate-700 transition-all hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:border-indigo-600 dark:hover:bg-indigo-900/30"
+              >
+                <Compass size={20} className="text-indigo-500" />
+                <span className="flex-1">认知地图</span>
+                <ArrowSquareOut size={14} className="text-slate-400" />
+              </button>
+              <button
+                onClick={() => navigate('/upload')}
+                className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white p-3 text-left text-sm font-medium text-slate-700 transition-all hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:border-sky-600 dark:hover:bg-sky-900/30"
+              >
+                <CloudArrowUp size={20} className="text-sky-500" />
+                <span className="flex-1">文件上传</span>
+                <ArrowSquareOut size={14} className="text-slate-400" />
+              </button>
+            </div>
+          </section>
 
           {rebuildMutation.data && (
             <div className="card border-green-300 bg-green-50 p-4 text-sm dark:border-green-700 dark:bg-green-900/20">

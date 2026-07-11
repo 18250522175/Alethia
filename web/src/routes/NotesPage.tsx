@@ -1,7 +1,8 @@
 import { useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Notebook, Plus, Folder, File, FloppyDisk, Trash, PaperPlaneTilt, CaretDown, CaretRight, Eye, Pencil } from '@phosphor-icons/react';
+import { useNavigate } from 'react-router-dom';
+import { Notebook, Plus, Folder, File, FloppyDisk, Trash, PaperPlaneTilt, CaretDown, CaretRight, Eye, Pencil, Article, Tag, X } from '@phosphor-icons/react';
 import api from '../lib/api';
 import MarkdownEditor from '../components/MarkdownEditor';
 import MarkdownRenderer from '../components/MarkdownRenderer';
@@ -10,17 +11,22 @@ interface NoteFile {
   path: string;
   name: string;
   folder: string;
-  status: 'draft' | 'ready' | 'archived';
+  status: string;
   updatedAt: string;
+  tags?: string[];
 }
 
 export default function NotesPage() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [selectedNote, setSelectedNote] = useState<string | null>(null);
   const [editContent, setEditContent] = useState('');
   const [isPreview, setIsPreview] = useState(false);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['inbox', 'drafts', 'ready-for-review']));
+  const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [tagInput, setTagInput] = useState('');
+  const [noteTags, setNoteTags] = useState<string[]>([]);
 
   const { data: notes, isLoading } = useQuery({
     queryKey: ['notes'],
@@ -34,6 +40,12 @@ export default function NotesPage() {
     enabled: !!selectedNote
   });
 
+  const { data: allTags } = useQuery({
+    queryKey: ['note-tags'],
+    queryFn: () => api.getNoteTags(),
+    staleTime: 60_000
+  });
+
   // Load content when note is selected
   const handleSelectNote = useCallback(async (path: string) => {
     setSelectedNote(path);
@@ -41,8 +53,10 @@ export default function NotesPage() {
     try {
       const data = await api.getNote(path);
       setEditContent(data.content);
+      setNoteTags((data as any).tags || []);
     } catch {
       setEditContent('');
+      setNoteTags([]);
     }
   }, []);
 
@@ -75,6 +89,14 @@ export default function NotesPage() {
     mutationFn: (path: string) => api.extractNote(path),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notes'] });
+    }
+  });
+
+  const updateTagsMutation = useMutation({
+    mutationFn: ({ path, tags }: { path: string; tags: string[] }) => api.updateNoteTags(path, tags),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notes'] });
+      queryClient.invalidateQueries({ queryKey: ['note-tags'] });
     }
   });
 
@@ -111,8 +133,39 @@ export default function NotesPage() {
     }
   };
 
+  const handleAddTag = () => {
+    if (!selectedNote || !tagInput.trim()) return;
+    const newTag = tagInput.trim();
+    if (noteTags.includes(newTag)) {
+      setTagInput('');
+      return;
+    }
+    const newTags = [...noteTags, newTag];
+    setNoteTags(newTags);
+    updateTagsMutation.mutate({ path: selectedNote, tags: newTags });
+    setTagInput('');
+  };
+
+  const handleRemoveTag = (tag: string) => {
+    if (!selectedNote) return;
+    const newTags = noteTags.filter(t => t !== tag);
+    setNoteTags(newTags);
+    updateTagsMutation.mutate({ path: selectedNote, tags: newTags });
+  };
+
+  const handleTagKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleAddTag();
+    }
+  };
+
   const notesByFolder = (folder: string) => {
-    return (notes?.items || []).filter((n: NoteFile) => n.folder === folder);
+    let items = (notes?.items || []).filter((n: NoteFile) => n.folder === folder);
+    if (selectedTag) {
+      items = items.filter((n: NoteFile) => (n.tags || []).includes(selectedTag));
+    }
+    return items;
   };
 
   return (
@@ -125,6 +178,43 @@ export default function NotesPage() {
             {t('notes.title', '笔记')}
           </h2>
         </div>
+        {/* Tag Filter */}
+        {allTags?.tags && allTags.tags.length > 0 && (
+          <div className="mb-3">
+            <div className="flex items-center gap-1 mb-1.5">
+              <Tag size={12} className="text-slate-400" />
+              <span className="text-[10px] font-medium text-slate-500 uppercase">{t('notes.tags', '标签')}</span>
+              {selectedTag && (
+                <button
+                  onClick={() => setSelectedTag(null)}
+                  className="ml-auto text-[10px] text-primary-500 hover:text-primary-700"
+                >
+                  {t('notes.clearFilter', '清除')}
+                </button>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {allTags.tags.map(tag => (
+                <button
+                  key={tag}
+                  onClick={() => setSelectedTag(selectedTag === tag ? null : tag)}
+                  className={`rounded px-1.5 py-0.5 text-[10px] transition-colors ${
+                    selectedTag === tag
+                      ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/40 dark:text-primary-400'
+                      : 'bg-slate-200 text-slate-600 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-400 dark:hover:bg-slate-600'
+                  }`}
+                >
+                  {tag}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {selectedTag && (
+          <div className="mb-2 text-[10px] text-slate-500">
+            {t('notes.filteringBy', '筛选')}: <span className="font-medium text-primary-600">{selectedTag}</span>
+          </div>
+        )}
         {folders.map(folder => (
           <div key={folder} className="mb-1">
             <button
@@ -148,14 +238,25 @@ export default function NotesPage() {
                   <button
                     key={note.path}
                     onClick={() => handleSelectNote(note.path)}
-                    className={`flex w-full items-center gap-1.5 rounded px-1.5 py-1 text-xs transition-colors ${
+                    className={`flex w-full flex-col rounded px-1.5 py-1 text-xs transition-colors ${
                       selectedNote === note.path
                         ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400'
                         : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-700'
                     }`}
                   >
-                    <File size={12} />
-                    <span className="flex-1 truncate text-left">{note.name}</span>
+                    <div className="flex items-center gap-1.5 w-full">
+                      <File size={12} />
+                      <span className="flex-1 truncate text-left">{note.name}</span>
+                    </div>
+                    {note.tags && note.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-0.5 ml-[18px] mt-0.5">
+                        {note.tags.map(tag => (
+                          <span key={tag} className="rounded bg-slate-200 px-1 text-[9px] text-slate-500 dark:bg-slate-700 dark:text-slate-400">
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </button>
                 ))}
                 {notesByFolder(folder).length === 0 && (
@@ -193,6 +294,17 @@ export default function NotesPage() {
                 <button onClick={handleExtract} disabled={extractMutation.isPending} className="btn btn-secondary text-xs py-1 px-2">
                   <PaperPlaneTilt size={14} className="mr-1" />
                   {t('notes.extract')}
+                </button>
+                <button
+                  onClick={() => {
+                    const slug = selectedNote.replace(/\.md$/, '').replace(/[^a-zA-Z0-9\u4e00-\u9fff_-]/g, '_');
+                    navigate(`/wiki/${slug}`);
+                  }}
+                  className="btn btn-secondary text-xs py-1 px-2"
+                  title={t('notes.convertToWiki', '转为 Wiki 条目')}
+                >
+                  <Article size={14} className="mr-1" />
+                  转为 Wiki 条目
                 </button>
                 <button onClick={handleDelete} className="btn btn-secondary text-xs py-1 px-2 text-red-500">
                   <Trash size={14} />
@@ -250,6 +362,39 @@ export default function NotesPage() {
               <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
                 {noteContent?.updatedAt ? new Date(noteContent.updatedAt).toLocaleString('zh-CN') : '-'}
               </p>
+            </div>
+            <div>
+              <label className="text-[10px] text-slate-500">{t('notes.tags', '标签')}</label>
+              <div className="flex flex-wrap gap-1 mt-1">
+                {noteTags.map(tag => (
+                  <span key={tag} className="inline-flex items-center gap-0.5 rounded bg-primary-100 px-1.5 py-0.5 text-[10px] text-primary-700 dark:bg-primary-900/30 dark:text-primary-400">
+                    {tag}
+                    <button
+                      onClick={() => handleRemoveTag(tag)}
+                      className="ml-0.5 rounded-full hover:bg-primary-200 dark:hover:bg-primary-800/50"
+                    >
+                      <X size={10} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+              <div className="flex items-center gap-1 mt-1.5">
+                <input
+                  type="text"
+                  value={tagInput}
+                  onChange={(e) => setTagInput(e.target.value)}
+                  onKeyDown={handleTagKeyDown}
+                  placeholder={t('notes.addTag', '添加标签...')}
+                  className="input text-xs py-1 px-1.5 w-full"
+                />
+                <button
+                  onClick={handleAddTag}
+                  disabled={!tagInput.trim()}
+                  className="btn btn-primary text-[10px] py-1 px-2"
+                >
+                  <Plus size={12} />
+                </button>
+              </div>
             </div>
           </div>
         </aside>

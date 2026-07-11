@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import cytoscape, { Core, ElementDefinition } from 'cytoscape';
-import { Spinner, Warning, Quotes } from '@phosphor-icons/react';
+import { Spinner, Warning, Quotes, X, PencilSimple, Check } from '@phosphor-icons/react';
 import api from '../../lib/api';
 import CausalToolbar, { LayoutType } from './CausalToolbar';
 import CausalNodeDetail from './CausalNodeDetail';
@@ -30,6 +30,18 @@ interface EdgeTooltip {
   evidenceSpanIds: string[];
   evidenceSpans: Array<{ spanId: string; source: string; text: string }>;
   loading: boolean;
+}
+
+interface HyperedgeContextMenu {
+  visible: boolean;
+  x: number;
+  y: number;
+  hyperedgeId: number;
+  type: string;
+  params: { weight?: number; conf?: number };
+  sourceSlugs: string[];
+  targetSlugs: string[];
+  editing: boolean;
 }
 
 interface CausalEdge {
@@ -155,6 +167,7 @@ export default function CausalCanvas() {
   const [triggeredEdgeIds, setTriggeredEdgeIds] = useState<Set<string>>(new Set());
   const [showVersionPanel, setShowVersionPanel] = useState(false);
   const [showViewManager, setShowViewManager] = useState(false);
+  const [highlightedCluster, setHighlightedCluster] = useState<string[] | null>(null);
   const [edgeTooltip, setEdgeTooltip] = useState<EdgeTooltip>({
     visible: false,
     x: 0,
@@ -169,6 +182,22 @@ export default function CausalCanvas() {
     evidenceSpans: [],
     loading: false,
   });
+  const [hyperedgeMenu, setHyperedgeMenu] = useState<HyperedgeContextMenu>({
+    visible: false,
+    x: 0,
+    y: 0,
+    hyperedgeId: 0,
+    type: '',
+    params: {},
+    sourceSlugs: [],
+    targetSlugs: [],
+    editing: false,
+  });
+  const [editWeight, setEditWeight] = useState('0.5');
+  const [editConf, setEditConf] = useState('0.5');
+  const [editType, setEditType] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
   const evidenceCacheRef = useRef<Map<number, Array<{ spanId: string; source: string; text: string }>>>(new Map());
 
   const {
@@ -557,8 +586,12 @@ export default function CausalCanvas() {
         {
           selector: '.highlighted',
           style: {
-            'border-width': 3,
-            'border-color': '#fbbf24',
+            'border-width': 4,
+            'border-color': '#f59e0b',
+            'border-opacity': 0.9,
+            'overlay-color': '#f59e0b',
+            'overlay-opacity': 0.25,
+            'overlay-padding': 6,
           },
         },
         {
@@ -573,6 +606,23 @@ export default function CausalCanvas() {
             'border-width': 3,
             'border-color': '#6366f1',
             'border-opacity': 1,
+          },
+        },
+        {
+          selector: '.hyperedge',
+          style: {
+            'line-color': '#a855f7',
+            'target-arrow-color': '#a855f7',
+            'width': 3.5,
+            'line-style': 'solid',
+            'curve-style': 'bezier',
+            'opacity': 0.85,
+            'target-arrow-shape': 'triangle',
+            'label': 'data(label)',
+            'font-size': 9,
+            'color': '#a855f7',
+            'text-background-color': '#ffffff',
+            'text-background-opacity': 0.7,
           },
         },
       ],
@@ -727,6 +777,7 @@ export default function CausalCanvas() {
         setContextMenu(prev => ({ ...prev, visible: false }));
         setSelectedNode(null);
         setSelectedNodeIds(new Set());
+        setHighlightedCluster(null);
         cy.elements().removeClass('highlighted dimmed');
       }
     });
@@ -788,7 +839,7 @@ export default function CausalCanvas() {
 
       // Fetch evidence details if available
       if (evidenceSpanIds.length > 0) {
-        const numericId = parseInt(edgeId, 10);
+        const numericId = parseInt(edgeId.replace(/^ce_/, ''), 10);
         if (!isNaN(numericId) && evidenceCacheRef.current.has(numericId)) {
           setEdgeTooltip(prev => ({
             ...prev,
@@ -829,6 +880,35 @@ export default function CausalCanvas() {
           return { ...prev, x: pos.x, y: pos.y };
         }
         return prev;
+      });
+    });
+
+    // Tap on hyperedge to show context menu
+    cy.on('tap', 'edge.hyperedge', (evt) => {
+      evt.originalEvent?.stopPropagation();
+      const edge = evt.target;
+      const edgeId = edge.data('id') as string;
+      const pos = evt.renderedPosition || { x: 0, y: 0 };
+
+      // Extract hyperedge ID from Cytoscape edge ID (format: he_{id}_{source}_{target})
+      const match = edgeId.match(/^he_(\d+)_/);
+      if (!match) return;
+      const hyperedgeId = parseInt(match[1], 10);
+
+      // Find the hyperedge data
+      const he = hypergraphData?.hyperedges?.find(h => h.id === hyperedgeId);
+      if (!he) return;
+
+      setHyperedgeMenu({
+        visible: true,
+        x: pos.x,
+        y: pos.y,
+        hyperedgeId: he.id,
+        type: he.type,
+        params: he.params || {},
+        sourceSlugs: he.source_slugs || [],
+        targetSlugs: he.target_slugs || [],
+        editing: false,
       });
     });
 
@@ -956,6 +1036,27 @@ export default function CausalCanvas() {
     });
   }, [triggeredEdgeIds]);
 
+  // Apply cluster highlighting
+  useEffect(() => {
+    const cy = cyInstanceRef.current;
+    if (!cy) return;
+
+    cy.elements().removeClass('highlighted dimmed');
+
+    if (highlightedCluster && highlightedCluster.length > 0) {
+      const clusterSet = new Set(highlightedCluster);
+      cy.nodes().forEach(node => {
+        const nodeId = node.data('id') as string;
+        if (clusterSet.has(nodeId)) {
+          node.addClass('highlighted');
+        } else {
+          node.addClass('dimmed');
+        }
+      });
+      cy.edges().addClass('dimmed');
+    }
+  }, [highlightedCluster]);
+
   const handleZoomIn = useCallback(() => {
     const cy = cyInstanceRef.current;
     if (!cy) return;
@@ -1047,6 +1148,48 @@ export default function CausalCanvas() {
     queryClient.invalidateQueries({ queryKey: ['views'] });
   }, [viewState.virtualNodes, layout, showKnowledgeEdges, showCausalEdges, showFeedbackLoops, showLowConfidence, queryClient]);
 
+  // Hyperedge edit/delete handlers
+  const handleHyperedgeEdit = useCallback(() => {
+    setEditType(hyperedgeMenu.type);
+    setEditWeight(String(hyperedgeMenu.params?.weight ?? 0.5));
+    setEditConf(String(hyperedgeMenu.params?.conf ?? 0.5));
+    setHyperedgeMenu(prev => ({ ...prev, editing: true }));
+  }, [hyperedgeMenu]);
+
+  const handleHyperedgeSave = useCallback(async () => {
+    setIsSavingEdit(true);
+    try {
+      await api.updateHyperedge(hyperedgeMenu.hyperedgeId, {
+        type: editType,
+        params: { weight: parseFloat(editWeight), conf: parseFloat(editConf) },
+      });
+      queryClient.invalidateQueries({ queryKey: ['hypergraph'] });
+      setHyperedgeMenu({ visible: false, x: 0, y: 0, hyperedgeId: 0, type: '', params: {}, sourceSlugs: [], targetSlugs: [], editing: false });
+    } catch (err: any) {
+      // Error handled in api layer
+    } finally {
+      setIsSavingEdit(false);
+    }
+  }, [hyperedgeMenu.hyperedgeId, editType, editWeight, editConf, queryClient]);
+
+  const handleHyperedgeDelete = useCallback(async () => {
+    if (!window.confirm('确定要删除此超边吗？删除后不可恢复。')) return;
+    setIsDeleting(true);
+    try {
+      await api.deleteHyperedge(hyperedgeMenu.hyperedgeId);
+      queryClient.invalidateQueries({ queryKey: ['hypergraph'] });
+      setHyperedgeMenu({ visible: false, x: 0, y: 0, hyperedgeId: 0, type: '', params: {}, sourceSlugs: [], targetSlugs: [], editing: false });
+    } catch (err: any) {
+      // Error handled in api layer
+    } finally {
+      setIsDeleting(false);
+    }
+  }, [hyperedgeMenu.hyperedgeId, queryClient]);
+
+  const closeHyperedgeMenu = useCallback(() => {
+    setHyperedgeMenu({ visible: false, x: 0, y: 0, hyperedgeId: 0, type: '', params: {}, sourceSlugs: [], targetSlugs: [], editing: false });
+  }, []);
+
   const handleSearch = useCallback((query: string) => {
     const cy = cyInstanceRef.current;
     if (!cy || !query.trim()) {
@@ -1110,9 +1253,16 @@ export default function CausalCanvas() {
     title: string;
     description: string;
     confidence: number;
+    moduleType?: string;
   }) => {
     const cy = cyInstanceRef.current;
     if (!cy) return;
+
+    // If suggestion has nodes and moduleType, treat it as cluster highlighting
+    if (suggestion.nodes && suggestion.nodes.length > 0 && suggestion.moduleType) {
+      setHighlightedCluster(suggestion.nodes);
+      return;
+    }
 
     switch (suggestion.action) {
       case 'pack':
@@ -1159,12 +1309,13 @@ export default function CausalCanvas() {
   useEffect(() => {
     const handleClickOutside = () => {
       setContextMenu(prev => ({ ...prev, visible: false }));
+      setHyperedgeMenu(prev => ({ ...prev, visible: false }));
     };
-    if (contextMenu.visible) {
+    if (contextMenu.visible || hyperedgeMenu.visible) {
       document.addEventListener('click', handleClickOutside);
     }
     return () => document.removeEventListener('click', handleClickOutside);
-  }, [contextMenu.visible]);
+  }, [contextMenu.visible, hyperedgeMenu.visible]);
 
   if (isLoading) {
     return (
@@ -1207,6 +1358,15 @@ export default function CausalCanvas() {
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
         />
+        {highlightedCluster && highlightedCluster.length > 0 && (
+          <button
+            onClick={() => setHighlightedCluster(null)}
+            className="mt-2 flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700 shadow-sm hover:bg-amber-100 transition-colors dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-400 dark:hover:bg-amber-900/50"
+          >
+            <X size={14} />
+            清除高亮 ({highlightedCluster.length} 个节点)
+          </button>
+        )}
         {nodeCount > 200 && (
           <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs text-amber-700 shadow-sm dark:border-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
             <Warning size={14} className="inline mr-1" />
@@ -1480,6 +1640,129 @@ export default function CausalCanvas() {
         onTogglePerspective={handleTogglePerspective}
         onExpandKnowledgeGraph={handleExpandKnowledgeGraph}
       />
+
+      {/* Hyperedge Context Menu */}
+      {hyperedgeMenu.visible && (
+        <div
+          className="absolute z-50 min-w-[220px] rounded-lg border border-purple-200 bg-white shadow-xl dark:border-purple-800 dark:bg-slate-800 animate-fade-in"
+          style={{
+            left: Math.max(0, Math.min(hyperedgeMenu.x, window.innerWidth - 240)),
+            top: Math.max(0, Math.min(hyperedgeMenu.y, window.innerHeight - 300)),
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between border-b border-purple-100 px-3 py-2 dark:border-purple-800">
+            <span className="text-xs font-semibold text-purple-700 dark:text-purple-300">
+              超边操作
+            </span>
+            <button
+              onClick={closeHyperedgeMenu}
+              className="rounded p-0.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+            >
+              <X size={14} />
+            </button>
+          </div>
+
+          {!hyperedgeMenu.editing ? (
+            <div className="px-3 py-2 space-y-2">
+              <div className="text-xs text-slate-600 dark:text-slate-300">
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-400">类型:</span>
+                  <span className="font-medium text-purple-600 dark:text-purple-400">{hyperedgeMenu.type}</span>
+                </div>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="text-slate-400">权重:</span>
+                  <span className="font-medium">{(hyperedgeMenu.params?.weight ?? 0.5).toFixed(1)}</span>
+                </div>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="text-slate-400">置信度:</span>
+                  <span className="font-medium">{((hyperedgeMenu.params?.conf ?? 0.5) * 100).toFixed(0)}%</span>
+                </div>
+                <div className="mt-1.5 text-xs text-slate-400">
+                  <div>源: {hyperedgeMenu.sourceSlugs.join(', ') || '—'}</div>
+                  <div>目标: {hyperedgeMenu.targetSlugs.join(', ') || '—'}</div>
+                </div>
+              </div>
+              <div className="flex gap-2 pt-1 border-t border-slate-100 dark:border-slate-700">
+                <button
+                  onClick={handleHyperedgeEdit}
+                  className="flex-1 flex items-center justify-center gap-1 rounded-md bg-purple-500 px-3 py-1.5 text-xs text-white hover:bg-purple-600 transition-colors"
+                >
+                  <PencilSimple size={12} />
+                  编辑超边
+                </button>
+                <button
+                  onClick={handleHyperedgeDelete}
+                  disabled={isDeleting}
+                  className="flex-1 flex items-center justify-center gap-1 rounded-md border border-red-300 px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 disabled:opacity-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-900/20 transition-colors"
+                >
+                  <X size={12} />
+                  {isDeleting ? '删除中...' : '删除超边'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="px-3 py-2 space-y-2">
+              <div className="space-y-1.5">
+                <label className="text-xs text-slate-500 dark:text-slate-400">关系类型</label>
+                <select
+                  value={editType}
+                  onChange={(e) => setEditType(e.target.value)}
+                  className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200"
+                >
+                  <option value=":jointlyCause">联合因果</option>
+                  <option value=":达成决议">达成决议</option>
+                  <option value=":causesIncrease">正向因果</option>
+                  <option value=":causesDecrease">负向因果</option>
+                  <option value=":inhibits">抑制</option>
+                  <option value=":feedbackLoop">反馈回路</option>
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs text-slate-500 dark:text-slate-400">权重</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="1"
+                  step="0.1"
+                  value={editWeight}
+                  onChange={(e) => setEditWeight(e.target.value)}
+                  className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs text-slate-500 dark:text-slate-400">置信度</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={editConf}
+                  onChange={(e) => setEditConf(e.target.value)}
+                  className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200"
+                />
+              </div>
+              <div className="flex gap-2 pt-1 border-t border-slate-100 dark:border-slate-700">
+                <button
+                  onClick={handleHyperedgeSave}
+                  disabled={isSavingEdit}
+                  className="flex-1 flex items-center justify-center gap-1 rounded-md bg-green-500 px-3 py-1.5 text-xs text-white hover:bg-green-600 disabled:opacity-50 transition-colors"
+                >
+                  <Check size={12} />
+                  {isSavingEdit ? '保存中...' : '保存'}
+                </button>
+                <button
+                  onClick={closeHyperedgeMenu}
+                  className="flex-1 flex items-center justify-center gap-1 rounded-md border border-slate-300 px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-400 dark:hover:bg-slate-700/60 transition-colors"
+                >
+                  <X size={12} />
+                  取消
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Perspective Mode Tooltip */}
       {perspectiveNode && (

@@ -39,6 +39,21 @@ let lastPrecomputedAt: number | null = null;
 let lastPrecomputedNodeCount = 0;
 let lastPrecomputedEdgeCount = 0;
 
+// 定期清理过期的因果推理缓存（每 30 分钟执行一次）
+setInterval(async () => {
+  try {
+    const pool = getPool();
+    const result = await pool.query(
+      'DELETE FROM causal_inference_cache WHERE expires_at < NOW()'
+    );
+    if (result.rowCount && result.rowCount > 0) {
+      logger.info({ deletedRows: result.rowCount }, '已清理过期的因果推理缓存');
+    }
+  } catch (err) {
+    logger.warn({ err }, '清理因果推理缓存失败');
+  }
+}, 30 * 60 * 1000);
+
 // GET /api/causal/graph — 返回完整因果图数据
 app.get('/api/causal/graph', async (c) => {
   const pool = getPool();
@@ -1376,6 +1391,88 @@ app.get('/api/hypergraph/subgraph', async (c) => {
     [slugs]
   );
   return c.json({ hyperedges, causalHyperedges, cpts });
+});
+
+// PUT /api/hyperedge/:id — 更新超边
+app.put('/api/hyperedge/:id', async (c) => {
+  try {
+    const id = parseInt(c.req.param('id'), 10);
+    if (isNaN(id)) {
+      return c.json({ error: { code: 'VALIDATION_ERROR', message: '无效的超边 ID' } }, 400);
+    }
+
+    const body = await c.req.json().catch(() => null);
+    if (!body) {
+      return c.json({ error: { code: 'VALIDATION_ERROR', message: '请求体为空' } }, 400);
+    }
+
+    const pool = getPool();
+    const { rows: existing } = await pool.query('SELECT * FROM hyperedges WHERE id = $1', [id]);
+    if (existing.length === 0) {
+      return c.json({ error: { code: 'NOT_FOUND', message: '超边不存在' } }, 404);
+    }
+
+    const updates: string[] = [];
+    const values: any[] = [];
+    let paramIdx = 1;
+
+    if (body.type !== undefined) {
+      updates.push(`type = $${paramIdx++}`);
+      values.push(body.type);
+    }
+    if (body.params !== undefined) {
+      updates.push(`params = $${paramIdx++}`);
+      values.push(JSON.stringify(body.params));
+    }
+    if (body.source_slugs !== undefined) {
+      updates.push(`source_slugs = $${paramIdx++}`);
+      values.push(body.source_slugs);
+    }
+    if (body.target_slugs !== undefined) {
+      updates.push(`target_slugs = $${paramIdx++}`);
+      values.push(body.target_slugs);
+    }
+
+    if (updates.length === 0) {
+      return c.json({ error: { code: 'VALIDATION_ERROR', message: '没有需要更新的字段' } }, 400);
+    }
+
+    updates.push(`updated_at = NOW()`);
+    values.push(id);
+
+    const { rows: updated } = await pool.query(
+      `UPDATE hyperedges SET ${updates.join(', ')} WHERE id = $${paramIdx} RETURNING *`,
+      values
+    );
+
+    return c.json({ hyperedge: updated[0] });
+  } catch (err) {
+    logger.error({ err }, '更新超边失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: '更新超边失败' } }, 500);
+  }
+});
+
+// DELETE /api/hyperedge/:id — 删除超边
+app.delete('/api/hyperedge/:id', async (c) => {
+  try {
+    const id = parseInt(c.req.param('id'), 10);
+    if (isNaN(id)) {
+      return c.json({ error: { code: 'VALIDATION_ERROR', message: '无效的超边 ID' } }, 400);
+    }
+
+    const pool = getPool();
+    const { rows: existing } = await pool.query('SELECT id FROM hyperedges WHERE id = $1', [id]);
+    if (existing.length === 0) {
+      return c.json({ error: { code: 'NOT_FOUND', message: '超边不存在' } }, 404);
+    }
+
+    // CASCADE will delete causal_hyperedges automatically
+    await pool.query('DELETE FROM hyperedges WHERE id = $1', [id]);
+    return c.json({ success: true });
+  } catch (err) {
+    logger.error({ err }, '删除超边失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: '删除超边失败' } }, 500);
+  }
 });
 
 // POST /api/causal/query — 综合因果推理

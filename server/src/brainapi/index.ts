@@ -1187,7 +1187,7 @@ ${relationsBlock}
     try {
       const pool = getPool();
       const fileResult = await pool.query(
-        'SELECT hash, mime, original_name, size, status, ingested_at FROM library_files WHERE hash = $1',
+        'SELECT hash, mime, original_name, size, status, ingested_at, tags FROM library_files WHERE hash = $1',
         [hash]
       );
 
@@ -1212,7 +1212,8 @@ ${relationsBlock}
           originalName: file.original_name,
           size: file.size,
           status: file.status,
-          ingestedAt: file.ingested_at
+          ingestedAt: file.ingested_at,
+          tags: file.tags || []
         },
         evidenceSpans: evidenceResult.rows.map((r: any) => ({
           spanId: r.span_id,

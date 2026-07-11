@@ -23,7 +23,8 @@ import {
   Crosshair,
   MapPin,
   Flag,
-  Path
+  Path,
+  Brain
 } from '@phosphor-icons/react';
 import api from '../lib/api';
 
@@ -620,6 +621,15 @@ export default function GraphFullPage() {
         >
           <FileCode size={14} />
           {t('graphFull.exportJson')}
+        </button>
+
+        <button
+          onClick={() => navigate('/cognitive-map')}
+          className="btn btn-secondary gap-1.5 text-xs"
+          title="认知地图"
+        >
+          <Brain size={14} />
+          认知地图
         </button>
 
         <div className="ml-auto flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400">

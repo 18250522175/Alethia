@@ -32,6 +32,10 @@ export default function UploadPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [files, setFiles] = useState<UploadFile[]>([]);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadStage, setUploadStage] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
+  const [batchCompleted, setBatchCompleted] = useState(false);
 
   const calculateSHA256 = async (file: File): Promise<string> => {
     const arrayBuffer = await file.arrayBuffer();
@@ -47,18 +51,85 @@ export default function UploadPage() {
     return File;
   };
 
-  const uploadFile = async (upload: UploadFile) => {
+  const uploadFile = async (upload: UploadFile): Promise<void> => {
     setFiles(prev => prev.map(f => f.id === upload.id ? { ...f, status: 'uploading' as const, progress: 10 } : f));
+
     try {
+      // Simulate upload progress: 0-20%
+      const uploadInterval = setInterval(() => {
+        setFiles(prev => prev.map(f =>
+          f.id === upload.id && f.status === 'uploading' && f.progress < 20
+            ? { ...f, progress: f.progress + 1 }
+            : f
+        ));
+      }, 100);
+
       const sha256 = await calculateSHA256(upload.file);
+      clearInterval(uploadInterval);
       setFiles(prev => prev.map(f => f.id === upload.id ? { ...f, sha256, progress: 30 } : f));
+
+      // Simulate processing: 20-80%
+      const processInterval = setInterval(() => {
+        setFiles(prev => prev.map(f =>
+          f.id === upload.id && f.status === 'uploading' && f.progress >= 30 && f.progress < 80
+            ? { ...f, progress: f.progress + 2 }
+            : f
+        ));
+      }, 150);
+
       await api.ingestFile(upload.file, sha256);
+      clearInterval(processInterval);
       setFiles(prev => prev.map(f => f.id === upload.id ? { ...f, status: 'done' as const, progress: 100 } : f));
       addNotification({ type: 'system', title: t('upload.success', '上传成功'), description: upload.file.name });
     } catch (err: any) {
       setFiles(prev => prev.map(f => f.id === upload.id ? { ...f, status: 'error' as const, error: err.message } : f));
       addNotification({ type: 'system', title: t('upload.failed', '上传失败'), description: upload.file.name });
     }
+  };
+
+  const startUploadAll = async () => {
+    const pending = files.filter(f => f.status === 'pending');
+    if (pending.length === 0) return;
+
+    setIsUploading(true);
+    setUploadStage('批量上传中...');
+    const total = pending.length;
+    let completed = 0;
+
+    const updateProgress = () => {
+      completed++;
+      setUploadProgress(Math.round((completed / total) * 100));
+      setUploadStage(`正在上传 (${completed}/${total})...`);
+    };
+
+    const queue = [...pending];
+    const active = new Set<Promise<void>>();
+
+    const runNext = async () => {
+      if (queue.length === 0) return;
+      const file = queue.shift()!;
+      const p = uploadFile(file).then(() => {
+        active.delete(p);
+        updateProgress();
+      });
+      active.add(p);
+      await p;
+      await runNext();
+    };
+
+    // Start initial batch of up to 2 concurrent uploads
+    const workers = [];
+    for (let i = 0; i < Math.min(2, queue.length); i++) {
+      workers.push(runNext());
+    }
+
+    await Promise.all(workers);
+
+    // All done
+    setIsUploading(false);
+    setUploadProgress(0);
+    setUploadStage('');
+    setBatchCompleted(true);
   };
 
   const addFiles = useCallback(async (newFiles: FileList | File[]) => {
@@ -84,11 +155,7 @@ export default function UploadPage() {
     }
 
     setFiles(prev => [...prev, ...newUploads]);
-
-    // Auto-start upload for each file
-    for (const upload of newUploads) {
-      uploadFile(upload);
-    }
+    setBatchCompleted(false);
   }, []);
 
   const removeFile = (id: string) => {
@@ -102,6 +169,7 @@ export default function UploadPage() {
   const clearAll = () => {
     files.forEach(f => { if (f.preview) URL.revokeObjectURL(f.preview); });
     setFiles([]);
+    setBatchCompleted(false);
   };
 
   const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); setIsDragging(true); };
@@ -130,11 +198,52 @@ export default function UploadPage() {
           </p>
         </div>
         {files.length > 0 && (
-          <button onClick={clearAll} className="btn btn-secondary text-sm">
-            {t('upload.clearAll', '清空列表')}
-          </button>
+          <div className="flex items-center gap-2">
+            {files.some(f => f.status === 'pending') && (
+              <button
+                onClick={startUploadAll}
+                disabled={isUploading}
+                className="btn btn-primary text-sm"
+              >
+                {t('upload.uploadAll', '全部上传')} ({files.filter(f => f.status === 'pending').length})
+              </button>
+            )}
+            <button
+              onClick={clearAll}
+              disabled={isUploading}
+              className="btn btn-secondary text-sm"
+            >
+              {t('upload.clearQueue', '清空队列')}
+            </button>
+          </div>
         )}
       </header>
+
+      {/* Global Upload Progress Bar */}
+      {isUploading && (
+        <div className="card p-4 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
+              {uploadStage}
+            </span>
+            <span className="text-sm font-semibold text-primary-600 dark:text-primary-400">
+              {uploadProgress}%
+            </span>
+          </div>
+          <div className="h-2 w-full rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-primary-500 transition-all duration-500 ease-out"
+              style={{ width: `${uploadProgress}%` }}
+            />
+          </div>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            {uploadProgress < 20 ? '正在将文件传输到服务器...' :
+             uploadProgress < 80 ? '服务器正在处理文件，提取知识...' :
+             uploadProgress < 100 ? '正在完成上传...' :
+             '处理完成'}
+          </p>
+        </div>
+      )}
 
       {/* Drop Zone */}
       <div
@@ -174,6 +283,7 @@ export default function UploadPage() {
           <div className="flex items-center justify-between text-sm text-slate-500">
             <span>{t('upload.fileCount', { count: files.length })}</span>
             <span className="flex gap-3">
+              {files.some(f => f.status === 'pending') && <span className="text-slate-400">{t('upload.pendingCount', { count: files.filter(f => f.status === 'pending').length })}</span>}
               {doneCount > 0 && <span className="text-green-500">{t('upload.doneCount', { count: doneCount })}</span>}
               {errorCount > 0 && <span className="text-red-500">{t('upload.errorCount', { count: errorCount })}</span>}
             </span>
@@ -214,12 +324,38 @@ export default function UploadPage() {
                   )}
                 </div>
                 {/* Remove */}
-                <button onClick={() => removeFile(upload.id)} className="rounded p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20">
+                <button
+                  onClick={() => removeFile(upload.id)}
+                  disabled={upload.status === 'uploading'}
+                  className="rounded px-2 py-1 text-xs text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-30 disabled:cursor-not-allowed"
+                  title={t('upload.remove', '移除')}
+                >
                   <X size={16} />
                 </button>
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Batch Upload Summary */}
+      {batchCompleted && files.length > 0 && !files.some(f => f.status === 'pending' || f.status === 'uploading') && (
+        <div className="card p-4 space-y-2 border-l-4 border-l-primary-500">
+          <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
+            {t('upload.batchComplete', '批量上传完成')}
+          </p>
+          <div className="flex gap-4 text-sm">
+            <span className="flex items-center gap-1 text-green-600">
+              <Check size={16} />
+              {t('upload.successCount', { count: doneCount })}
+            </span>
+            {errorCount > 0 && (
+              <span className="flex items-center gap-1 text-red-500">
+                <Warning size={16} />
+                {t('upload.failedCount', { count: errorCount })}
+              </span>
+            )}
+          </div>
         </div>
       )}
 

@@ -595,6 +595,7 @@ export const api = {
         size: number;
         status: string;
         ingestedAt: string;
+        tags: string[];
       };
       evidenceSpans: {
         spanId: string;
@@ -754,6 +755,7 @@ export const api = {
         size: number;
         status: string;
         ingestedAt: string;
+        tags: string[];
       }>;
       total: number;
     }>('/library-files');
@@ -761,6 +763,17 @@ export const api = {
 
   deleteLibraryFile(hash: string) {
     return request<{ success: boolean }>(`/library-files/${hash}`, { method: 'DELETE' });
+  },
+
+  updateLibraryFileTags(hash: string, tags: string[]) {
+    return request<{ success: boolean; hash: string; tags: string[] }>(`/library-files/${hash}/tags`, {
+      method: 'PUT',
+      body: JSON.stringify({ tags })
+    });
+  },
+
+  getLibraryFileTags() {
+    return request<{ tags: string[] }>('/library-files/tags');
   },
 
   getPages() {
@@ -869,6 +882,15 @@ export const api = {
       method: 'POST'
     });
   },
+  getNoteTags() {
+    return request<{ tags: string[] }>('/notes/tags');
+  },
+  updateNoteTags(path: string, tags: string[]) {
+    return request<{ success: boolean; tags: string[] }>(`/notes/${encodeURIComponent(path)}/tags`, {
+      method: 'PUT',
+      body: JSON.stringify({ tags })
+    });
+  },
 
   getPrompts() {
     return request<{ items: Array<{ name: string; title: string; description: string }> }>('/prompts');
@@ -896,6 +918,17 @@ export const api = {
       causalHyperedges: Array<any>;
       cpts: Array<any>;
     }>('/hypergraph');
+  },
+
+  updateHyperedge(id: number, body: { type?: string; params?: { weight?: number; conf?: number }; source_slugs?: string[]; target_slugs?: string[] }) {
+    return request<{ hyperedge: any }>(`/hyperedge/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(body)
+    });
+  },
+
+  deleteHyperedge(id: number) {
+    return request<{ success: boolean }>(`/hyperedge/${id}`, { method: 'DELETE' });
   },
 
   // Causal Cognitive Map
@@ -944,7 +977,7 @@ export const api = {
         conditions: Record<string, unknown>;
         probabilities: unknown;
       } | null;
-    }>(`/causal/nodes/${encodeURIComponent(slug)}`);
+    }>(`/causal/node/${encodeURIComponent(slug)}`);
   },
 
   postNlCommand(command: string, currentView: { nodes: string[]; selectedNodes: string[] }) {

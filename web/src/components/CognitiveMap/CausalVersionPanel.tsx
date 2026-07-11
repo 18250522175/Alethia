@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { X, Clock, Check, ArrowRight, FloppyDisk, ArrowsLeftRight, CheckCircle } from '@phosphor-icons/react';
+import { X, Clock, Check, ArrowRight, FloppyDisk, ArrowsLeftRight, CheckCircle, GitDiff } from '@phosphor-icons/react';
 import api from '../../lib/api';
 
 interface VersionItem {
@@ -37,6 +37,12 @@ export default function CausalVersionPanel({ onClose }: CausalVersionPanelProps)
   const [compareResult, setCompareResult] = useState<any>(null);
   const [compareLoading, setCompareLoading] = useState(false);
 
+  // Bottom version compare section state
+  const [bottomV1, setBottomV1] = useState('');
+  const [bottomV2, setBottomV2] = useState('');
+  const [bottomCompareResult, setBottomCompareResult] = useState<any>(null);
+  const [bottomCompareLoading, setBottomCompareLoading] = useState(false);
+
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['causal-versions'],
     queryFn: () => api.listCausalVersions(),
@@ -71,6 +77,19 @@ export default function CausalVersionPanel({ onClose }: CausalVersionPanelProps)
       setCompareResult(null);
     } finally {
       setCompareLoading(false);
+    }
+  };
+
+  const handleBottomCompare = async () => {
+    if (!bottomV1 || !bottomV2) return;
+    setBottomCompareLoading(true);
+    try {
+      const result = await api.compareCausalVersions(bottomV1, bottomV2);
+      setBottomCompareResult(result);
+    } catch {
+      setBottomCompareResult(null);
+    } finally {
+      setBottomCompareLoading(false);
     }
   };
 
@@ -345,6 +364,138 @@ export default function CausalVersionPanel({ onClose }: CausalVersionPanelProps)
           )}
         </div>
       )}
+
+      {/* Bottom Version Compare Section */}
+      <div className="border-t border-slate-200 px-4 py-3 dark:border-slate-700">
+        <div className="flex items-center gap-2 mb-2">
+          <GitDiff size={16} className="text-indigo-500" />
+          <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">版本对比</span>
+        </div>
+        <div className="flex items-center gap-2 mb-2">
+          <select
+            value={bottomV1}
+            onChange={e => setBottomV1(e.target.value)}
+            className="flex-1 rounded border border-slate-300 bg-slate-50 px-2 py-1.5 text-xs text-slate-700 focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-400 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200"
+          >
+            <option value="">选择版本 A...</option>
+            {versions.map((v: VersionItem) => (
+              <option key={v.version_id} value={v.version_id}>
+                {v.version_id.slice(0, 20)}... {v.is_active ? '(当前)' : ''}
+              </option>
+            ))}
+          </select>
+          <ArrowRight size={14} className="text-slate-400 shrink-0" />
+          <select
+            value={bottomV2}
+            onChange={e => setBottomV2(e.target.value)}
+            className="flex-1 rounded border border-slate-300 bg-slate-50 px-2 py-1.5 text-xs text-slate-700 focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-400 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200"
+          >
+            <option value="">选择版本 B...</option>
+            {versions.map((v: VersionItem) => (
+              <option key={v.version_id} value={v.version_id}>
+                {v.version_id.slice(0, 20)}... {v.is_active ? '(当前)' : ''}
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={handleBottomCompare}
+            disabled={bottomCompareLoading || !bottomV1 || !bottomV2}
+            className="shrink-0 flex items-center gap-1 rounded bg-indigo-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-600 disabled:opacity-50 transition-colors"
+          >
+            {bottomCompareLoading ? '对比中...' : '对比'}
+          </button>
+        </div>
+
+        {/* Bottom Compare Results */}
+        {bottomCompareResult && (
+          <div className="mt-3">
+            <div className="mb-2 text-xs font-semibold text-slate-700 dark:text-slate-200">对比结果</div>
+
+            {bottomCompareResult.added.length === 0 && bottomCompareResult.removed.length === 0 && bottomCompareResult.modified.length === 0 && (
+              <p className="text-xs text-slate-400">两个版本完全相同</p>
+            )}
+
+            {bottomCompareResult.added.length > 0 && (
+              <div className="mb-2">
+                <span className="text-xs font-medium text-green-600 dark:text-green-400">
+                  新增边 ({bottomCompareResult.added.length})
+                </span>
+                <div className="mt-1 space-y-1 max-h-32 overflow-y-auto">
+                  {bottomCompareResult.added.map((e: any, i: number) => (
+                    <div
+                      key={`btm-added-${i}`}
+                      className="rounded bg-green-50 px-2 py-1 text-xs text-green-800 dark:bg-green-900/20 dark:text-green-300"
+                    >
+                      {e.source_slug} → {e.target_slug} ({e.relation})
+                      {e.weight != null && (
+                        <span className="ml-1 text-green-600 dark:text-green-400">
+                          w:{Number(e.weight).toFixed(1)}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {bottomCompareResult.removed.length > 0 && (
+              <div className="mb-2">
+                <span className="text-xs font-medium text-red-600 dark:text-red-400">
+                  删除边 ({bottomCompareResult.removed.length})
+                </span>
+                <div className="mt-1 space-y-1 max-h-32 overflow-y-auto">
+                  {bottomCompareResult.removed.map((e: any, i: number) => (
+                    <div
+                      key={`btm-removed-${i}`}
+                      className="rounded bg-red-50 px-2 py-1 text-xs text-red-800 line-through dark:bg-red-900/20 dark:text-red-300"
+                    >
+                      {e.source_slug} → {e.target_slug} ({e.relation})
+                      {e.weight != null && (
+                        <span className="ml-1 text-red-600 dark:text-red-400">
+                          w:{Number(e.weight).toFixed(1)}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {bottomCompareResult.modified.length > 0 && (
+              <div>
+                <span className="text-xs font-medium text-amber-600 dark:text-amber-400">
+                  修改边 ({bottomCompareResult.modified.length})
+                </span>
+                <div className="mt-1 space-y-1 max-h-32 overflow-y-auto">
+                  {bottomCompareResult.modified.map((m: any, i: number) => (
+                    <div
+                      key={`btm-modified-${i}`}
+                      className="rounded bg-amber-50 px-2 py-1 text-xs dark:bg-amber-900/20"
+                    >
+                      <span className="text-amber-800 dark:text-amber-300">
+                        {m.source} → {m.target} ({m.relation})
+                      </span>
+                      <div className="mt-0.5 space-y-0.5">
+                        {m.changes.map((chg: any, j: number) => (
+                          <span
+                            key={j}
+                            className="block text-amber-700 dark:text-amber-400"
+                          >
+                            {chg.field}:{' '}
+                            <span className="text-red-500 line-through">{JSON.stringify(chg.old)}</span>
+                            {' → '}
+                            <span className="text-green-500">{JSON.stringify(chg.new)}</span>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

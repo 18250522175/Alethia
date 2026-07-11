@@ -12,7 +12,8 @@ import {
   Empty,
   Keyboard,
   ArrowDown,
-  ArrowUp
+  ArrowUp,
+  Compass
 } from '@phosphor-icons/react';
 import api from '../lib/api';
 import DiffCompare from '../components/DiffCompare';
@@ -386,6 +387,16 @@ function DiffCard({ diff, onApply, onReject, applying, rejecting, isActive, navi
           </p>
         </div>
       )}
+
+      <div className="mt-3 flex items-center gap-2">
+        <button
+          onClick={() => navigate('/cognitive-map')}
+          className="inline-flex items-center gap-1 rounded bg-indigo-50 px-2 py-1 text-xs font-medium text-indigo-600 transition-colors hover:bg-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-400 dark:hover:bg-indigo-900/50"
+        >
+          <Compass size={12} />
+          在认知地图中查看影响
+        </button>
+      </div>
 
       <div className="mt-4 flex items-center justify-between">
         <div className="text-xs text-slate-400">
