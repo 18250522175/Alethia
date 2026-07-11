@@ -24,6 +24,7 @@ export interface ParsedPage {
   evidence: ParsedEvidence[];
   causalEdges: ParsedCausalEdge[];
   causalCpt: ParsedCausalCPT | null;
+  hyperRelations: ParsedHyperEdge[];
 }
 
 export interface ParsedRelation {
@@ -60,6 +61,14 @@ export interface ParsedCausalEdge {
   evidence: string[];
 }
 
+export interface ParsedHyperEdge {
+  id: string;
+  sourceSlugs: string[];
+  targetSlugs: string[];
+  type: string;
+  params: Record<string, any>;
+}
+
 export interface ParsedCausalCPT {
   variableSlug: string;
   parentVariables: string[];
@@ -77,7 +86,8 @@ const SECTION_NAMES = [
   'Semantic Rings Archive',
   'Evidence',
   'Causal Model',
-  'Causal CPT'
+  'Causal CPT',
+  'Hyper Relations'
 ];
 
 export class CompiledTruthParser {
@@ -98,9 +108,14 @@ export class CompiledTruthParser {
     const openThreads = this.parseOpenThreads(sections['Open Threads'] || '');
     const evidence = this.parseEvidence(sections['Evidence'] || '');
     const semanticRings = this.parseSemanticRings(sections['Semantic Rings Archive'] || '');
-    const causalEdges = this.parseCausalEdges(this.getSectionByPrefix(sections, 'Causal Model'));
+    const causalResult = this.parseCausalEdges(this.getSectionByPrefix(sections, 'Causal Model'));
+    const causalEdges = causalResult.edges;
     const causalCptKey = Object.keys(sections).find(k => k.startsWith('Causal CPT')) || '';
     const causalCpt = this.parseCausalCPT(sections[causalCptKey] || '', causalCptKey);
+    const hyperRelations = [
+      ...this.parseHyperRelations(sections['Hyper Relations'] || ''),
+      ...causalResult.hyperEdges
+    ];
 
     return {
       slug,
@@ -124,7 +139,8 @@ export class CompiledTruthParser {
       semanticRings,
       evidence,
       causalEdges,
-      causalCpt
+      causalCpt,
+      hyperRelations
     };
   }
 
@@ -268,11 +284,98 @@ export class CompiledTruthParser {
     return '';
   }
 
-  private parseCausalEdges(text: string): ParsedCausalEdge[] {
+  private parseCausalEdges(text: string): { edges: ParsedCausalEdge[]; hyperEdges: ParsedHyperEdge[] } {
     const edges: ParsedCausalEdge[] = [];
+    const hyperEdges: ParsedHyperEdge[] = [];
     const lines = text.split('\n').filter(l => l.trim().startsWith('-'));
 
     for (const line of lines) {
+      // Try multi-source hyperedge regex first: supports [A], [B], [C] and optional HC1: prefix
+      const multiMatch = line.match(/^\s*-\s*(?:([A-Za-z]+[A-Za-z0-9]*)\s*:\s*)?\[([^\]]+(?:\],\s*\[[^\]]+)*)\]\s*--(:[a-zA-Z]+(?:\([^)]*\))?)-->\s*\[([^\]]+(?:\],\s*\[[^\]]+)*)\]\s*(?:\(([^)]*)\))?\s*$/);
+      if (multiMatch) {
+        const edgeId = multiMatch[1] || '';
+        const sourcesRaw = multiMatch[2].trim();
+        const relation = multiMatch[3].replace(/^:/, '');
+        const targetsRaw = multiMatch[4].trim();
+        const paramsStr = multiMatch[5] || '';
+
+        // Parse individual source/target names from comma-separated bracket format
+        const sourceNames = sourcesRaw.split(/\],\s*\[/).map(s => s.trim()).filter(Boolean);
+        const targetNames = targetsRaw.split(/\],\s*\[/).map(s => s.trim()).filter(Boolean);
+
+        // Parse params
+        let lag = '';
+        let weight = 0;
+        let conf = 0.5;
+        const evidence: string[] = [];
+        const params: Record<string, any> = {};
+
+        if (paramsStr) {
+          const parts = paramsStr.split(',').map(s => s.trim());
+          for (const part of parts) {
+            const kv = part.match(/^(\w+)\s*:\s*(.+)$/);
+            if (kv) {
+              const k = kv[1].trim();
+              const v = kv[2].trim();
+              switch (k) {
+                case 'lag':
+                  lag = v;
+                  params[k] = v;
+                  break;
+                case 'weight':
+                  weight = parseFloat(v) || 0;
+                  params[k] = weight;
+                  break;
+                case 'conf':
+                  conf = parseFloat(v) || 0.5;
+                  params[k] = conf;
+                  break;
+                case 'evidence':
+                  evidence.push(...v.split(',').map(s => s.trim()).filter(s => s.length > 0));
+                  params[k] = evidence;
+                  break;
+                default:
+                  params[k] = v;
+                  break;
+              }
+            }
+          }
+        }
+
+        const sourceSlugs = sourceNames.map(n => this.nameToSlug(n));
+        const targetSlugs = targetNames.map(n => this.nameToSlug(n));
+
+        // Create one ParsedCausalEdge per source-target pair
+        for (const sourceName of sourceNames) {
+          for (const targetName of targetNames) {
+            edges.push({
+              sourceSlug: this.nameToSlug(sourceName),
+              targetSlug: this.nameToSlug(targetName),
+              relation,
+              lag,
+              weight,
+              conf,
+              evidence
+            });
+          }
+        }
+
+        // If multiple sources, also create a ParsedHyperEdge
+        if (sourceNames.length > 1 || targetNames.length > 1) {
+          const hyperId = edgeId || `H${hyperEdges.length + 1}`;
+          hyperEdges.push({
+            id: hyperId,
+            sourceSlugs,
+            targetSlugs,
+            type: relation,
+            params: { ...params, conf, evidence }
+          });
+        }
+
+        continue;
+      }
+
+      // Fallback: original single-source regex
       const match = line.match(/^\s*-\s*\[([^\]]+)\]\s*--(:[a-zA-Z]+(?:\([^)]*\))?)-->\s*\[([^\]]+)\]\s*(?:\(([^)]*)\))?\s*$/);
       if (match) {
         const sourceName = match[1].trim();
@@ -325,7 +428,7 @@ export class CompiledTruthParser {
       }
     }
 
-    return edges;
+    return { edges, hyperEdges };
   }
 
   private parseCausalCPT(text: string, headingKey: string): ParsedCausalCPT | null {
@@ -390,6 +493,65 @@ export class CompiledTruthParser {
       states,
       table
     };
+  }
+
+  private parseHyperRelations(text: string): ParsedHyperEdge[] {
+    const hyperEdges: ParsedHyperEdge[] = [];
+    const lines = text.split('\n').filter(l => l.trim().startsWith('-'));
+
+    for (const line of lines) {
+      // Match format: - H1: [A], [B], [C] --:jointlyCause--> [D] (conf:0.9, evidence:span_12, context: 2026-07-09 会议)
+      const match = line.match(/^\s*-\s*(?:([A-Za-z]+[A-Za-z0-9]*)\s*:\s*)?\[([^\]]+(?:\],\s*\[[^\]]+)*)\]\s*--(:[a-zA-Z]+(?:\([^)]*\))?)-->\s*\[([^\]]+(?:\],\s*\[[^\]]+)*)\]\s*(?:\(([^)]*)\))?\s*$/);
+      if (!match) continue;
+
+      const edgeId = match[1] || '';
+      const sourcesRaw = match[2].trim();
+      const relation = match[3].replace(/^:/, '');
+      const targetsRaw = match[4].trim();
+      const paramsStr = match[5] || '';
+
+      const sourceNames = sourcesRaw.split(/\],\s*\[/).map(s => s.trim()).filter(Boolean);
+      const targetNames = targetsRaw.split(/\],\s*\[/).map(s => s.trim()).filter(Boolean);
+
+      const sourceSlugs = sourceNames.map(n => this.nameToSlug(n));
+      const targetSlugs = targetNames.map(n => this.nameToSlug(n));
+
+      const params: Record<string, any> = {};
+
+      if (paramsStr) {
+        // Parse params: conf:0.9, evidence:span_12, context: 2026-07-09 会议
+        const parts = paramsStr.split(/,(?![^(]*\))/).map(s => s.trim());
+        for (const part of parts) {
+          const kv = part.match(/^(\w+)\s*:\s*(.+)$/);
+          if (kv) {
+            const k = kv[1].trim();
+            const v = kv[2].trim();
+            switch (k) {
+              case 'conf':
+                params[k] = parseFloat(v) || 0.5;
+                break;
+              case 'evidence':
+                params[k] = v.split(',').map(s => s.trim()).filter(s => s.length > 0);
+                break;
+              default:
+                params[k] = v;
+                break;
+            }
+          }
+        }
+      }
+
+      const hyperId = edgeId || `H${hyperEdges.length + 1}`;
+      hyperEdges.push({
+        id: hyperId,
+        sourceSlugs,
+        targetSlugs,
+        type: relation,
+        params
+      });
+    }
+
+    return hyperEdges;
   }
 
   private nameToSlug(name: string): string {

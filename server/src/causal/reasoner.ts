@@ -15,6 +15,15 @@ export interface CausalGraph {
     lag: string;
     evidence?: string[];
   }>;
+  hyperedges?: Array<{
+    sources: string[];
+    targets: string[];
+    type: string;
+    weight: number;
+    conf: number;
+    lag: string;
+    evidence?: string[];
+  }>;
   cpts: Map<string, CausalCPT>;
 }
 
@@ -58,6 +67,15 @@ interface NetworkNode {
   children: string[];
   cpt: CausalCPT | null;
   states: string[];
+  hyperedgeInfo?: Array<{
+    sources: string[];
+    targets: string[];
+    type: string;
+    weight: number;
+    conf: number;
+    lag: string;
+    evidence?: string[];
+  }>;
 }
 
 // ── 辅助函数 ─────────────────────────────────────────────────────────────────
@@ -147,6 +165,55 @@ function buildNetwork(graph: CausalGraph): Map<string, NetworkNode> {
     const source = nodes.get(edge.source)!;
     target.parents.push(edge.source);
     source.children.push(edge.target);
+  }
+
+  // 处理超边: 对每个超边，将所有 sources 添加为所有 targets 的父节点
+  if (graph.hyperedges && graph.hyperedges.length > 0) {
+    for (const he of graph.hyperedges) {
+      // 确保所有 source 和 target 节点存在
+      for (const s of he.sources) {
+        if (!nodes.has(s)) {
+          nodes.set(s, {
+            slug: s,
+            parents: [],
+            children: [],
+            cpt: null,
+            states: ['low', 'high'],
+          });
+        }
+      }
+      for (const t of he.targets) {
+        if (!nodes.has(t)) {
+          nodes.set(t, {
+            slug: t,
+            parents: [],
+            children: [],
+            cpt: null,
+            states: ['low', 'high'],
+          });
+        }
+      }
+
+      // 将 sources 添加为 targets 的父节点，将 targets 添加为 sources 的子节点
+      for (const s of he.sources) {
+        const sourceNode = nodes.get(s)!;
+        for (const t of he.targets) {
+          const targetNode = nodes.get(t)!;
+          if (!targetNode.parents.includes(s)) {
+            targetNode.parents.push(s);
+          }
+          if (!sourceNode.children.includes(t)) {
+            sourceNode.children.push(t);
+          }
+
+          // 存储超边信息到目标节点
+          if (!targetNode.hyperedgeInfo) {
+            targetNode.hyperedgeInfo = [];
+          }
+          targetNode.hyperedgeInfo.push(he);
+        }
+      }
+    }
   }
 
   // 附加 CPT 数据
@@ -869,6 +936,620 @@ function computeConfidenceInterval(
   return [Math.max(0, 0.5 - halfWidth), Math.min(1, 0.5 + halfWidth)];
 }
 
+// ── 超图推理: doCalculusOnHypergraph ──────────────────────────────────────────
+
+export function doCalculusOnHypergraph(
+  graph: CausalGraph,
+  query: InterventionQuery,
+): CausalReasoningResult {
+  // 如果没有超边，回退到普通 doCalculus
+  if (!graph.hyperedges || graph.hyperedges.length === 0) {
+    return doCalculus(graph, query);
+  }
+
+  // 空图处理
+  if (!graph.edges || graph.edges.length === 0) {
+    return {
+      baselineProbability: 0.5,
+      interventionProbability: 0.5,
+      delta: 0,
+      confidenceInterval: [0.5, 0.5],
+      method: 'heuristic',
+      assumptions: ['因果图为空，无法进行推理'],
+      evidence: [],
+    };
+  }
+
+  const nodes = buildNetwork(graph);
+  const hasCPTs = graph.cpts && graph.cpts.size > 0;
+
+  // 网络规模判断
+  if (nodes.size > 10) {
+    return gibbsSampling(graph, query);
+  }
+
+  if (hasCPTs) {
+    const { probHigh, evidence } = variableEliminationWithHyperedges(graph, query);
+
+    const baselineQuery: InterventionQuery = {
+      ...query,
+      intervention: {
+        ...query.intervention,
+        toState: query.intervention.fromState,
+      },
+    };
+    const { probHigh: baselineProb } = variableEliminationWithHyperedges(graph, baselineQuery);
+
+    const delta = probHigh - baselineProb;
+    const ci = computeConfidenceInterval(graph, query);
+
+    return {
+      baselineProbability: baselineProb,
+      interventionProbability: probHigh,
+      delta,
+      confidenceInterval: ci,
+      method: 'cpt',
+      assumptions: [
+        '使用超图扩展的变量消除算法进行精确推理',
+        'CPT 数据来源于知识库提取',
+        '超边 (jointlyCause) 处理为联合因子',
+        '假设因果充分性（无未观测混杂因子）',
+      ],
+      evidence,
+    };
+  }
+
+  // 无 CPT: 使用超图启发式
+  const { probHigh, evidence } = hypergraphHeuristicEstimate(graph, query);
+
+  const baselineQuery: InterventionQuery = {
+    ...query,
+    intervention: {
+      ...query.intervention,
+      toState: query.intervention.fromState,
+    },
+  };
+  const { probHigh: baselineProb } = hypergraphHeuristicEstimate(graph, baselineQuery);
+
+  const delta = probHigh - baselineProb;
+  const ci = computeConfidenceInterval(graph, query);
+
+  return {
+    baselineProbability: baselineProb,
+    interventionProbability: probHigh,
+    delta,
+    confidenceInterval: ci,
+    method: 'heuristic',
+    assumptions: [
+      '无 CPT 数据，使用超图启发式权重传播',
+      '超边 (jointlyCause) 提供联合因果影响',
+      '假设边权重可靠反映因果强度',
+      '假设线性可加效应',
+      '假设因果充分性（无未观测混杂因子）',
+    ],
+    evidence,
+  };
+}
+
+// ── 超图变量消除 ──────────────────────────────────────────────────────────────
+
+function variableEliminationWithHyperedges(
+  graph: CausalGraph,
+  query: InterventionQuery,
+): { probHigh: number; evidence: Array<{ source: string; text: string }> } {
+  const nodes = buildNetwork(graph);
+  const targetNode = nodes.get(query.target);
+  if (!targetNode) {
+    return { probHigh: 0.5, evidence: [] };
+  }
+
+  // 收集所有相关变量
+  const relevantVars = new Set<string>();
+  const collectVars = (slug: string, visited: Set<string>) => {
+    if (visited.has(slug)) return;
+    visited.add(slug);
+    relevantVars.add(slug);
+    const node = nodes.get(slug);
+    if (node) {
+      for (const p of node.parents) collectVars(p, visited);
+      for (const c of node.children) collectVars(c, visited);
+    }
+  };
+  collectVars(query.target, new Set<string>());
+  collectVars(query.intervention.variable, new Set<string>());
+
+  // 构建因子列表
+  const factors: FactorTable[] = [];
+
+  for (const slug of relevantVars) {
+    const node = nodes.get(slug);
+    if (!node) continue;
+
+    if (slug === query.intervention.variable) {
+      // do-operator: 移除入边，固定为干预状态
+      continue;
+    }
+
+    if (node.cpt) {
+      factors.push(buildFactorFromCPT(node.cpt));
+    } else if (node.parents.length > 0) {
+      const relevantParents = node.parents.filter(p => relevantVars.has(p));
+
+      // 检查是否有超边覆盖该节点
+      if (node.hyperedgeInfo && node.hyperedgeInfo.length > 0) {
+        // 使用超边因子
+        factors.push(buildHyperedgeFactor(slug, relevantParents, node.hyperedgeInfo, graph.edges));
+      } else if (relevantParents.length > 0) {
+        factors.push(buildHeuristicFactor(slug, relevantParents, graph.edges));
+      }
+    }
+  }
+
+  // 如果没有因子，返回启发式估计
+  if (factors.length === 0) {
+    return hypergraphHeuristicEstimate(graph, query);
+  }
+
+  // 变量消除
+  const allFactorVars = new Set<string>();
+  for (const f of factors) {
+    for (const v of f.variables) allFactorVars.add(v);
+  }
+
+  const queryVars = new Set<string>([query.target]);
+  if (query.background) {
+    for (const v of Object.keys(query.background)) queryVars.add(v);
+  }
+
+  const eliminationOrder: string[] = [];
+  for (const v of allFactorVars) {
+    if (!queryVars.has(v)) {
+      eliminationOrder.push(v);
+    }
+  }
+
+  let currentFactors = factors;
+  for (const v of eliminationOrder) {
+    const relevantFactors = currentFactors.filter(f => f.variables.includes(v));
+    const otherFactors = currentFactors.filter(f => !f.variables.includes(v));
+
+    if (relevantFactors.length === 0) {
+      currentFactors = otherFactors;
+      continue;
+    }
+
+    let product = relevantFactors[0];
+    for (let i = 1; i < relevantFactors.length; i++) {
+      product = factorMultiply(product, relevantFactors[i]);
+    }
+
+    product = factorSumOut(product, v);
+    currentFactors = [...otherFactors, product];
+  }
+
+  let finalFactor: FactorTable = currentFactors[0] || { variables: [], rows: new Map() };
+  for (let i = 1; i < currentFactors.length; i++) {
+    finalFactor = factorMultiply(finalFactor, currentFactors[i]);
+  }
+  finalFactor = factorNormalize(finalFactor);
+
+  let probHigh = 0.5;
+  const interventionState = query.intervention.toState;
+
+  for (const [key, val] of finalFactor.rows) {
+    const map = parseKey(key);
+    const targetState = map[query.target];
+    const ivState = map[query.intervention.variable];
+
+    if (ivState && ivState !== interventionState) continue;
+
+    if (query.background) {
+      let match = true;
+      for (const [bgVar, bgState] of Object.entries(query.background)) {
+        if (map[bgVar] && map[bgVar] !== bgState) {
+          match = false;
+          break;
+        }
+      }
+      if (!match) continue;
+    }
+
+    if (targetState === 'high') {
+      probHigh = val;
+      break;
+    }
+  }
+
+  const evidence = collectEvidence(graph, query);
+
+  return { probHigh, evidence };
+}
+
+// ── 超边因子构建 ──────────────────────────────────────────────────────────────
+
+function buildHyperedgeFactor(
+  targetSlug: string,
+  parentSlugs: string[],
+  hyperedgeInfos: NetworkNode['hyperedgeInfo'],
+  edges: CausalGraph['edges'],
+): FactorTable {
+  const rows = new Map<string, number>();
+  const states = ['low', 'high'];
+
+  if (!hyperedgeInfos || hyperedgeInfos.length === 0) {
+    return buildHeuristicFactor(targetSlug, parentSlugs, edges);
+  }
+
+  const generateCombinations = (
+    remaining: string[],
+    current: Record<string, string>,
+  ): void => {
+    if (remaining.length === 0) {
+      let weightedSum = 0;
+      let totalWeight = 0;
+
+      // 检查是否有超边覆盖所有父节点
+      const matchingHyperedges = hyperedgeInfos.filter(he =>
+        he.sources.every(s => parentSlugs.includes(s)) &&
+        he.targets.includes(targetSlug),
+      );
+
+      if (matchingHyperedges.length > 0) {
+        // 使用超边的联合影响
+        for (const he of matchingHyperedges) {
+          const sign = he.type === 'jointlyCause'
+            ? 1
+            : relationSign(he.type);
+          // 联合效应: 所有 source 的状态乘积
+          let jointEffect = 1;
+          for (const s of he.sources) {
+            const parentState = current[s] || 'low';
+            jointEffect *= parentState === 'high' ? 1 : -1;
+          }
+          weightedSum += sign * jointEffect * he.weight * he.conf;
+          totalWeight += Math.abs(he.weight * he.conf);
+        }
+      } else {
+        // 回退到普通二元边
+        for (const p of parentSlugs) {
+          const parentEdges = edges.filter(e => e.source === p && e.target === targetSlug);
+          for (const edge of parentEdges) {
+            const sign = relationSign(edge.relation);
+            const parentState = current[p] || 'low';
+            const parentEffect = parentState === 'high' ? 1 : -1;
+            weightedSum += sign * parentEffect * edge.weight * edge.conf;
+            totalWeight += Math.abs(edge.weight * edge.conf);
+          }
+        }
+      }
+
+      const logit = totalWeight > 0 ? weightedSum / totalWeight : 0;
+      const probHigh = 1 / (1 + Math.exp(-logit * 2));
+
+      const parts = parentSlugs.map(p => `${p}=${current[p] || 'low'}`).join('|');
+      rows.set(`${parts}|${targetSlug}=high`, probHigh);
+      rows.set(`${parts}|${targetSlug}=low`, 1 - probHigh);
+      return;
+    }
+    const [head, ...tail] = remaining;
+    for (const state of states) {
+      generateCombinations(tail, { ...current, [head]: state });
+    }
+  };
+
+  generateCombinations(parentSlugs, {});
+  return {
+    variables: [...parentSlugs, targetSlug],
+    rows,
+  };
+}
+
+// ── 超图启发式估计 ────────────────────────────────────────────────────────────
+
+function hypergraphHeuristicEstimate(
+  graph: CausalGraph,
+  query: InterventionQuery,
+): { probHigh: number; evidence: Array<{ source: string; text: string }> } {
+  const nodes = buildNetwork(graph);
+  const targetNode = nodes.get(query.target);
+  const ivNode = nodes.get(query.intervention.variable);
+
+  if (!targetNode) {
+    return { probHigh: 0.5, evidence: [] };
+  }
+
+  // 找干预变量到目标变量的路径
+  const paths = findAllPaths(nodes, query.intervention.variable, query.target, 5);
+
+  // 计算每条路径的影响
+  let totalEffect = 0;
+  let totalWeight = 0;
+
+  for (const path of paths) {
+    let pathEffect = 1;
+    let pathWeight = 1;
+    for (let i = 0; i < path.length - 1; i++) {
+      const edge = graph.edges.find(
+        e => e.source === path[i] && e.target === path[i + 1],
+      );
+      if (edge) {
+        pathEffect *= relationSign(edge.relation);
+        pathWeight *= edge.weight * edge.conf;
+      }
+    }
+    totalEffect += pathEffect * pathWeight;
+    totalWeight += Math.abs(pathWeight);
+  }
+
+  // 额外考虑超边的影响
+  if (targetNode.hyperedgeInfo && targetNode.hyperedgeInfo.length > 0) {
+    const matchingHyperedges = targetNode.hyperedgeInfo.filter(
+      he => he.sources.includes(query.intervention.variable),
+    );
+    for (const he of matchingHyperedges) {
+      const sign = he.type === 'jointlyCause' ? 1 : relationSign(he.type);
+      totalEffect += sign * he.weight * he.conf;
+      totalWeight += Math.abs(he.weight * he.conf);
+    }
+  }
+
+  // 基线概率 (基于父节点估计，包括超边)
+  let baselineProb = 0.5;
+  if (targetNode.parents.length > 0) {
+    let parentSum = 0;
+    let parentWeight = 0;
+
+    for (const parentSlug of targetNode.parents) {
+      const edges = graph.edges.filter(e => e.source === parentSlug && e.target === query.target);
+      for (const edge of edges) {
+        const sign = relationSign(edge.relation);
+        parentSum += sign * edge.weight * edge.conf;
+        parentWeight += Math.abs(edge.weight * edge.conf);
+      }
+    }
+
+    // 超边贡献
+    if (targetNode.hyperedgeInfo) {
+      for (const he of targetNode.hyperedgeInfo) {
+        const sign = he.type === 'jointlyCause' ? 1 : relationSign(he.type);
+        parentSum += sign * he.weight * he.conf;
+        parentWeight += Math.abs(he.weight * he.conf);
+      }
+    }
+
+    if (parentWeight > 0) {
+      const logit = parentSum / parentWeight;
+      baselineProb = 1 / (1 + Math.exp(-logit * 2));
+    }
+  }
+
+  // 干预后概率
+  const effectMagnitude = totalWeight > 0 ? totalEffect / totalWeight : 0;
+  const logitBase = Math.log(baselineProb / (1 - baselineProb));
+  const logitIntervention = logitBase + effectMagnitude * 2;
+  const probHigh = 1 / (1 + Math.exp(-logitIntervention));
+
+  const evidence = collectEvidence(graph, query);
+
+  return { probHigh: Math.max(0.01, Math.min(0.99, probHigh)), evidence };
+}
+
+// ── 超图: 联合因果推理 ────────────────────────────────────────────────────────
+
+export function jointCausalInference(
+  graph: CausalGraph,
+  jointIntervention: {
+    target: string;
+    interventions: Array<{ variable: string; toState: string }>;
+    desiredState?: string;
+  },
+): CausalReasoningResult {
+  const desiredState = jointIntervention.desiredState || 'high';
+
+  // 空图处理
+  if (!graph.edges || graph.edges.length === 0) {
+    return {
+      baselineProbability: 0.5,
+      interventionProbability: 0.5,
+      delta: 0,
+      confidenceInterval: [0.5, 0.5],
+      method: 'heuristic',
+      assumptions: ['因果图为空，无法进行推理'],
+      evidence: [],
+    };
+  }
+
+  const nodes = buildNetwork(graph);
+  const targetNode = nodes.get(jointIntervention.target);
+  if (!targetNode) {
+    return {
+      baselineProbability: 0.5,
+      interventionProbability: 0.5,
+      delta: 0,
+      confidenceInterval: [0.5, 0.5],
+      method: 'heuristic',
+      assumptions: ['目标节点不存在于因果图中'],
+      evidence: [],
+    };
+  }
+
+  const hasCPTs = graph.cpts && graph.cpts.size > 0;
+
+  // 基线概率: 无干预时 P(target=desiredState)
+  let baselineProb = 0.5;
+
+  if (hasCPTs) {
+    // 使用变量消除计算基线
+    const baselineQuery: InterventionQuery = {
+      target: jointIntervention.target,
+      intervention: {
+        variable: jointIntervention.interventions[0]?.variable || jointIntervention.target,
+        fromState: 'low',
+        toState: 'low',
+      },
+    };
+    const { probHigh } = variableEliminationWithHyperedges(graph, baselineQuery);
+    baselineProb = probHigh;
+  } else {
+    // 启发式基线
+    if (targetNode.parents.length > 0) {
+      let parentSum = 0;
+      let parentWeight = 0;
+
+      for (const parentSlug of targetNode.parents) {
+        const edges = graph.edges.filter(e => e.source === parentSlug && e.target === jointIntervention.target);
+        for (const edge of edges) {
+          const sign = relationSign(edge.relation);
+          parentSum += sign * edge.weight * edge.conf;
+          parentWeight += Math.abs(edge.weight * edge.conf);
+        }
+      }
+
+      // 超边贡献
+      if (targetNode.hyperedgeInfo) {
+        for (const he of targetNode.hyperedgeInfo) {
+          const sign = he.type === 'jointlyCause' ? 1 : relationSign(he.type);
+          parentSum += sign * he.weight * he.conf;
+          parentWeight += Math.abs(he.weight * he.conf);
+        }
+      }
+
+      if (parentWeight > 0) {
+        const logit = parentSum / parentWeight;
+        baselineProb = 1 / (1 + Math.exp(-logit * 2));
+      }
+    }
+  }
+
+  // 干预后概率: P(target=desiredState | do(interventions))
+  let interventionProb = 0.5;
+  const interventionVars = new Set(jointIntervention.interventions.map(i => i.variable));
+
+  // 检查是否有超边连接干预变量和目标
+  let hyperedgeMatched = false;
+  if (targetNode.hyperedgeInfo && targetNode.hyperedgeInfo.length > 0) {
+    const matchingHe = targetNode.hyperedgeInfo.find(he =>
+      he.sources.every(s => interventionVars.has(s)) &&
+      he.targets.includes(jointIntervention.target),
+    );
+    if (matchingHe) {
+      hyperedgeMatched = true;
+      // 使用超边的权重和置信度计算联合影响
+      const sign = matchingHe.type === 'jointlyCause' ? 1 : relationSign(matchingHe.type);
+      const effect = sign * matchingHe.weight * matchingHe.conf;
+      const logitBase = Math.log(baselineProb / (1 - baselineProb));
+      const logitIntervention = logitBase + effect * 2;
+      interventionProb = 1 / (1 + Math.exp(-logitIntervention));
+    }
+  }
+
+  if (!hyperedgeMatched) {
+    // 没有超边匹配: 累积每个干预的独立影响
+    let totalEffect = 0;
+    let totalWeight = 0;
+
+    for (const iv of jointIntervention.interventions) {
+      const paths = findAllPaths(nodes, iv.variable, jointIntervention.target, 5);
+
+      for (const path of paths) {
+        let pathEffect = 1;
+        let pathWeight = 1;
+        for (let i = 0; i < path.length - 1; i++) {
+          const edge = graph.edges.find(
+            e => e.source === path[i] && e.target === path[i + 1],
+          );
+          if (edge) {
+            pathEffect *= relationSign(edge.relation);
+            pathWeight *= edge.weight * edge.conf;
+          }
+        }
+        totalEffect += pathEffect * pathWeight;
+        totalWeight += Math.abs(pathWeight);
+      }
+
+      // 超边贡献
+      if (targetNode.hyperedgeInfo) {
+        for (const he of targetNode.hyperedgeInfo) {
+          if (he.sources.includes(iv.variable)) {
+            const sign = he.type === 'jointlyCause' ? 1 : relationSign(he.type);
+            totalEffect += sign * he.weight * he.conf;
+            totalWeight += Math.abs(he.weight * he.conf);
+          }
+        }
+      }
+    }
+
+    if (totalWeight > 0) {
+      const effectMagnitude = totalEffect / totalWeight;
+      const logitBase = Math.log(baselineProb / (1 - baselineProb));
+      const logitIntervention = logitBase + effectMagnitude * 2;
+      interventionProb = 1 / (1 + Math.exp(-logitIntervention));
+    }
+  }
+
+  interventionProb = Math.max(0.01, Math.min(0.99, interventionProb));
+  const delta = interventionProb - baselineProb;
+
+  // 置信区间
+  let avgConf = 0.5;
+  const allConfs: number[] = [];
+  for (const iv of jointIntervention.interventions) {
+    const paths = findAllPaths(nodes, iv.variable, jointIntervention.target, 5);
+    for (const path of paths) {
+      for (let i = 0; i < path.length - 1; i++) {
+        const edge = graph.edges.find(
+          e => e.source === path[i] && e.target === path[i + 1],
+        );
+        if (edge) allConfs.push(edge.conf);
+      }
+    }
+  }
+  if (targetNode.hyperedgeInfo) {
+    for (const he of targetNode.hyperedgeInfo) {
+      if (he.sources.some(s => interventionVars.has(s))) {
+        allConfs.push(he.conf);
+      }
+    }
+  }
+  if (allConfs.length > 0) {
+    avgConf = allConfs.reduce((a, b) => a + b, 0) / allConfs.length;
+  }
+  const halfWidth = (1 - avgConf) * 0.2 + 0.02;
+  const ci: [number, number] = [
+    Math.max(0, interventionProb - halfWidth),
+    Math.min(1, interventionProb + halfWidth),
+  ];
+
+  // 收集证据
+  const evidence: Array<{ source: string; text: string }> = [];
+  for (const iv of jointIntervention.interventions) {
+    const ivQuery: InterventionQuery = {
+      target: jointIntervention.target,
+      intervention: {
+        variable: iv.variable,
+        fromState: 'low',
+        toState: iv.toState,
+      },
+    };
+    evidence.push(...collectEvidence(graph, ivQuery));
+  }
+
+  return {
+    baselineProbability: baselineProb,
+    interventionProbability: interventionProb,
+    delta,
+    confidenceInterval: ci,
+    method: hasCPTs ? 'cpt' : 'heuristic',
+    assumptions: [
+      `联合干预: ${jointIntervention.interventions.map(i => `${i.variable}=${i.toState}`).join(', ')}`,
+      hyperedgeMatched ? '使用超边 (jointlyCause) 进行联合推理' : '使用独立路径累积效应',
+      '应用 do-operator 到所有干预变量',
+      '假设因果充分性',
+    ],
+    evidence,
+  };
+}
+
 // ── 9d: 时间脉冲响应 ─────────────────────────────────────────────────────────
 
 export function timePulseResponse(
@@ -1191,6 +1872,15 @@ export function buildGraphFromDB(
     conditions: Record<string, unknown>;
     probabilities: Record<string, unknown>;
   }>,
+  hyperedges?: Array<{
+    sources: string[];
+    targets: string[];
+    type: string;
+    weight: number;
+    conf: number;
+    lag: string;
+    evidence?: string[];
+  }>,
 ): CausalGraph {
   const cptMap = new Map<string, CausalCPT>();
 
@@ -1240,6 +1930,15 @@ export function buildGraphFromDB(
       lag: e.lag || '',
       evidence: e.evidence,
     })),
+    hyperedges: hyperedges && hyperedges.length > 0 ? hyperedges.map(he => ({
+      sources: he.sources,
+      targets: he.targets,
+      type: he.type,
+      weight: he.weight,
+      conf: he.conf,
+      lag: he.lag || '',
+      evidence: he.evidence,
+    })) : undefined,
     cpts: cptMap,
   };
 }
@@ -1248,6 +1947,8 @@ export function buildGraphFromDB(
 
 export default {
   doCalculus,
+  doCalculusOnHypergraph,
+  jointCausalInference,
   gibbsSampling,
   timePulseResponse,
   counterfactualInference,

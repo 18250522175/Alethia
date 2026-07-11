@@ -883,6 +883,21 @@ export const api = {
     });
   },
 
+  // Hypergraph API
+  getHypergraph() {
+    return request<{
+      hyperedges: Array<{
+        id: number;
+        source_slugs: string[];
+        target_slugs: string[];
+        type: string;
+        params: any;
+      }>;
+      causalHyperedges: Array<any>;
+      cpts: Array<any>;
+    }>('/hypergraph');
+  },
+
   // Causal Cognitive Map
   getCausalGraph() {
     return request<{
@@ -1172,6 +1187,61 @@ export const api = {
         message: string;
       }>;
     }>('/causal/alert/check', { method: 'POST' });
+  },
+
+  // Views API
+  saveView(viewId: string, userLabel: string, snapshot: any) {
+    return request<{ viewId: string; message: string }>('/views/save', {
+      method: 'POST',
+      body: JSON.stringify({ viewId, userLabel, snapshot })
+    });
+  },
+
+  listViews() {
+    return request<{
+      views: Array<{
+        view_id: string;
+        user_label: string;
+        created_at: string;
+        updated_at: string;
+        node_count: number;
+      }>;
+    }>('/views/list');
+  },
+
+  loadView(viewId: string) {
+    return request<{
+      viewId: string;
+      userLabel: string;
+      snapshot: any;
+      createdAt: string;
+      updatedAt: string;
+    }>(`/views/${encodeURIComponent(viewId)}`);
+  },
+
+  deleteView(viewId: string) {
+    return request<{ message: string }>(`/views/${encodeURIComponent(viewId)}`, {
+      method: 'DELETE'
+    });
+  },
+
+  suggestViews() {
+    return request<{
+      suggestions: Array<{
+        type: string;
+        title: string;
+        description: string;
+        nodes: string[];
+        action: string;
+      }>;
+    }>('/views/suggest', { method: 'POST' });
+  },
+
+  solidifyView(viewId: string, hyperNodeId: string) {
+    return request<{ diff: any; message: string }>('/views/solidify', {
+      method: 'POST',
+      body: JSON.stringify({ viewId, hyperNodeId }),
+    });
   },
 };
 

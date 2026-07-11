@@ -8,7 +8,7 @@ export interface DreamReport {
   budgetAllowed: boolean;
   phases: {
     budgetCheck: { allowed: boolean; reason?: string };
-    communityDetect: { skipped: boolean };
+    communityDetect: { skipped: boolean; clusters?: number; ghosts?: number; diffs?: number };
     nliPre: { skipped: boolean };
     forgetDecay: { ok: boolean; decayed: number };
     lint: { ok: boolean };
@@ -28,9 +28,9 @@ const FORGET_DECAY_CONFIDENCE = 0.3;
 /**
  * Dream Cycle 编排器（Task 6.1）
  *
- * 执行完整的六阶段夜间任务。当前已实现：预算检查、forget_decay、lint、幽灵清理。
- * community_detect、NLI 预检、topic_cluster、gap_analysis、enrich_external、Diff、
- * 年轮 等阶段暂时跳过（仅记录日志）。
+ * 执行完整的六阶段夜间任务。当前已实现：预算检查、community_detect（超图聚类+Ghost检测）、
+ * forget_decay、lint、幽灵清理。
+ * NLI 预检、topic_cluster、gap_analysis、enrich_external、Diff、年轮 等阶段暂时跳过（仅记录日志）。
  */
 export async function runDreamCycle(): Promise<DreamReport> {
   const start = Date.now();
@@ -42,7 +42,7 @@ export async function runDreamCycle(): Promise<DreamReport> {
     budgetAllowed: false,
     phases: {
       budgetCheck: { allowed: false },
-      communityDetect: { skipped: true },
+      communityDetect: { skipped: true, clusters: 0, ghosts: 0, diffs: 0 },
       nliPre: { skipped: true },
       forgetDecay: { ok: false, decayed: 0 },
       lint: { ok: false },
@@ -73,8 +73,30 @@ export async function runDreamCycle(): Promise<DreamReport> {
   }
   logger.info('阶段 1 预算检查通过');
 
-  // 阶段 2：community_detect（跳过）
-  logger.info('阶段 2 community_detect 跳过（暂未实现）');
+  // 阶段 2：community_detect（超图聚类 + Ghost Hyperedge 检测）
+  try {
+    const hgSpecifier = './hypergraph';
+    const hgModule: any = await import(hgSpecifier);
+    if (typeof hgModule.runHypergraphEvolution === 'function') {
+      const result = await hgModule.runHypergraphEvolution();
+      report.phases.communityDetect = {
+        skipped: false,
+        clusters: result.clusters?.length ?? 0,
+        ghosts: result.ghosts?.length ?? 0,
+        diffs: result.diffs?.length ?? 0,
+      };
+      logger.info(
+        { clusters: result.clusters?.length, ghosts: result.ghosts?.length, diffs: result.diffs?.length },
+        '阶段 2 community_detect 完成（超图聚类 + Ghost 检测）'
+      );
+    } else {
+      logger.warn('hypergraph 模块未导出 runHypergraphEvolution，跳过 community_detect');
+    }
+  } catch (err) {
+    report.phases.communityDetect = { skipped: true, clusters: 0, ghosts: 0, diffs: 0 };
+    errors.push(`community_detect 失败: ${(err as Error).message}`);
+    logger.warn({ err }, '阶段 2 community_detect 执行失败');
+  }
 
   // 阶段 3：NLI 预检（跳过）
   logger.info('阶段 3 NLI 预检跳过（暂未实现）');

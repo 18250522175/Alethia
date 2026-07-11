@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import cytoscape, { Core, ElementDefinition } from 'cytoscape';
-import { Spinner, Warning, Quotes, ArrowRight, X } from '@phosphor-icons/react';
+import { Spinner, Warning, Quotes } from '@phosphor-icons/react';
 import api from '../../lib/api';
 import CausalToolbar, { LayoutType } from './CausalToolbar';
 import CausalNodeDetail from './CausalNodeDetail';
@@ -10,6 +10,8 @@ import CausalReasoningPanel from './CausalReasoningPanel';
 import CausalSuggestions from './CausalSuggestions';
 import CausalAlertPanel from './CausalAlertPanel';
 import CausalVersionPanel from './CausalVersionPanel';
+import IntentBar from './IntentBar';
+import ViewManager from './ViewManager';
 import {
   useVirtualNodes,
   usePerspectiveMode,
@@ -53,6 +55,18 @@ interface CausalGraphData {
   cpts: CPT[];
 }
 
+interface HypergraphData {
+  hyperedges: Array<{
+    id: number;
+    source_slugs: string[];
+    target_slugs: string[];
+    type: string;
+    params: { weight?: number; conf?: number };
+  }>;
+  causalHyperedges: Array<any>;
+  cpts: Array<any>;
+}
+
 function getNodeStatusColor(conf: number): string {
   if (conf >= 0.7) return '#22c55e';
   if (conf >= 0.3) return '#f97316';
@@ -67,6 +81,8 @@ function getEdgeStyle(relation: string): {
   if (relation.includes('causesDecrease')) return { color: '#ef4444', style: 'solid' };
   if (relation.includes('inhibits')) return { color: '#f97316', style: 'solid' };
   if (relation.includes('feedbackLoop')) return { color: '#3b82f6', style: 'dashed' };
+  if (relation.includes('jointlyCause')) return { color: '#a855f7', style: 'solid' };
+  if (relation.includes('达成决议')) return { color: '#06b6d4', style: 'dashed' };
   return { color: '#94a3b8', style: 'solid' };
 }
 
@@ -76,6 +92,8 @@ function getRelationLabel(relation: string): string {
     ':causesDecrease': '负向因果',
     ':inhibits': '抑制',
     ':feedbackLoop': '反馈回路',
+    ':jointlyCause': '联合因果',
+    ':达成决议': '达成决议',
   };
   return map[relation] || relation;
 }
@@ -114,6 +132,7 @@ export default function CausalCanvas() {
   const [showAlertPanel, setShowAlertPanel] = useState(false);
   const [triggeredEdgeIds, setTriggeredEdgeIds] = useState<Set<string>>(new Set());
   const [showVersionPanel, setShowVersionPanel] = useState(false);
+  const [showViewManager, setShowViewManager] = useState(false);
   const [edgeTooltip, setEdgeTooltip] = useState<EdgeTooltip>({
     visible: false,
     x: 0,
@@ -149,9 +168,17 @@ export default function CausalCanvas() {
     handleMouseMove,
   } = usePerspectiveMode();
 
+  const queryClient = useQueryClient();
+
   const { data, isLoading, error } = useQuery<CausalGraphData>({
     queryKey: ['causal-graph'],
     queryFn: () => api.getCausalGraph(),
+    staleTime: 60_000,
+  });
+
+  const { data: hypergraphData } = useQuery<HypergraphData>({
+    queryKey: ['hypergraph'],
+    queryFn: () => api.getHypergraph(),
     staleTime: 60_000,
   });
 
@@ -194,17 +221,36 @@ export default function CausalCanvas() {
 
     const visibleNodeIds = new Set(getVisibleNodes(Array.from(nodeMap.keys())));
 
+    // Also add hyperedge source/target slugs to the visible set
+    const hyperNodeSlugs = new Set<string>();
+    if (hypergraphData?.hyperedges) {
+      for (const he of hypergraphData.hyperedges) {
+        for (const s of he.source_slugs) { hyperNodeSlugs.add(s); visibleNodeIds.add(s); }
+        for (const t of he.target_slugs) { hyperNodeSlugs.add(t); visibleNodeIds.add(t); }
+      }
+    }
+
     const nodeElements: ElementDefinition[] = [];
     for (const slug of visibleNodeIds) {
       const info = nodeMap.get(slug);
-      if (!info) continue;
-      nodeElements.push({
-        data: {
-          id: slug,
-          label: slug,
-          conf: info.conf,
-        },
-      });
+      if (info) {
+        nodeElements.push({
+          data: {
+            id: slug,
+            label: slug,
+            conf: info.conf,
+          },
+        });
+      } else if (hyperNodeSlugs.has(slug)) {
+        // Node only exists in hyperedges, no regular edges
+        nodeElements.push({
+          data: {
+            id: slug,
+            label: slug,
+            conf: 0.5,
+          },
+        });
+      }
     }
 
     // Add virtual nodes
@@ -263,8 +309,31 @@ export default function CausalCanvas() {
       });
     }
 
+    // Process hyperedges into Cytoscape edge elements
+    if (hypergraphData?.hyperedges) {
+      for (const he of hypergraphData.hyperedges) {
+        for (const source of (he.source_slugs || [])) {
+          for (const target of (he.target_slugs || [])) {
+            edgeElements.push({
+              data: {
+                id: `he_${he.id}_${source}_${target}`,
+                source,
+                target,
+                label: he.type,
+                type: he.type,
+                weight: he.params?.weight || 0.5,
+                conf: he.params?.conf || 0.5,
+                evidence: [],
+              },
+              classes: 'hyperedge',
+            });
+          }
+        }
+      }
+    }
+
     return [...nodeElements, ...edgeElements];
-  }, [data, nodeMap, viewState, getVisibleNodes, getVirtualNodeByChildId, isNodeHidden]);
+  }, [data, hypergraphData, nodeMap, viewState, getVisibleNodes, getVirtualNodeByChildId, isNodeHidden]);
 
   const nodeCount = useMemo(() => {
     if (!data) return 0;
@@ -273,22 +342,20 @@ export default function CausalCanvas() {
       slugs.add(edge.source_slug);
       slugs.add(edge.target_slug);
     }
-    return slugs.size;
-  }, [data]);
-
-  const edgeCount = data?.edges.length || 0;
-
-  const [nlCommand, setNlCommand] = useState('');
-  const [nlCommandLoading, setNlCommandLoading] = useState(false);
-  const [nlToast, setNlToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
-
-  // Auto-dismiss toast
-  useEffect(() => {
-    if (nlToast) {
-      const timer = setTimeout(() => setNlToast(null), 5000);
-      return () => clearTimeout(timer);
+    if (hypergraphData?.hyperedges) {
+      for (const he of hypergraphData.hyperedges) {
+        for (const s of he.source_slugs) slugs.add(s);
+        for (const t of he.target_slugs) slugs.add(t);
+      }
     }
-  }, [nlToast]);
+    return slugs.size;
+  }, [data, hypergraphData]);
+
+  const edgeCount = (data?.edges.length || 0) +
+    (hypergraphData?.hyperedges?.reduce((sum, he) => sum + (he.source_slugs?.length || 0) * (he.target_slugs?.length || 0), 0) || 0);
+
+  const allNodeSlugs = useMemo(() => Array.from(nodeMap.keys()), [nodeMap]);
+  const selectedNodes = useMemo(() => Array.from(selectedNodeIds), [selectedNodeIds]);
 
   // Initialize cytoscape
   // Performance: Cytoscape.js uses native viewport-based rendering optimization
@@ -355,6 +422,38 @@ export default function CausalCanvas() {
           },
         },
         {
+          selector: 'edge[type=":jointlyCause"]',
+          style: {
+            'line-color': '#a855f7',
+            'target-arrow-color': '#a855f7',
+            'width': 3,
+            'line-style': 'solid',
+            'curve-style': 'bezier',
+            'opacity': 0.8,
+            'target-arrow-shape': 'triangle',
+            'label': 'data(label)',
+            'font-size': 10,
+            'color': '#a855f7',
+            'text-background-color': '#ffffff',
+            'text-background-opacity': 0.7,
+          },
+        },
+        {
+          selector: 'edge[type=":达成决议"]',
+          style: {
+            'line-color': '#06b6d4',
+            'target-arrow-color': '#06b6d4',
+            'width': 2,
+            'line-style': 'dashed',
+            'curve-style': 'bezier',
+            'opacity': 0.7,
+            'target-arrow-shape': 'triangle',
+            'label': 'data(label)',
+            'font-size': 10,
+            'color': '#06b6d4',
+          },
+        },
+        {
           selector: '.highlighted',
           style: {
             'border-width': 3,
@@ -408,7 +507,7 @@ export default function CausalCanvas() {
 
     // Apply edge styles based on relation and confidence
     cy.edges().forEach(edge => {
-      const relation = edge.data('relation') as string;
+      const relation = (edge.data('relation') || edge.data('type')) as string;
       const conf = edge.data('conf') as number;
       const style = getEdgeStyle(relation);
       edge.style('line-color', style.color);
@@ -564,7 +663,7 @@ export default function CausalCanvas() {
       const edgeId = edge.data('id') as string;
       const sourceSlug = edge.data('source') as string;
       const targetSlug = edge.data('target') as string;
-      const relation = edge.data('relation') as string;
+      const relation = (edge.data('relation') || edge.data('type')) as string;
       const weight = edge.data('weight') as number;
       const conf = edge.data('conf') as number;
       const evidenceSpanIds = (edge.data('evidence') as string[]) || [];
@@ -659,7 +758,7 @@ export default function CausalCanvas() {
       }
     });
     cy.edges().forEach(edge => {
-      const relation = edge.data('relation') as string;
+      const relation = (edge.data('relation') || edge.data('type')) as string;
       const conf = edge.data('conf') as number;
       const style = getEdgeStyle(relation);
       edge.style('line-color', style.color);
@@ -680,7 +779,7 @@ export default function CausalCanvas() {
     if (!cy) return;
 
     cy.edges().forEach(edge => {
-      const relation = edge.data('relation') as string;
+      const relation = (edge.data('relation') || edge.data('type')) as string;
       const conf = edge.data('conf') as number;
 
       let hidden = false;
@@ -718,7 +817,7 @@ export default function CausalCanvas() {
         edge.addClass('alert-pulse');
       } else {
         // Reset to original style
-        const relation = edge.data('relation') as string;
+        const relation = (edge.data('relation') || edge.data('type')) as string;
         const style = getEdgeStyle(relation);
         edge.style('line-color', style.color);
         edge.style('target-arrow-color', style.color);
@@ -788,91 +887,46 @@ export default function CausalCanvas() {
     link.click();
   }, []);
 
-  const handleNlCommand = useCallback(async () => {
-    const cmd = nlCommand.trim();
-    if (!cmd || nlCommandLoading) return;
-
-    setNlCommandLoading(true);
-    try {
-      const visibleNodes = Array.from(nodeMap.keys());
-      const selectedNodes = Array.from(selectedNodeIds);
-
-      const result = await api.postNlCommand(cmd, {
-        nodes: visibleNodes,
-        selectedNodes,
-      });
-
-      // Apply operations
-      const cy = cyInstanceRef.current;
-      if (result.operations && cy) {
-        for (const op of result.operations) {
-          switch (op.type) {
-            case 'select':
-              if (op.target.length > 0) {
-                setSelectedNodeIds(new Set(op.target));
-              }
-              break;
-            case 'pack':
-              if (op.target.length > 1) {
-                const label = (op.params?.label as string) || op.target.join(', ');
-                packNodes(op.target, label.length > 30 ? `${label.slice(0, 27)}...` : label);
-              }
-              break;
-            case 'unpack':
-              for (const targetId of op.target) {
-                unpackNode(targetId);
-              }
-              break;
-            case 'perspective':
-              if (op.target[0]) {
-                const info = nodeMap.get(op.target[0]);
-                const cpt = cptMap.get(op.target[0]) || null;
-                setSelectedNode({
-                  id: op.target[0],
-                  label: op.target[0],
-                  incoming: info?.incoming || [],
-                  outgoing: info?.outgoing || [],
-                  cpt,
-                });
-                cy.elements().removeClass('highlighted dimmed');
-                const targetNode = cy.getElementById(op.target[0]);
-                if (targetNode.length > 0) {
-                  targetNode.addClass('highlighted');
-                  targetNode.neighborhood().addClass('highlighted');
-                  cy.center(targetNode);
-                }
-              }
-              break;
-            case 'filter':
-              if (op.params?.minConf !== undefined) {
-                setShowLowConfidence(false);
-              }
-              if (op.params?.relation) {
-                setShowFeedbackLoops(false);
-              }
-              break;
-            case 'layout':
-              if (op.params?.layoutName) {
-                handleLayoutChange(op.params.layoutName as LayoutType);
-              }
-              break;
-            case 'expand':
-              if (op.target[0]) {
-                window.open(`/wiki/${encodeURIComponent(op.target[0])}`, '_blank');
-              }
-              break;
-          }
-        }
-      }
-
-      setNlToast({ message: result.explanation || '命令执行成功', type: 'success' });
-      setNlCommand('');
-    } catch (err: any) {
-      setNlToast({ message: err?.message || '自然语言命令执行失败', type: 'error' });
-    } finally {
-      setNlCommandLoading(false);
+  const handleLoadView = useCallback(async (viewId: string) => {
+    const view = await api.loadView(viewId);
+    if (view.snapshot?.hyperNodes) {
+      // Apply the view snapshot to the canvas
+      // Note: hyperNodes snapshot application depends on view state structure
     }
-  }, [nlCommand, nlCommandLoading, nodeMap, cptMap, selectedNodeIds, packNodes, unpackNode, handleLayoutChange]);
+    if (view.snapshot?.layout) {
+      const cy = cyInstanceRef.current;
+      if (cy) {
+        cy.layout({ name: view.snapshot.layout, animate: true, animationDuration: 500, padding: 40 }).run();
+      }
+    }
+    if (view.snapshot?.zoomPan) {
+      const cy = cyInstanceRef.current;
+      if (cy) {
+        cy.zoom(view.snapshot.zoomPan.scale);
+        cy.pan({ x: view.snapshot.zoomPan.x, y: view.snapshot.zoomPan.y });
+      }
+    }
+    setShowViewManager(false);
+  }, []);
+
+  const handleSaveView = useCallback(async (saveName: string) => {
+    const cy = cyInstanceRef.current;
+    const viewId = `view_${Date.now()}`;
+    const snapshot = {
+      hyperNodes: viewState.virtualNodes,
+      layout,
+      zoomPan: {
+        x: cy?.pan().x || 0,
+        y: cy?.pan().y || 0,
+        scale: cy?.zoom() || 1,
+      },
+      filters: {
+        visibleEdgeTypes: showFeedbackLoops ? undefined : [':causesIncrease', ':causesDecrease', ':inhibits', ':jointlyCause'],
+      },
+    };
+    await api.saveView(viewId, saveName, snapshot);
+    queryClient.invalidateQueries({ queryKey: ['views'] });
+  }, [viewState.virtualNodes, layout, showFeedbackLoops, queryClient]);
 
   const handleSearch = useCallback((query: string) => {
     const cy = cyInstanceRef.current;
@@ -1085,6 +1139,15 @@ export default function CausalCanvas() {
         {showVersionPanel ? '隐藏版本' : '版本历史'}
       </button>
 
+      {/* View Manager toggle */}
+      <button
+        onClick={() => setShowViewManager(!showViewManager)}
+        className="absolute right-3 top-52 z-40 rounded-lg border border-slate-200 bg-white/95 px-3 py-1.5 text-xs font-medium text-purple-600 shadow-sm hover:bg-purple-50 dark:border-slate-700 dark:bg-slate-800/95 dark:text-purple-400 dark:hover:bg-purple-900/30 transition-colors"
+        title="视图管理"
+      >
+        {showViewManager ? '隐藏视图' : '视图'}
+      </button>
+
       {/* Legend */}
       <div className="absolute bottom-3 left-3 z-40 rounded-lg border border-slate-200 bg-white/95 p-3 text-xs shadow-sm dark:border-slate-700 dark:bg-slate-800/95">
         <div className="mb-1 font-semibold text-slate-700 dark:text-slate-200">图例</div>
@@ -1122,50 +1185,91 @@ export default function CausalCanvas() {
               <span className="h-0.5 w-6 border-t-2 border-dashed border-blue-500" />
               反馈回路
             </div>
+            <div className="flex items-center gap-2">
+              <span className="h-0.5 w-6 bg-purple-500" />
+              联合因果
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="h-0.5 w-6 border-t-2 border-dashed border-cyan-500" />
+              达成决议
+            </div>
           </div>
         </div>
       </div>
 
-      {/* NL Command Input */}
-      <div className="absolute bottom-4 left-48 z-20 flex items-center gap-2 bg-white/95 dark:bg-slate-800/95 rounded-lg shadow-lg p-2 border border-slate-200 dark:border-slate-700">
-        <input
-          type="text"
-          value={nlCommand}
-          onChange={(e) => setNlCommand(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleNlCommand()}
-          placeholder="输入自然语言指令..."
-          className="flex-1 min-w-[200px] px-3 py-1.5 text-sm border rounded-md border-slate-200 bg-slate-50 text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:placeholder-slate-500"
-          disabled={nlCommandLoading}
-        />
-        <button
-          onClick={handleNlCommand}
-          disabled={nlCommandLoading || !nlCommand.trim()}
-          className="rounded-md p-1.5 text-white bg-primary-600 hover:bg-primary-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-        >
-          {nlCommandLoading ? (
-            <Spinner size={16} className="animate-spin" />
-          ) : (
-            <ArrowRight size={16} />
-          )}
-        </button>
-      </div>
-
-      {/* NL Toast Notification */}
-      {nlToast && (
-        <div className={`absolute bottom-16 left-1/2 -translate-x-1/2 z-50 rounded-lg px-4 py-2 text-sm shadow-lg flex items-center gap-2 ${
-          nlToast.type === 'success'
-            ? 'bg-green-50 text-green-800 border border-green-200 dark:bg-green-900/80 dark:text-green-200 dark:border-green-800'
-            : 'bg-red-50 text-red-800 border border-red-200 dark:bg-red-900/80 dark:text-red-200 dark:border-red-800'
-        }`}>
-          <span>{nlToast.message}</span>
-          <button
-            onClick={() => setNlToast(null)}
-            className="ml-2 rounded p-0.5 hover:bg-black/10 dark:hover:bg-white/10"
-          >
-            <X size={14} />
-          </button>
-        </div>
-      )}
+      {/* IntentBar - NL Command Input */}
+      <IntentBar
+        onOperations={(ops) => {
+          const cy = cyInstanceRef.current;
+          for (const op of ops) {
+            switch (op.type) {
+              case 'pack':
+                if (op.target.length > 1) {
+                  const label = (op.params?.label as string) || op.target.join(', ');
+                  packNodes(op.target, label.length > 30 ? `${label.slice(0, 27)}...` : label);
+                }
+                break;
+              case 'unpack':
+                for (const targetId of op.target) {
+                  unpackNode(targetId);
+                }
+                break;
+              case 'expand':
+                if (op.target[0]) {
+                  toggleExpand(op.target[0]);
+                }
+                break;
+              case 'filter':
+                if (op.params?.edgeTypes) {
+                  const edgeTypes = op.params.edgeTypes as string[];
+                  if (edgeTypes.includes('causal')) {
+                    setShowFeedbackLoops(false);
+                  }
+                }
+                if (op.params?.minConf !== undefined) {
+                  setShowLowConfidence(false);
+                }
+                break;
+              case 'select':
+                if (cy) {
+                  for (const slug of op.target) {
+                    cy.getElementById(slug)?.select();
+                  }
+                }
+                break;
+              case 'layout':
+                if (op.params?.layout) {
+                  handleLayoutChange(op.params.layout as LayoutType);
+                }
+                break;
+              case 'perspective':
+                if (op.target[0]) {
+                  const info = nodeMap.get(op.target[0]);
+                  const cpt = cptMap.get(op.target[0]) || null;
+                  setSelectedNode({
+                    id: op.target[0],
+                    label: op.target[0],
+                    incoming: info?.incoming || [],
+                    outgoing: info?.outgoing || [],
+                    cpt,
+                  });
+                  if (cy) {
+                    cy.elements().removeClass('highlighted dimmed');
+                    const targetNode = cy.getElementById(op.target[0]);
+                    if (targetNode.length > 0) {
+                      targetNode.addClass('highlighted');
+                      targetNode.neighborhood().addClass('highlighted');
+                      cy.center(targetNode);
+                    }
+                  }
+                }
+                break;
+            }
+          }
+        }}
+        allNodes={allNodeSlugs}
+        selectedNodes={selectedNodes}
+      />
 
       {/* Node Detail Panel */}
       {selectedNode && (
@@ -1328,6 +1432,14 @@ export default function CausalCanvas() {
       <CausalSuggestions
         visibleNodes={Array.from(nodeMap.keys())}
         onApplySuggestion={handleApplySuggestion}
+      />
+
+      {/* View Manager */}
+      <ViewManager
+        visible={showViewManager}
+        onClose={() => setShowViewManager(false)}
+        onLoadView={handleLoadView}
+        onSaveView={handleSaveView}
       />
     </div>
   );

@@ -1,5 +1,5 @@
 import { storage } from './markdown';
-import { parser, type ParsedPage, type ParsedCausalEdge, type ParsedCausalCPT } from './parser';
+import { parser, type ParsedPage, type ParsedCausalEdge, type ParsedCausalCPT, type ParsedHyperEdge } from './parser';
 import { syncSummaries } from './summary';
 import { getPool } from '../db/pool';
 import logger from '../i18n/logger';
@@ -37,13 +37,14 @@ function calcLinkWeight(relation: string): number {
 }
 
 export class SyncEngine {
-  async syncAll(): Promise<{ pages: number; links: number; timeline: number; versions: number; clusters: number; causalEdges: number }> {
+  async syncAll(): Promise<{ pages: number; links: number; timeline: number; versions: number; clusters: number; causalEdges: number; hyperEdgeCount: number }> {
     const wikiFiles = storage.listWikiFiles();
     let pageCount = 0;
     let linkCount = 0;
     let timelineCount = 0;
     let versionCount = 0;
     let causalEdgeCount = 0;
+    let hyperEdgeCount = 0;
 
     const pool = getPool();
     const client = await pool.connect();
@@ -52,6 +53,8 @@ export class SyncEngine {
       // 清空旧的因果缓存
       await client.query('DELETE FROM causal_edges');
       await client.query('DELETE FROM causal_cpt');
+      await client.query('DELETE FROM hyperedges');
+      await client.query('DELETE FROM causal_hyperedges');
 
       for (const filePath of wikiFiles) {
         try {
@@ -73,15 +76,21 @@ export class SyncEngine {
           causalEdgeCount += cEdges;
 
           await this.syncCausalCPT(client, parsed);
+
+          const hEdges = await this.syncHyperRelations(client, parsed);
+          hyperEdgeCount += hEdges;
+
+          const chEdges = await this.syncCausalHyperedges(client, parsed);
+          hyperEdgeCount += chEdges;
         } catch (err) {
           logger.error({ err, filePath }, '同步文件失败');
         }
       }
 
-      logger.info(`同步完成: ${pageCount} 页, ${linkCount} 链接, ${timelineCount} 时间线, ${versionCount} 版本, ${causalEdgeCount} 因果边`);
+      logger.info(`同步完成: ${pageCount} 页, ${linkCount} 链接, ${timelineCount} 时间线, ${versionCount} 版本, ${causalEdgeCount} 因果边, ${hyperEdgeCount} 超边`);
 
       const summaryResult = await syncSummaries(client);
-      return { pages: pageCount, links: linkCount, timeline: timelineCount, versions: versionCount, clusters: summaryResult.clusters, causalEdges: causalEdgeCount };
+      return { pages: pageCount, links: linkCount, timeline: timelineCount, versions: versionCount, clusters: summaryResult.clusters, causalEdges: causalEdgeCount, hyperEdgeCount };
     } finally {
       client.release();
     }
@@ -273,6 +282,82 @@ export class SyncEngine {
       JSON.stringify(conditions),
       JSON.stringify(probabilities)
     ]);
+  }
+
+  private async syncHyperRelations(client: any, parsed: ParsedPage): Promise<number> {
+    if (parsed.hyperRelations.length === 0) return 0;
+
+    // Note: Hyperedge and CPT changes are tracked via the Diff system (🟡 preview).
+    // The auto_change_log table is used for file-level Markdown changes.
+
+    for (const hyperEdge of parsed.hyperRelations) {
+      await client.query(`
+        INSERT INTO hyperedges (source_slugs, target_slugs, type, params)
+        VALUES ($1::text[], $2::text[], $3, $4::jsonb)
+      `, [
+        hyperEdge.sourceSlugs,
+        hyperEdge.targetSlugs,
+        hyperEdge.type,
+        JSON.stringify(hyperEdge.params)
+      ]);
+    }
+
+    return parsed.hyperRelations.length;
+  }
+
+  private async syncCausalHyperedges(client: any, parsed: ParsedPage): Promise<number> {
+    if (parsed.causalEdges.length === 0) return 0;
+
+    let count = 0;
+
+    for (const edge of parsed.causalEdges) {
+      // Create a hyperedge entry for each causal edge (single source/target)
+      const { rows: existingHyper } = await client.query(
+        'SELECT id FROM hyperedges WHERE source_slugs = $1::text[] AND target_slugs = $2::text[] AND type = $3 LIMIT 1',
+        [[edge.sourceSlug], [edge.targetSlug], edge.relation]
+      );
+
+      let hyperedgeId: number;
+      if (existingHyper.length > 0) {
+        hyperedgeId = existingHyper[0].id;
+      } else {
+        const { rows: inserted } = await client.query(
+          `INSERT INTO hyperedges (source_slugs, target_slugs, type, params)
+           VALUES ($1::text[], $2::text[], $3, $4::jsonb)
+           ON CONFLICT DO NOTHING
+           RETURNING id`,
+          [[edge.sourceSlug], [edge.targetSlug], edge.relation, JSON.stringify({ conf: edge.conf, evidence: edge.evidence })]
+        );
+        if (inserted.length > 0) {
+          hyperedgeId = inserted[0].id;
+        } else {
+          // ON CONFLICT DO NOTHING returned no row, re-query
+          const { rows: reQuery } = await client.query(
+            'SELECT id FROM hyperedges WHERE source_slugs = $1::text[] AND target_slugs = $2::text[] AND type = $3 LIMIT 1',
+            [[edge.sourceSlug], [edge.targetSlug], edge.relation]
+          );
+          if (reQuery.length === 0) continue;
+          hyperedgeId = reQuery[0].id;
+        }
+      }
+
+      // Insert into causal_hyperedges
+      await client.query(`
+        INSERT INTO causal_hyperedges (hyperedge_id, lag, weight, conf, evidence_spans)
+        VALUES ($1, $2, $3, $4, $5::text[])
+        ON CONFLICT DO NOTHING
+      `, [
+        hyperedgeId,
+        edge.lag,
+        edge.weight,
+        edge.conf,
+        edge.evidence
+      ]);
+
+      count++;
+    }
+
+    return count;
   }
 
   async rebuildGhostRelations(): Promise<number> {
@@ -505,6 +590,8 @@ export class SyncEngine {
       await client.query('TRUNCATE TABLE cluster_members CASCADE');
       await client.query('TRUNCATE TABLE causal_edges CASCADE');
       await client.query('TRUNCATE TABLE causal_cpt CASCADE');
+      await client.query('TRUNCATE TABLE hyperedges CASCADE');
+      await client.query('TRUNCATE TABLE causal_hyperedges CASCADE');
       await client.query('TRUNCATE TABLE pages CASCADE');
       await client.query('COMMIT');
       logger.info('所有缓存表已清空');

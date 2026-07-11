@@ -1,9 +1,13 @@
+import api from '../../lib/api';
+
 interface CausalContextMenuProps {
   visible: boolean;
   x: number;
   y: number;
   isVirtualNode: boolean;
   multiSelected: boolean;
+  viewId?: string;
+  hyperNodeId?: string;
   onPackIntoNode: () => void;
   onUnpack: () => void;
   onTogglePerspective: () => void;
@@ -16,6 +20,8 @@ export default function CausalContextMenu({
   y,
   isVirtualNode,
   multiSelected,
+  viewId,
+  hyperNodeId,
   onPackIntoNode,
   onUnpack,
   onTogglePerspective,
@@ -24,7 +30,7 @@ export default function CausalContextMenu({
   if (!visible) return null;
 
   const menuWidth = 180;
-  const menuHeight = isVirtualNode ? 160 : (multiSelected ? 140 : 100);
+  const menuHeight = isVirtualNode ? 200 : (multiSelected ? 140 : 100);
   const vw = window.innerWidth;
   const vh = window.innerHeight;
 
@@ -50,13 +56,28 @@ export default function CausalContextMenu({
       )}
 
       {isVirtualNode && (
-        <button
-          onClick={onUnpack}
-          className="flex w-full items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700"
-        >
-          <span className="text-primary-500">📤</span>
-          解包
-        </button>
+        <>
+          <button
+            onClick={onUnpack}
+            className="flex w-full items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700"
+          >
+            <span className="text-primary-500">📤</span>
+            解包
+          </button>
+          {viewId && hyperNodeId && (
+            <button
+              onClick={() => {
+                api.solidifyView(viewId, hyperNodeId).then((result) => {
+                  alert(result.message);
+                });
+              }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700"
+            >
+              <span className="text-primary-500">💾</span>
+              保存为知识超边
+            </button>
+          )}
+        </>
       )}
 
       <button

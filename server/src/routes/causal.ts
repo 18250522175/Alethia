@@ -5,12 +5,17 @@ import logger from '../i18n/logger';
 import { llmRouter } from '../llm/router';
 import {
   doCalculus,
+  doCalculusOnHypergraph,
+  jointCausalInference,
   counterfactualInference,
   backwardReasoning,
   timePulseResponse,
   buildGraphFromDB,
   type InterventionQuery,
+  type CausalGraph,
 } from '../causal/reasoner';
+import { createResolver } from '../causal/intent';
+import { runCausalDiscovery } from '../causal/discovery';
 
 const app = new Hono();
 
@@ -69,15 +74,8 @@ app.get('/api/causal/node/:slug', async (c) => {
   });
 });
 
-// POST /api/causal/nl-command — 自然语言图操作
+// POST /api/causal/nl-command — 自然语言图操作（使用 IntentResolver）
 app.post('/api/causal/nl-command', async (c) => {
-  if (!llmRouter.hasAnyConfigured()) {
-    return c.json({
-      error: true,
-      message: '未配置任何 LLM 适配器。请在设置中配置至少一个 LLM API Key 以启用自然语言命令功能。'
-    }, 400);
-  }
-
   const body = await c.req.json().catch(() => null);
   if (!body || typeof body.command !== 'string' || !body.command.trim()) {
     return c.json({ error: true, message: '请提供 command 字段' }, 400);
@@ -88,62 +86,18 @@ app.post('/api/causal/nl-command', async (c) => {
     currentView?: { nodes?: string[]; selectedNodes?: string[] };
   };
 
-  const pool = getPool();
-  const { rows: edges } = await pool.query(
-    'SELECT source_slug, target_slug, relation, weight, conf FROM causal_edges ORDER BY id'
-  );
-
   const nodes = currentView?.nodes || [];
   const selectedNodes = currentView?.selectedNodes || [];
 
-  const systemPrompt = `你是一个因果认知地图的智能操作助手。用户会用自然语言描述他们想要的操作，你需要将其转换为精确的图操作序列。
-
-## 可用操作
-- **select**: 选中指定节点。参数: target (节点ID列表)
-- **pack**: 将多个节点分组为一个虚拟节点。参数: target (节点ID列表), params.label (组名)
-- **unpack**: 展开虚拟节点，显示其内部节点。参数: target (虚拟节点ID)
-- **filter**: 根据关系类型或置信度过滤边。参数: target (空数组), params.relation (关系类型), params.minConf (最小置信度)
-- **perspective**: 显示节点详情和信息。参数: target (节点ID)
-- **expand**: 展开知识图谱，在Wiki中查看节点。参数: target (节点ID)
-- **layout**: 切换布局。参数: target (空数组), params.layoutName (布局名称: cose, circle, grid, concentric, breadthfirst)
-
-## 输出格式
-返回纯JSON（不要带markdown代码块），格式如下：
-{
-  "operations": [
-    { "type": "操作类型", "target": ["节点ID列表"], "params": { "可选的额外参数": "值" } }
-  ],
-  "explanation": "用中文简短解释你执行的操作"
-}`;
-
-  const userPrompt = `## 当前视图状态
-画布中的节点: ${nodes.length > 0 ? nodes.join(', ') : '（无节点）'}
-选中的节点: ${selectedNodes.length > 0 ? selectedNodes.join(', ') : '（无选中节点）'}
-
-## 可用因果边（共 ${edges.length} 条）
-${edges.slice(0, 50).map((e: any) => `${e.source_slug} -> ${e.target_slug} (${e.relation}, 置信度:${e.conf})`).join('\n')}
-${edges.length > 50 ? `\n... 还有 ${edges.length - 50} 条边'` : ''}
-
-## 用户命令
-${command}
-
-请将用户命令转换为图操作序列，返回JSON格式。`;
-
   try {
-    const adapter = llmRouter.route('nl_command');
-    const response = await adapter.chat({
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt }
-      ],
-      jsonMode: true,
-      temperature: 0.1
+    const resolver = createResolver('hybrid');
+    const result = await resolver.resolve(command, {
+      nodes,
+      selectedNodes,
     });
-
-    const parsed = JSON.parse(response.content);
-    return c.json(parsed);
+    return c.json(result);
   } catch (err: any) {
-    logger.error({ err }, 'NL command LLM 调用失败');
+    logger.error({ err }, 'NL command 意图解析失败');
     return c.json({
       error: true,
       message: '自然语言命令处理失败: ' + (err.message || '未知错误')
@@ -1294,6 +1248,243 @@ app.post('/api/causal/alert/check', async (c) => {
   } catch (err) {
     logger.error({ err }, '预警检查失败');
     return c.json({ error: true, message: '预警检查失败' }, 500);
+  }
+});
+
+// ── Hypergraph API ──────────────────────────────────────────────────────────
+
+// GET /api/hypergraph — 返回完整超图数据
+app.get('/api/hypergraph', async (c) => {
+  const pool = getPool();
+  const { rows: hyperedges } = await pool.query('SELECT * FROM hyperedges ORDER BY id');
+  const { rows: causalHyperedges } = await pool.query(
+    'SELECT ch.*, h.source_slugs, h.target_slugs, h.type FROM causal_hyperedges ch JOIN hyperedges h ON ch.hyperedge_id = h.id ORDER BY ch.id'
+  );
+  const { rows: cpts } = await pool.query('SELECT * FROM causal_cpt ORDER BY id');
+  return c.json({ hyperedges, causalHyperedges, cpts });
+});
+
+// GET /api/hypergraph/subgraph — 按需返回子图
+app.get('/api/hypergraph/subgraph', async (c) => {
+  const slugs = (c.req.query('slugs') || '').split(',').filter(Boolean);
+  if (slugs.length === 0) {
+    return c.json({ hyperedges: [], causalHyperedges: [], cpts: [] });
+  }
+  const pool = getPool();
+  const { rows: hyperedges } = await pool.query(
+    'SELECT * FROM hyperedges WHERE source_slugs && $1::text[] OR target_slugs && $1::text[] ORDER BY id',
+    [slugs]
+  );
+  const { rows: causalHyperedges } = await pool.query(
+    'SELECT ch.*, h.source_slugs, h.target_slugs, h.type FROM causal_hyperedges ch JOIN hyperedges h ON ch.hyperedge_id = h.id WHERE h.source_slugs && $1::text[] OR h.target_slugs && $1::text[] ORDER BY ch.id',
+    [slugs]
+  );
+  const { rows: cpts } = await pool.query(
+    'SELECT * FROM causal_cpt WHERE variable_slug = ANY($1::text[]) ORDER BY id',
+    [slugs]
+  );
+  return c.json({ hyperedges, causalHyperedges, cpts });
+});
+
+// POST /api/causal/query — 综合因果推理
+app.post('/api/causal/query', async (c) => {
+  const pool = getPool();
+  const body = await c.req.json();
+  const { question, scopeSlugs, maxResults } = body;
+
+  if (!question) {
+    return c.json({ error: 'question is required' }, 400);
+  }
+
+  // 1. Check cache
+  const queryHash = crypto.createHash('sha256').update(question + JSON.stringify(scopeSlugs || [])).digest('hex').slice(0, 64);
+  const { rows: cachedRows } = await pool.query(
+    'SELECT result FROM causal_inference_cache WHERE query_hash = $1 AND expires_at > NOW()',
+    [queryHash]
+  );
+  if (cachedRows.length > 0) {
+    return c.json({ ...cachedRows[0].result, cached: true });
+  }
+
+  // 2. Build causal graph from DB
+  let edgeQuery = 'SELECT * FROM causal_edges';
+  let cptQuery = 'SELECT * FROM causal_cpt';
+  const params: any[] = [];
+
+  if (scopeSlugs && scopeSlugs.length > 0) {
+    edgeQuery = `SELECT * FROM causal_edges WHERE source_slug = ANY($1) OR target_slug = ANY($1)`;
+    cptQuery = `SELECT * FROM causal_cpt WHERE variable_slug = ANY($1)`;
+    params.push(scopeSlugs);
+  }
+
+  const { rows: edgeRows } = await pool.query(edgeQuery, params);
+  const { rows: cptRows } = await pool.query(cptQuery, params);
+
+  // Also fetch hyperedges
+  const { rows: hyperedgeRows } = await pool.query(
+    'SELECT h.*, ch.lag, ch.weight, ch.conf, ch.evidence_spans FROM hyperedges h LEFT JOIN causal_hyperedges ch ON h.id = ch.hyperedge_id WHERE h.type = $1',
+    [':jointlyCause']
+  );
+
+  const graph: CausalGraph = buildGraphFromDB(edgeRows, cptRows, hyperedgeRows);
+
+  // 3. Extract target variable and intervention intent from question
+  // Simple heuristic: look for "提高" or "降低" keywords
+  const targetMatch = question.match(/(\S+)\s*(?:变|成为|的|概率|怎么样|如何)/);
+  const interventionMatch = question.match(/(?:如果|把|将|让)\s*(\S+)\s*(?:从|提高|降低|变为|变成)\s*(\S+)/);
+
+  // 4. Find relevant nodes in graph
+  const allNodeSlugs = new Set<string>();
+  for (const e of edgeRows) {
+    allNodeSlugs.add(e.source_slug);
+    allNodeSlugs.add(e.target_slug);
+  }
+
+  let targetSlug = '';
+  let interventionSlug = '';
+  let toState = 'high';
+
+  // Try to match slugs from the question
+  for (const slug of allNodeSlugs) {
+    const readable = slug.replace(/_/g, '');
+    if (question.includes(readable) || question.includes(slug)) {
+      if (!targetSlug) {
+        targetSlug = slug;
+      } else if (!interventionSlug && slug !== targetSlug) {
+        interventionSlug = slug;
+      }
+    }
+  }
+
+  // 5. Run reasoning
+  let result;
+  if (interventionSlug && targetSlug) {
+    // Detect direction: "提高" means make it high, "降低" means make it low
+    if (question.includes('降低') || question.includes('减少') || question.includes('抑制')) {
+      toState = 'low';
+    }
+
+    // Check if there are hyperedges for joint inference
+    const relevantHyperedges = graph.hyperedges?.filter(he =>
+      he.targets.includes(targetSlug)
+    );
+
+    if (relevantHyperedges && relevantHyperedges.length > 0) {
+      const jointInterventions = relevantHyperedges[0].sources.map(s => ({
+        variable: s,
+        toState: toState,
+      }));
+      result = jointCausalInference(graph, {
+        target: targetSlug,
+        interventions: jointInterventions,
+        desiredState: toState,
+      });
+    } else {
+      result = doCalculusOnHypergraph(graph, {
+        target: targetSlug,
+        intervention: { variable: interventionSlug, fromState: 'low', toState },
+      });
+    }
+  } else {
+    // No specific intervention found, return graph summary
+    result = {
+      baselineProbability: 0.5,
+      interventionProbability: 0.5,
+      delta: 0,
+      confidenceInterval: [0.3, 0.7] as [number, number],
+      method: 'heuristic' as const,
+      assumptions: ['未能从问题中提取明确的干预变量和目标变量'],
+      evidence: [],
+      explanation: `因果图包含 ${allNodeSlugs.size} 个变量，${edgeRows.length} 条因果边。请提供更具体的问题，例如："如果提高X，Y会如何变化？"`,
+    };
+  }
+
+  // 6. Build natural language report
+  const report = buildCausalReport(question, result, targetSlug, interventionSlug, toState);
+
+  // 7. Cache result
+  await pool.query(
+    `INSERT INTO causal_inference_cache (query_hash, result, expires_at)
+     VALUES ($1, $2, NOW() + INTERVAL '1 hour')
+     ON CONFLICT (query_hash) DO UPDATE SET result = $2, expires_at = NOW() + INTERVAL '1 hour'`,
+    [queryHash, JSON.stringify({ ...result, report })]
+  );
+
+  return c.json({ ...result, report, cached: false });
+});
+
+// Helper: build natural language causal report
+function buildCausalReport(
+  question: string,
+  result: any,
+  targetSlug: string,
+  interventionSlug: string,
+  toState: string,
+): string {
+  if (!interventionSlug || !targetSlug) {
+    return '未能识别具体的干预变量和目标变量。请提供更具体的问题。';
+  }
+
+  const targetName = targetSlug.replace(/_/g, '');
+  const interventionName = interventionSlug.replace(/_/g, '');
+  const direction = toState === 'high' ? '提高' : '降低';
+  const effectDirection = result.delta > 0 ? '上升' : '下降';
+  const effectMagnitude = Math.abs(result.delta) > 0.2 ? '显著' : Math.abs(result.delta) > 0.05 ? '中等' : '轻微';
+  const confidence = result.method === 'cpt' ? '高' : '中等';
+  const ciText = `95% 置信区间: [${(result.confidenceInterval[0] * 100).toFixed(0)}%, ${(result.confidenceInterval[1] * 100).toFixed(0)}%]`;
+
+  let report = `## 因果推理报告\n\n`;
+  report += `**问题**: ${question}\n\n`;
+  report += `**分析**: 若将「${interventionName}」${direction}，则「${targetName}」变高的概率从 ${(result.baselineProbability * 100).toFixed(0)}% ${effectDirection}为 ${(result.interventionProbability * 100).toFixed(0)}%，变化幅度为 ${effectDirection} ${Math.abs(result.delta * 100).toFixed(0)} 个百分点。\n\n`;
+  report += `**效应强度**: ${effectMagnitude}\n`;
+  report += `**置信度**: ${confidence}（${result.method === 'cpt' ? '基于贝叶斯网络精确推理' : '基于启发式权重传播'}）\n`;
+  report += `**置信区间**: ${ciText}\n\n`;
+
+  if (result.assumptions && result.assumptions.length > 0) {
+    report += `**假设前提**:\n`;
+    for (const a of result.assumptions) {
+      report += `- ${a}\n`;
+    }
+    report += '\n';
+  }
+
+  if (result.evidence && result.evidence.length > 0) {
+    report += `**证据来源**:\n`;
+    for (const e of result.evidence) {
+      report += `- ${e.source}: ${e.text}\n`;
+    }
+  }
+
+  return report;
+}
+
+// POST /api/causal/discovery — 运行因果发现
+app.post('/api/causal/discovery', async (c) => {
+  const result = await runCausalDiscovery();
+  return c.json(result);
+});
+
+// POST /api/causal/apply-diff — 人工确认超边/因果边，设置 conf=1.0
+app.post('/api/causal/apply-diff', async (c) => {
+  try {
+    const pool = getPool();
+    const body = await c.req.json();
+    const { diffId, type } = body;
+
+    // If the diff is for a causal hyperedge and is being confirmed by a human,
+    // set conf to 1.0 (or user-specified value)
+    if (type === 'causal_hyperedge' || type === 'hyper_relation_add') {
+      const conf = body.conf || 1.0; // Human-reviewed edges default to 1.0
+      await pool.query(
+        'UPDATE causal_hyperedges SET conf = $1 WHERE id = $2',
+        [conf, diffId]
+      );
+    }
+
+    return c.json({ message: 'Diff applied successfully' });
+  } catch (err) {
+    logger.error({ err }, 'apply-diff 失败');
+    return c.json({ error: true, message: 'apply-diff 失败' }, 500);
   }
 });
 

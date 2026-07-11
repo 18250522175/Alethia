@@ -478,12 +478,13 @@ app.post('/api/generate-draft', async (c) => {
 app.post('/api/generate-static-site', async (c) => {
   try {
     const body = await c.req.json().catch(() => ({}));
-    const { outputPath, includeMedia, includeGraph, theme } = body;
+    const { outputPath, includeMedia, includeGraph, includeCausal, theme } = body;
 
     const options: any = {};
     if (outputPath !== undefined) options.outputPath = outputPath;
     if (includeMedia !== undefined) options.includeMedia = includeMedia;
     if (includeGraph !== undefined) options.includeGraph = includeGraph;
+    if (includeCausal !== undefined) options.includeCausal = includeCausal;
     if (theme !== undefined) options.theme = theme;
 
     const result = await brainAPI.generateStaticSite(options);

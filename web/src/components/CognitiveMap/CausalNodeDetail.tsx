@@ -1,5 +1,6 @@
 import { X, ArrowSquareOut } from '@phosphor-icons/react';
 import { useNavigate } from 'react-router-dom';
+import CausalCPTWidget from '../CausalCPTWidget';
 
 interface CausalEdge {
   id: string;
@@ -141,39 +142,15 @@ export default function CausalNodeDetail({
         )}
       </div>
 
-      {/* CPT Table */}
+      {/* CPT Widget */}
       {cpt && (
         <div className="mb-3">
-          <h4 className="mb-1.5 text-xs font-medium text-slate-500 dark:text-slate-400">
-            条件概率表 (CPT)
-          </h4>
-          <div className="max-h-40 overflow-auto rounded border border-slate-200 dark:border-slate-700">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="bg-slate-50 dark:bg-slate-700/50">
-                  <th className="px-2 py-1 text-left text-slate-500 dark:text-slate-400">条件</th>
-                  <th className="px-2 py-1 text-right text-slate-500 dark:text-slate-400">概率</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(() => {
-                  const conditions = cpt.conditions || {};
-                  const probs = cpt.probabilities as Record<string, number> | undefined;
-                  const entries = probs
-                    ? Object.entries(probs)
-                    : Object.entries(conditions).map(([k, v]) => [k, String(v)]);
-                  return entries.map(([key, value], idx) => (
-                    <tr key={idx} className="border-t border-slate-100 dark:border-slate-700">
-                      <td className="px-2 py-1 text-slate-700 dark:text-slate-200">{key}</td>
-                      <td className="px-2 py-1 text-right font-mono text-slate-600 dark:text-slate-300">
-                        {typeof value === 'number' ? value.toFixed(3) : String(value)}
-                      </td>
-                    </tr>
-                  ));
-                })()}
-              </tbody>
-            </table>
-          </div>
+          <CausalCPTWidget cpt={{
+            variableSlug: cpt.variable_slug,
+            parentVariables: (cpt.conditions as Record<string, unknown>)?.parents as string[] || (cpt.conditions as Record<string, unknown>)?.parentVariables as string[] || [],
+            states: (cpt.conditions as Record<string, unknown>)?.states as string[] || ['low', 'high'],
+            table: (cpt.probabilities as Record<string, unknown>)?.table as Array<Record<string, string>> || (cpt.probabilities as Record<string, unknown>)?.rows as Array<Record<string, string>> || [],
+          }} />
         </div>
       )}
 
