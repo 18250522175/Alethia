@@ -12,7 +12,6 @@ import WikiHomePage from './routes/WikiHomePage';
 import SettingsPage from './routes/SettingsPage';
 import QAPanelPage from './routes/QAPanelPage';
 import DiffReviewPage from './routes/DiffReviewPage';
-import GraphFullPage from './routes/GraphFullPage';
 import DashboardPage from './routes/DashboardPage';
 import WikiEntryPage from './routes/WikiEntryPage';
 import OnboardingPage from './routes/OnboardingPage';
@@ -28,6 +27,7 @@ import UploadPage from './routes/UploadPage';
 import PromptsPage from './routes/PromptsPage';
 import AliasesPage from './routes/AliasesPage';
 import CognitiveMapPage from './routes/CognitiveMapPage';
+import PortalPage from './routes/PortalPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();
@@ -59,7 +59,7 @@ function AppRoutes() {
         <Route path="wiki/:slug" element={<WikiEntryPage />} />
         <Route path="qa" element={<QAPanelPage />} />
         <Route path="qa/:conversationId" element={<QAPanelPage />} />
-        <Route path="graph" element={<GraphFullPage />} />
+        <Route path="graph" element={<Navigate to="/cognitive-map" replace />} />
         <Route path="review" element={<DiffReviewPage />} />
         <Route path="dashboard" element={<DashboardPage />} />
         <Route path="settings" element={<SettingsPage />} />
@@ -76,6 +76,7 @@ function AppRoutes() {
         <Route path="prompts" element={<PromptsPage />} />
         <Route path="aliases" element={<AliasesPage />} />
         <Route path="cognitive-map" element={<CognitiveMapPage />} />
+        <Route path="portal/:context" element={<PortalPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

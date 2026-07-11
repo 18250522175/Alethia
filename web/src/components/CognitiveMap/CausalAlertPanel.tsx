@@ -10,6 +10,10 @@ import {
   X,
   Lightning,
   Spinner,
+  Wrench,
+  Minus,
+  Prohibit,
+  Check,
 } from '@phosphor-icons/react';
 import api from '../../lib/api';
 import { useNotification } from '../../contexts/NotificationContext';
@@ -113,6 +117,58 @@ export default function CausalAlertPanel({ edges, onTriggeredEdges, onClose }: C
       queryClient.invalidateQueries({ queryKey: ['causal-alerts'] });
     },
   });
+
+  // Fix: reduce edge weight
+  const reduceWeightMutation = useMutation({
+    mutationFn: ({ edgeId, alertId }: { edgeId: number; alertId: number }) =>
+      Promise.all([
+        api.updateCausalEdge(edgeId, { weight: 0.1 }),
+        api.updateCausalAlert(alertId, { enabled: false }),
+      ]),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['causal-alerts'] });
+      queryClient.invalidateQueries({ queryKey: ['causal-graph'] });
+      addNotification({
+        type: 'system' as any,
+        title: '已降低权重',
+        description: '因果边权重已降低至 0.1',
+      });
+    },
+  });
+
+  // Fix: delete conflicting edge
+  const deleteEdgeMutation = useMutation({
+    mutationFn: ({ edgeId, alertId }: { edgeId: number; alertId: number }) =>
+      Promise.all([
+        api.deleteCausalEdge(edgeId),
+        api.updateCausalAlert(alertId, { enabled: false }),
+      ]),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['causal-alerts'] });
+      queryClient.invalidateQueries({ queryKey: ['causal-graph'] });
+      addNotification({
+        type: 'system' as any,
+        title: '已删除冲突边',
+        description: '冲突因果边已被删除',
+      });
+    },
+  });
+
+  // Fix: ignore/dismiss alert
+  const ignoreMutation = useMutation({
+    mutationFn: (alertId: number) =>
+      api.updateCausalAlert(alertId, { enabled: false }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['causal-alerts'] });
+      addNotification({
+        type: 'system' as any,
+        title: '已忽略预警',
+        description: '该预警规则已禁用',
+      });
+    },
+  });
+
+  const [openFixMenuId, setOpenFixMenuId] = useState<number | null>(null);
 
   // Check alerts mutation
   const checkMutation = useMutation({
@@ -335,6 +391,7 @@ export default function CausalAlertPanel({ edges, onTriggeredEdges, onClose }: C
           <ul className="divide-y divide-slate-100 dark:divide-slate-700">
             {alerts.map(alert => {
               const isTriggered = triggeredEdgeIds.has(String(alert.edge_id));
+              const isFixMenuOpen = openFixMenuId === alert.id;
               return (
                 <li
                   key={alert.id}
@@ -369,7 +426,58 @@ export default function CausalAlertPanel({ edges, onTriggeredEdges, onClose }: C
                         </span>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1 flex-shrink-0">
+                    <div className="flex items-center gap-1 flex-shrink-0 relative">
+                      {/* Fix button */}
+                      {isTriggered && (
+                        <div className="relative">
+                          <button
+                            onClick={() => setOpenFixMenuId(isFixMenuOpen ? null : alert.id)}
+                            className="rounded p-0.5 text-orange-500 hover:bg-orange-100 dark:hover:bg-orange-900/30 transition-colors"
+                            title="修复"
+                          >
+                            <Wrench size={14} />
+                          </button>
+                          {isFixMenuOpen && (
+                            <div className="absolute right-0 top-6 z-50 min-w-[130px] rounded-lg border border-slate-200 bg-white shadow-xl dark:border-slate-700 dark:bg-slate-800 animate-fade-in">
+                              <button
+                                onClick={() => {
+                                  reduceWeightMutation.mutate({ edgeId: alert.edge_id, alertId: alert.id });
+                                  setOpenFixMenuId(null);
+                                }}
+                                disabled={reduceWeightMutation.isPending}
+                                className="flex w-full items-center gap-2 px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-700 disabled:opacity-50"
+                              >
+                                <Minus size={12} className="text-orange-500" />
+                                降低权重
+                              </button>
+                              <button
+                                onClick={() => {
+                                  if (confirm(`确定要删除边 ${alert.source_slug} → ${alert.target_slug} 吗？`)) {
+                                    deleteEdgeMutation.mutate({ edgeId: alert.edge_id, alertId: alert.id });
+                                    setOpenFixMenuId(null);
+                                  }
+                                }}
+                                disabled={deleteEdgeMutation.isPending}
+                                className="flex w-full items-center gap-2 px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-700 disabled:opacity-50"
+                              >
+                                <Prohibit size={12} className="text-red-500" />
+                                删除冲突边
+                              </button>
+                              <button
+                                onClick={() => {
+                                  ignoreMutation.mutate(alert.id);
+                                  setOpenFixMenuId(null);
+                                }}
+                                disabled={ignoreMutation.isPending}
+                                className="flex w-full items-center gap-2 px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-700 disabled:opacity-50"
+                              >
+                                <Check size={12} className="text-green-500" />
+                                忽略
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
                       <button
                         onClick={() => handleToggle(alert)}
                         disabled={updateMutation.isPending}

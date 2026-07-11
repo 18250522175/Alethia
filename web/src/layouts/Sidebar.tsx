@@ -1,4 +1,4 @@
-import { House, Graph, CheckCircle, ChatsCircle, Gauge, Clock, ClockCounterClockwise, Gear, BookOpen, Brain, CaretDown, CaretRight, Ghost, Eye, MagnifyingGlass, Bell, Flask, Notebook, UploadSimple, Link, Sparkle } from '@phosphor-icons/react';
+import { House, CheckCircle, ChatsCircle, Gauge, Clock, ClockCounterClockwise, Gear, BookOpen, Brain, CaretDown, CaretRight, Ghost, Eye, MagnifyingGlass, Bell, Flask, Notebook, UploadSimple, Link, Sparkle } from '@phosphor-icons/react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
@@ -173,8 +173,7 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
 
   const navItems: NavItem[] = [
     { path: '/', icon: House, label: t('nav.home') },
-    { path: '/graph', icon: Graph, label: t('nav.graph') },
-    { path: '/cognitive-map', icon: Brain, label: t('nav.cognitiveMap', '认知地图') },
+    { path: '/cognitive-map', icon: Brain, label: t('nav.graph', '图谱') },
     { path: '/review', icon: CheckCircle, label: t('nav.review'), badge: reviewCount > 0 ? String(reviewCount) : undefined, badgeColor: 'yellow' },
     { path: '/qa', icon: ChatsCircle, label: t('nav.qa') },
     { path: '/dashboard', icon: Gauge, label: t('nav.dashboard') },

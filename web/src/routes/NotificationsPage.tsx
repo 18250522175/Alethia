@@ -13,7 +13,8 @@ import {
   ArrowLeft,
   ArrowRight,
   Funnel,
-  Clock
+  Clock,
+  Brain
 } from '@phosphor-icons/react';
 import { useNotification, NotificationType } from '../contexts/NotificationContext';
 
@@ -235,6 +236,19 @@ export default function NotificationsPage() {
                             {notification.actionLabel}
                             <ArrowRight size={12} />
                           </div>
+                        )}
+                        {notification.type === 'anomaly' && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              markAsRead(notification.id);
+                              navigate('/cognitive-map');
+                            }}
+                            className="mt-2 flex items-center gap-1 text-xs font-medium text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
+                          >
+                            <Brain size={14} />
+                            {t('notification.viewInCognitiveMap', '在认知地图中查看')}
+                          </button>
                         )}
                       </div>
                     </div>

@@ -1,3 +1,4 @@
+// DEPRECATED: 此页面已废弃，功能已迁移至 CognitiveMapPage + CausalCanvas。保留此文件仅供参考。
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';

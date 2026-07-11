@@ -12,6 +12,7 @@ import {
   X,
   Check,
   ArrowRight,
+  Brain,
 } from '@phosphor-icons/react';
 import { formatRelativeTime } from '../lib/format';
 import api from '../lib/api';
@@ -318,6 +319,20 @@ export function NotificationCenter({ isOpen, onClose }: NotificationCenterProps)
                             </span>
                           )}
                         </div>
+                        {notification.type === 'anomaly' && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              markAsRead(notification.id);
+                              navigate('/cognitive-map');
+                              onClose();
+                            }}
+                            className="mt-2 flex items-center gap-1 text-xs font-medium text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
+                          >
+                            <Brain size={14} />
+                            {tNotif('notification.viewInCognitiveMap', '在认知地图中查看')}
+                          </button>
+                        )}
                       </div>
                     </div>
                   </button>

@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { PencilSimple, Check, X } from '@phosphor-icons/react';
 
 interface CPTData {
   variableSlug: string;
@@ -20,6 +21,8 @@ export default function CausalCPTWidget({ cpt, onProbabilityChange }: CausalCPTW
     }
     return initial;
   });
+  const [isEditing, setIsEditing] = useState(false);
+  const [editValues, setEditValues] = useState<Record<string, string>>({});
 
   // Compute probabilities for the current parent state combination
   const probabilities = useMemo(() => {
@@ -60,15 +63,70 @@ export default function CausalCPTWidget({ cpt, onProbabilityChange }: CausalCPTW
     setParentStates(newStates);
   };
 
+  const handleStartEdit = () => {
+    const initial: Record<string, string> = {};
+    for (const state of cpt.states) {
+      const prob = probabilities[state] || 0;
+      initial[state] = prob.toFixed(2);
+    }
+    setEditValues(initial);
+    setIsEditing(true);
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    setEditValues({});
+  };
+
+  const handleSaveEdit = () => {
+    for (const state of cpt.states) {
+      const val = parseFloat(editValues[state] || '0');
+      if (!isNaN(val) && onProbabilityChange) {
+        onProbabilityChange(state, Math.max(0, Math.min(1, val)));
+      }
+    }
+    setIsEditing(false);
+    setEditValues({});
+  };
+
   const maxProb = Math.max(...Object.values(probabilities), 0.1);
 
   const readableName = (slug: string) => slug.replace(/_/g, ' ');
 
   return (
     <div className="cpt-widget bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-4">
-      <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">
-        {readableName(cpt.variableSlug)} · 条件概率表
-      </h4>
+      <div className="flex items-center justify-between mb-3">
+        <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+          {readableName(cpt.variableSlug)} · 条件概率表
+        </h4>
+        {!isEditing ? (
+          <button
+            onClick={handleStartEdit}
+            className="flex items-center gap-1 rounded px-2 py-0.5 text-xs text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:text-slate-300 dark:hover:bg-slate-700 transition-colors"
+            title="编辑概率"
+          >
+            <PencilSimple size={12} />
+            编辑
+          </button>
+        ) : (
+          <div className="flex items-center gap-1">
+            <button
+              onClick={handleSaveEdit}
+              className="flex items-center gap-0.5 rounded px-1.5 py-0.5 text-xs text-green-600 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-900/20 transition-colors"
+              title="保存"
+            >
+              <Check size={12} />
+            </button>
+            <button
+              onClick={handleCancelEdit}
+              className="flex items-center gap-0.5 rounded px-1.5 py-0.5 text-xs text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-900/20 transition-colors"
+              title="取消"
+            >
+              <X size={12} />
+            </button>
+          </div>
+        )}
+      </div>
 
       {/* Parent variable selectors */}
       {cpt.parentVariables.length > 0 && (
@@ -99,7 +157,9 @@ export default function CausalCPTWidget({ cpt, onProbabilityChange }: CausalCPTW
       <div className="space-y-2">
         <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">概率分布:</div>
         {cpt.states.map((state) => {
-          const prob = probabilities[state] || 0;
+          const prob = isEditing
+            ? parseFloat(editValues[state] || '0')
+            : (probabilities[state] || 0);
           const pct = (prob * 100).toFixed(0);
           const barWidth = maxProb > 0 ? (prob / maxProb) * 100 : 0;
 
@@ -117,9 +177,21 @@ export default function CausalCPTWidget({ cpt, onProbabilityChange }: CausalCPTW
                   style={{ width: `${barWidth}%` }}
                 />
               </div>
-              <span className="text-xs text-slate-500 dark:text-slate-400 w-10 text-right">
-                {pct}%
-              </span>
+              {isEditing ? (
+                <input
+                  type="number"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value={editValues[state] || '0'}
+                  onChange={(e) => setEditValues(prev => ({ ...prev, [state]: e.target.value }))}
+                  className="w-14 text-xs text-right px-1 py-0.5 border rounded dark:bg-slate-700 dark:border-slate-600 dark:text-slate-300"
+                />
+              ) : (
+                <span className="text-xs text-slate-500 dark:text-slate-400 w-10 text-right">
+                  {pct}%
+                </span>
+              )}
             </div>
           );
         })}

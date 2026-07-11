@@ -1096,6 +1096,23 @@ export const api = {
     }>(`/causal/evidence/${edgeId}`);
   },
 
+  updateCausalEdge(edgeId: number, body: { weight?: number; conf?: number; relation?: string }) {
+    return request<{
+      edge: {
+        id: number;
+        source_slug: string;
+        target_slug: string;
+        relation: string;
+        weight: number;
+        conf: number;
+      };
+    }>(`/causal/edge/${edgeId}`, { method: 'PUT', body: JSON.stringify(body) });
+  },
+
+  deleteCausalEdge(edgeId: number) {
+    return request<{ success: boolean }>(`/causal/edge/${edgeId}`, { method: 'DELETE' });
+  },
+
   getCausalEvalCheck() {
     return request<{
       warnings: string[];

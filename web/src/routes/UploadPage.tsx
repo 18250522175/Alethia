@@ -2,7 +2,7 @@ import { useState, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { UploadSimple, File, Image, FilePdf, FileText, X, Check, Warning, CloudArrowUp } from '@phosphor-icons/react';
+import { UploadSimple, File, Image, FilePdf, FileText, X, Check, Warning, CloudArrowUp, Brain } from '@phosphor-icons/react';
 import api from '../lib/api';
 import { useNotification } from '../contexts/NotificationContext';
 
@@ -361,9 +361,13 @@ export default function UploadPage() {
 
       {/* Quick Link to Observed Files */}
       {doneCount > 0 && (
-        <div className="text-center">
+        <div className="flex flex-wrap items-center justify-center gap-3">
           <button onClick={() => navigate('/observed-files')} className="btn btn-primary">
             {t('upload.viewObserved', '查看已上传文件')}
+          </button>
+          <button onClick={() => navigate('/cognitive-map')} className="btn btn-secondary text-sm flex items-center gap-1.5">
+            <Brain size={16} />
+            {t('upload.viewCognitiveMap', '查看关联图谱')}
           </button>
         </div>
       )}

@@ -19,7 +19,10 @@ import {
   ChartPie,
   Compass,
   CloudArrowUp,
-  ArrowSquareOut
+  ArrowSquareOut,
+  Lightning,
+  CirclesThreePlus,
+  Bell,
 } from '@phosphor-icons/react';
 import {
   Chart as ChartJS,
@@ -63,6 +66,18 @@ export default function DashboardPage() {
     staleTime: 15_000
   });
 
+  const causalGraphQuery = useQuery({
+    queryKey: ['dashboard-causal-graph'],
+    queryFn: () => api.getCausalGraph(),
+    staleTime: 60_000,
+  });
+
+  const causalAlertsQuery = useQuery({
+    queryKey: ['dashboard-causal-alerts'],
+    queryFn: () => api.listCausalAlerts(),
+    staleTime: 60_000,
+  });
+
   const rebuildMutation = useMutation({
     mutationFn: () => api.rebuildStruct(),
     onSuccess: () => {
@@ -91,6 +106,18 @@ export default function DashboardPage() {
   const data = healthQuery.data;
   const isLoading = healthQuery.isLoading;
   const isError = healthQuery.isError;
+
+  // Causal map stats
+  const causalEdgeCount = causalGraphQuery.data?.edges?.length || 0;
+  const causalNodeSlugs = new Set<string>();
+  if (causalGraphQuery.data?.edges) {
+    for (const e of causalGraphQuery.data.edges) {
+      causalNodeSlugs.add(e.source_slug);
+      causalNodeSlugs.add(e.target_slug);
+    }
+  }
+  const causalClusterCount = causalNodeSlugs.size;
+  const causalAlertCount = causalAlertsQuery.data?.alerts?.length || 0;
 
   const dayKeys = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
   const today = new Date();
@@ -459,6 +486,36 @@ export default function DashboardPage() {
               onClick={() => data.brokenEvidenceChains > 0 && navigate('/graph')}
             />
           </div>
+
+          {/* Cognitive Map Stats */}
+          <section>
+            <h2 className="mb-3 text-sm font-semibold uppercase text-slate-500 dark:text-slate-400">
+              认知地图
+            </h2>
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+              <StatCard
+                icon={<Lightning size={20} />}
+                label="因果边数"
+                value={causalEdgeCount}
+                color="bg-purple-500"
+                onClick={() => navigate('/cognitive-map')}
+              />
+              <StatCard
+                icon={<CirclesThreePlus size={20} />}
+                label="因果节点数"
+                value={causalClusterCount}
+                color="bg-indigo-500"
+                onClick={() => navigate('/cognitive-map')}
+              />
+              <StatCard
+                icon={<Bell size={20} />}
+                label="预警规则数"
+                value={causalAlertCount}
+                color={causalAlertCount > 0 ? 'bg-orange-500' : 'bg-slate-400'}
+                onClick={() => navigate('/cognitive-map')}
+              />
+            </div>
+          </section>
 
           <div className="card p-4 text-xs text-slate-500 dark:text-slate-400">
             <Coins size={14} className="mr-1 inline" />

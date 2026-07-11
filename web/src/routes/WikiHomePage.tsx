@@ -103,7 +103,7 @@ export default function WikiHomePage() {
   };
 
   const handlePortalClick = (portalId: string) => {
-    navigate(`/graph?type=${encodeURIComponent(portalId)}`);
+    navigate(`/portal/${encodeURIComponent(portalId)}`);
   };
 
   const handleActivityClick = (slug?: string) => {

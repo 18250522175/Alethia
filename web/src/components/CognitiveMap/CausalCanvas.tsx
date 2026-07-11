@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueries, useQueryClient } from '@tanstack/react-query';
 import cytoscape, { Core, ElementDefinition } from 'cytoscape';
 import { Spinner, Warning, Quotes, X, PencilSimple, Check } from '@phosphor-icons/react';
 import api from '../../lib/api';
@@ -200,6 +200,18 @@ export default function CausalCanvas() {
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const evidenceCacheRef = useRef<Map<number, Array<{ spanId: string; source: string; text: string }>>>(new Map());
 
+  // Path finding state
+  const [pathMode, setPathMode] = useState(false);
+  const [pathStart, setPathStart] = useState<string | null>(null);
+  const [pathEnd, setPathEnd] = useState<string | null>(null);
+  const [pathInstruction, setPathInstruction] = useState('请点击起始节点');
+  const pathElementsRef = useRef<cytoscape.CollectionReturnValue | null>(null);
+  const pathModeRef = useRef(false);
+  const handlePathNodeClickRef = useRef<(nodeId: string) => void>(() => {});
+
+  // Keep refs in sync with state for cytoscape event handlers
+  useEffect(() => { pathModeRef.current = pathMode; }, [pathMode]);
+
   const {
     viewState,
     packNodes,
@@ -221,23 +233,35 @@ export default function CausalCanvas() {
 
   const queryClient = useQueryClient();
 
-  const { data, isLoading, error } = useQuery<CausalGraphData>({
-    queryKey: ['causal-graph'],
-    queryFn: () => api.getCausalGraph(),
-    staleTime: 60_000,
+  const [
+    causalQuery,
+    hypergraphQuery,
+    graphQuery,
+  ] = useQueries({
+    queries: [
+      {
+        queryKey: ['causal-graph'],
+        queryFn: () => api.getCausalGraph(),
+        staleTime: 60_000,
+      },
+      {
+        queryKey: ['hypergraph'],
+        queryFn: () => api.getHypergraph(),
+        staleTime: 60_000,
+      },
+      {
+        queryKey: ['graph-data'],
+        queryFn: () => api.getGraphData(),
+        staleTime: 60_000,
+      },
+    ],
   });
 
-  const { data: hypergraphData } = useQuery<HypergraphData>({
-    queryKey: ['hypergraph'],
-    queryFn: () => api.getHypergraph(),
-    staleTime: 60_000,
-  });
-
-  const { data: graphData } = useQuery<KnowledgeGraphData>({
-    queryKey: ['graph-data'],
-    queryFn: () => api.getGraphData(),
-    staleTime: 60_000,
-  });
+  const data = causalQuery.data as CausalGraphData | undefined;
+  const isLoading = causalQuery.isLoading || hypergraphQuery.isLoading || graphQuery.isLoading;
+  const error = causalQuery.error || hypergraphQuery.error || graphQuery.error;
+  const hypergraphData = hypergraphQuery.data as HypergraphData | undefined;
+  const graphData = graphQuery.data as KnowledgeGraphData | undefined;
 
   // Build node/edge maps from data
   const nodeMap = useMemo(() => {
@@ -625,6 +649,30 @@ export default function CausalCanvas() {
             'text-background-opacity': 0.7,
           },
         },
+        {
+          selector: '.path-highlighted',
+          style: {
+            'border-width': 4,
+            'border-color': '#f59e0b',
+            'border-opacity': 1,
+            'background-color': '#f59e0b',
+            'overlay-color': '#f59e0b',
+            'overlay-opacity': 0.3,
+            'overlay-padding': 8,
+            'line-color': '#f59e0b',
+            'target-arrow-color': '#f59e0b',
+            'width': 4,
+            'opacity': 1,
+            'z-index': 10,
+          },
+        },
+        {
+          selector: '.path-dimmed',
+          style: {
+            'opacity': 0.1,
+            'z-index': 0,
+          },
+        },
       ],
       layout: {
         name: layout,
@@ -684,6 +732,12 @@ export default function CausalCanvas() {
       const node = evt.target;
       const nodeId = node.data('id');
       const isVirtual = !!node.data('isVirtual');
+
+      // Path mode: intercept clicks for path selection
+      if (pathModeRef.current && !isVirtual) {
+        handlePathNodeClickRef.current(nodeId);
+        return;
+      }
 
       if (evt.originalEvent?.ctrlKey || evt.originalEvent?.metaKey) {
         setSelectedNodeIds(prev => {
@@ -1098,6 +1152,105 @@ export default function CausalCanvas() {
     link.click();
   }, []);
 
+  const handleExportJson = useCallback(() => {
+    const cy = cyInstanceRef.current;
+    if (!cy) return;
+    const jsonData = JSON.stringify(cy.json(), null, 2);
+    const blob = new Blob([jsonData], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `causal-map-${Date.now()}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }, []);
+
+  const handlePathModeToggle = useCallback(() => {
+    setPathMode(true);
+    setPathStart(null);
+    setPathEnd(null);
+    setPathInstruction('请点击起始节点');
+    // Clear any previous path highlights
+    const cy = cyInstanceRef.current;
+    if (cy) {
+      cy.elements().removeClass('path-highlighted path-dimmed');
+    }
+  }, []);
+
+  const handlePathModeCancel = useCallback(() => {
+    setPathMode(false);
+    setPathStart(null);
+    setPathEnd(null);
+    setPathInstruction('请点击起始节点');
+    // Clear path highlights
+    const cy = cyInstanceRef.current;
+    if (cy) {
+      cy.elements().removeClass('path-highlighted path-dimmed');
+    }
+  }, []);
+
+  const handlePathNodeClick = useCallback((nodeId: string) => {
+    const cy = cyInstanceRef.current;
+    if (!cy) return;
+
+    if (!pathStart) {
+      setPathStart(nodeId);
+      setPathInstruction('请点击目标节点');
+      // Highlight start node
+      const startNode = cy.getElementById(nodeId);
+      if (startNode.length > 0) {
+        startNode.addClass('path-highlighted');
+      }
+    } else if (!pathEnd && nodeId !== pathStart) {
+      setPathEnd(nodeId);
+      setPathInstruction('路径已找到');
+
+      // Run A* path finding
+      const startNode = cy.getElementById(pathStart);
+      const endNode = cy.getElementById(nodeId);
+      if (startNode.length === 0 || endNode.length === 0) return;
+
+      const aStarResult = cy.elements().aStar({
+        root: startNode,
+        goal: endNode,
+        directed: false,
+      });
+
+      if (aStarResult.found && aStarResult.path) {
+        // Highlight the path
+        cy.elements().removeClass('path-highlighted path-dimmed');
+        const pathCollection = aStarResult.path;
+        pathCollection.addClass('path-highlighted');
+        pathElementsRef.current = pathCollection;
+        // Dim all other elements
+        cy.elements().not(pathCollection).addClass('path-dimmed');
+        cy.center(pathCollection);
+      } else {
+        setPathInstruction('未找到路径，请重新选择');
+        setPathStart(null);
+        setPathEnd(null);
+      }
+    } else {
+      // Reset if clicking the same node or after path found
+      setPathStart(null);
+      setPathEnd(null);
+      setPathInstruction('请点击起始节点');
+      cy.elements().removeClass('path-highlighted path-dimmed');
+      // Start new selection with this node
+      setPathStart(nodeId);
+      setPathInstruction('请点击目标节点');
+      const startNode = cy.getElementById(nodeId);
+      if (startNode.length > 0) {
+        startNode.addClass('path-highlighted');
+      }
+    }
+  }, [pathStart, pathEnd]);
+
+  // Keep handlePathNodeClickRef in sync with the latest callback
+  useEffect(() => {
+    handlePathNodeClickRef.current = handlePathNodeClick;
+  }, [handlePathNodeClick]);
+
   const handleLoadView = useCallback(async (viewId: string) => {
     const view = await api.loadView(viewId);
     if (view.snapshot?.hyperNodes) {
@@ -1197,9 +1350,12 @@ export default function CausalCanvas() {
       return;
     }
     cy.elements().removeClass('highlighted dimmed');
-    const matches = cy.nodes().filter(n =>
-      (n.data('label') as string)?.toLowerCase().includes(query.toLowerCase())
-    );
+    const lowerQuery = query.toLowerCase();
+    const matches = cy.nodes().filter(n => {
+      const label = (n.data('label') as string)?.toLowerCase() || '';
+      const id = (n.data('id') as string)?.toLowerCase() || '';
+      return label.includes(lowerQuery) || id.includes(lowerQuery);
+    });
     if (matches.length > 0) {
       matches.addClass('highlighted');
       cy.nodes().not(matches).addClass('dimmed');
@@ -1346,6 +1502,7 @@ export default function CausalCanvas() {
           layout={layout}
           onLayoutChange={handleLayoutChange}
           onExportPng={handleExportPng}
+          onExportJson={handleExportJson}
           showFeedbackLoops={showFeedbackLoops}
           onToggleFeedbackLoops={() => setShowFeedbackLoops(!showFeedbackLoops)}
           showLowConfidence={showLowConfidence}
@@ -1357,6 +1514,10 @@ export default function CausalCanvas() {
           onSearch={handleSearch}
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
+          pathMode={pathMode}
+          pathInstruction={pathInstruction}
+          onPathModeToggle={handlePathModeToggle}
+          onPathModeCancel={handlePathModeCancel}
         />
         {highlightedCluster && highlightedCluster.length > 0 && (
           <button
