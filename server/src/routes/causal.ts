@@ -252,6 +252,7 @@ app.get('/api/causal/suggestions', async (c) => {
 
   const suggestions: Array<{
     type: string;
+    moduleType?: string;
     title: string;
     description: string;
     nodes?: string[];
@@ -274,16 +275,74 @@ app.get('/api/causal/suggestions', async (c) => {
 
   // Use cached community detection results if available
   if (cached) {
-    for (const comp of cached.components.slice(0, limit)) {
+    // Query knowledge edges and hyperedges for classification
+    const { rows: knowledgeEdges } = await pool.query(
+      'SELECT * FROM links ORDER BY id'
+    );
+    const { rows: hyperedges } = await pool.query(
+      'SELECT * FROM hyperedges ORDER BY id'
+    );
+
+    // Build combined adjacency from knowledge edges and causal edges
+    const combinedAdj = new Map<string, Set<string>>();
+    // Knowledge edges (weight 0.5)
+    for (const edge of (knowledgeEdges || [])) {
+      const source = edge.source_slug || edge.source;
+      const target = edge.target_slug || edge.target;
+      if (source && target) {
+        if (!combinedAdj.has(source)) combinedAdj.set(source, new Set());
+        if (!combinedAdj.has(target)) combinedAdj.set(target, new Set());
+        combinedAdj.get(source)!.add(target);
+        combinedAdj.get(target)!.add(source);
+      }
+    }
+    // Causal edges (weight 1.0)
+    for (const edge of edges) {
+      if (!combinedAdj.has(edge.source_slug)) combinedAdj.set(edge.source_slug, new Set());
+      if (!combinedAdj.has(edge.target_slug)) combinedAdj.set(edge.target_slug, new Set());
+      combinedAdj.get(edge.source_slug)!.add(edge.target_slug);
+      combinedAdj.get(edge.target_slug)!.add(edge.source_slug);
+    }
+
+    // Recompute components from combined graph
+    const combinedVisited = new Set<string>();
+    const combinedComponents: string[][] = [];
+    for (const node of combinedAdj.keys()) {
+      if (combinedVisited.has(node)) continue;
+      if (filterNodes && !filterNodes.includes(node)) continue;
+      const component: string[] = [];
+      const queue = [node];
+      combinedVisited.add(node);
+      while (queue.length > 0) {
+        const current = queue.shift()!;
+        component.push(current);
+        for (const neighbor of combinedAdj.get(current) || []) {
+          if (!combinedVisited.has(neighbor)) {
+            combinedVisited.add(neighbor);
+            queue.push(neighbor);
+          }
+        }
+      }
+      if (component.length > 3) {
+        combinedComponents.push(component);
+      }
+    }
+    combinedComponents.sort((a, b) => b.length - a.length);
+
+    for (const comp of combinedComponents.slice(0, limit)) {
       if (filterNodes && !comp.some(n => filterNodes.includes(n))) continue;
-      suggestions.push({
+      const classification = classifyComponent(comp, knowledgeEdges, edges, hyperedges);
+      const isMixed = classification === 'mixed';
+      const suggestion: any = {
         type: 'cluster',
-        title: '发现紧密连接的节点簇',
-        description: `有 ${comp.length} 个节点紧密互连，可能是同一个风险模块`,
+        moduleType: classification,
+        title: classification === 'mixed' ? '发现跨类型复合模块' : classification === 'knowledge' ? '发现知识密集模块' : '发现因果紧密模块',
+        description: `${comp.length} 个节点通过${classification === 'mixed' ? '知识边和因果边' : classification === 'knowledge' ? '知识边' : '因果边'}紧密连接，建议打包为一组`,
         nodes: comp,
         action: 'pack',
-        confidence: Math.min(0.85, 0.5 + comp.length * 0.05)
-      });
+        confidence: isMixed ? 0.9 : Math.min(0.85, 0.5 + comp.length * 0.05),
+      };
+      suggestions.push(suggestion);
     }
 
     // Use cached hub nodes
@@ -329,11 +388,40 @@ app.get('/api/causal/suggestions', async (c) => {
   }
 
   // Fallback: compute on the fly (no cache)
+  // Query knowledge edges and hyperedges for classification
+  const { rows: knowledgeEdges } = await pool.query(
+    'SELECT * FROM links ORDER BY id'
+  );
+  const { rows: hyperedges } = await pool.query(
+    'SELECT * FROM hyperedges ORDER BY id'
+  );
+
+  // Build combined adjacency from knowledge edges and causal edges
+  const combinedAdj = new Map<string, Set<string>>();
+  // Knowledge edges (weight 0.5)
+  for (const edge of (knowledgeEdges || [])) {
+    const source = edge.source_slug || edge.source;
+    const target = edge.target_slug || edge.target;
+    if (source && target) {
+      if (!combinedAdj.has(source)) combinedAdj.set(source, new Set());
+      if (!combinedAdj.has(target)) combinedAdj.set(target, new Set());
+      combinedAdj.get(source)!.add(target);
+      combinedAdj.get(target)!.add(source);
+    }
+  }
+  // Causal edges (weight 1.0)
+  for (const edge of edges) {
+    if (!combinedAdj.has(edge.source_slug)) combinedAdj.set(edge.source_slug, new Set());
+    if (!combinedAdj.has(edge.target_slug)) combinedAdj.set(edge.target_slug, new Set());
+    combinedAdj.get(edge.source_slug)!.add(edge.target_slug);
+    combinedAdj.get(edge.target_slug)!.add(edge.source_slug);
+  }
+
   // --- 1. Community detection: connected components via BFS ---
   const visited = new Set<string>();
   const components: string[][] = [];
 
-  for (const node of adj.keys()) {
+  for (const node of combinedAdj.keys()) {
     if (visited.has(node)) continue;
     if (filterNodes && !filterNodes.includes(node)) continue;
 
@@ -344,7 +432,7 @@ app.get('/api/causal/suggestions', async (c) => {
     while (queue.length > 0) {
       const current = queue.shift()!;
       component.push(current);
-      for (const neighbor of adj.get(current) || []) {
+      for (const neighbor of combinedAdj.get(current) || []) {
         if (!visited.has(neighbor)) {
           visited.add(neighbor);
           queue.push(neighbor);
@@ -360,14 +448,18 @@ app.get('/api/causal/suggestions', async (c) => {
   // Sort components by size descending, suggest largest
   components.sort((a, b) => b.length - a.length);
   for (const comp of components.slice(0, limit)) {
-    suggestions.push({
+    const classification = classifyComponent(comp, knowledgeEdges, edges, hyperedges);
+    const isMixed = classification === 'mixed';
+    const suggestion: any = {
       type: 'cluster',
-      title: '发现紧密连接的节点簇',
-      description: `有 ${comp.length} 个节点紧密互连，可能是同一个风险模块`,
+      moduleType: classification,
+      title: classification === 'mixed' ? '发现跨类型复合模块' : classification === 'knowledge' ? '发现知识密集模块' : '发现因果紧密模块',
+      description: `${comp.length} 个节点通过${classification === 'mixed' ? '知识边和因果边' : classification === 'knowledge' ? '知识边' : '因果边'}紧密连接，建议打包为一组`,
       nodes: comp,
       action: 'pack',
-      confidence: Math.min(0.85, 0.5 + comp.length * 0.05)
-    });
+      confidence: isMixed ? 0.9 : Math.min(0.85, 0.5 + comp.length * 0.05),
+    };
+    suggestions.push(suggestion);
   }
 
   // --- 2. Hub detection: high out-degree ---
@@ -1412,6 +1504,39 @@ app.post('/api/causal/query', async (c) => {
 
   return c.json({ ...result, report, cached: false });
 });
+
+// Helper: classify a connected component based on edge types
+function classifyComponent(
+  comp: string[],
+  knowledgeEdges: any[],
+  causalEdges: any[],
+  hyperedges: any[],
+): 'knowledge' | 'causal' | 'mixed' {
+  let hasKnowledge = false;
+  let hasCausal = false;
+
+  const compSet = new Set(comp);
+
+  for (const edge of (knowledgeEdges || [])) {
+    const s = edge.source_slug || edge.source;
+    const t = edge.target_slug || edge.target;
+    if (compSet.has(s) || compSet.has(t)) hasKnowledge = true;
+  }
+
+  for (const edge of (causalEdges || [])) {
+    if (compSet.has(edge.source_slug) || compSet.has(edge.target_slug)) hasCausal = true;
+  }
+
+  // Also check hyperedges
+  for (const he of (hyperedges || [])) {
+    for (const s of (he.source_slugs || [])) if (compSet.has(s)) hasCausal = true;
+    for (const t of (he.target_slugs || [])) if (compSet.has(t)) hasCausal = true;
+  }
+
+  if (hasKnowledge && hasCausal) return 'mixed';
+  if (hasKnowledge) return 'knowledge';
+  return 'causal';
+}
 
 // Helper: build natural language causal report
 function buildCausalReport(

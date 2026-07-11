@@ -67,6 +67,26 @@ interface HypergraphData {
   cpts: Array<any>;
 }
 
+interface KnowledgeGraphData {
+  nodes: Array<{
+    id: string;
+    label: string;
+    title?: string;
+    type: string;
+    slug?: string;
+    weight?: number;
+    x?: number;
+    y?: number;
+  }>;
+  edges: Array<{
+    id: string;
+    source: string;
+    target: string;
+    relation: string;
+    weight: number;
+  }>;
+}
+
 function getNodeStatusColor(conf: number): string {
   if (conf >= 0.7) return '#22c55e';
   if (conf >= 0.3) return '#f97316';
@@ -105,6 +125,8 @@ export default function CausalCanvas() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showFeedbackLoops, setShowFeedbackLoops] = useState(true);
   const [showLowConfidence, setShowLowConfidence] = useState(true);
+  const [showKnowledgeEdges, setShowKnowledgeEdges] = useState(true);
+  const [showCausalEdges, setShowCausalEdges] = useState(true);
   const [selectedNode, setSelectedNode] = useState<{
     id: string;
     label: string;
@@ -182,6 +204,12 @@ export default function CausalCanvas() {
     staleTime: 60_000,
   });
 
+  const { data: graphData } = useQuery<KnowledgeGraphData>({
+    queryKey: ['graph-data'],
+    queryFn: () => api.getGraphData(),
+    staleTime: 60_000,
+  });
+
   // Build node/edge maps from data
   const nodeMap = useMemo(() => {
     if (!data) return new Map<string, { incoming: CausalEdge[]; outgoing: CausalEdge[]; conf: number }>();
@@ -230,27 +258,45 @@ export default function CausalCanvas() {
       }
     }
 
-    const nodeElements: ElementDefinition[] = [];
+    // Dedup map: keyed by slug, prefer knowledge graph label/title
+    const dedupMap = new Map<string, { id: string; label: string; conf: number; isKnowledge?: boolean }>();
+
+    // First pass: causal map nodes
     for (const slug of visibleNodeIds) {
       const info = nodeMap.get(slug);
       if (info) {
-        nodeElements.push({
-          data: {
-            id: slug,
-            label: slug,
-            conf: info.conf,
-          },
-        });
+        dedupMap.set(slug, { id: slug, label: slug, conf: info.conf });
       } else if (hyperNodeSlugs.has(slug)) {
-        // Node only exists in hyperedges, no regular edges
-        nodeElements.push({
-          data: {
-            id: slug,
-            label: slug,
-            conf: 0.5,
-          },
-        });
+        dedupMap.set(slug, { id: slug, label: slug, conf: 0.5 });
       }
+    }
+
+    // Second pass: knowledge graph nodes (overwrite label if already exists)
+    const kgIdToSlug = new Map<string, string>();
+    if (graphData?.nodes) {
+      for (const gn of graphData.nodes) {
+        const slug = gn.slug || gn.id;
+        kgIdToSlug.set(gn.id, slug);
+        const existing = dedupMap.get(slug);
+        if (existing) {
+          existing.label = gn.title || gn.label;
+          existing.isKnowledge = true;
+        } else {
+          dedupMap.set(slug, { id: slug, label: gn.title || gn.label, conf: 0.5, isKnowledge: true });
+        }
+      }
+    }
+
+    const nodeElements: ElementDefinition[] = [];
+    for (const [slug, info] of dedupMap) {
+      nodeElements.push({
+        data: {
+          id: slug,
+          label: info.label,
+          conf: info.conf,
+          ...(info.isKnowledge ? { type: 'knowledge' } : {}),
+        },
+      });
     }
 
     // Add virtual nodes
@@ -297,7 +343,7 @@ export default function CausalCanvas() {
 
       edgeElements.push({
         data: {
-          id: edge.id,
+          id: `ce_${edge.id}`,
           source: actualSource,
           target: actualTarget,
           relation: edge.relation,
@@ -307,6 +353,28 @@ export default function CausalCanvas() {
           evidence: Array.isArray(edge.evidence) ? edge.evidence : [],
         },
       });
+    }
+
+    // Knowledge graph edges
+    if (graphData?.edges) {
+      for (const edge of graphData.edges) {
+        const sourceSlug = kgIdToSlug.get(edge.source) || edge.source;
+        const targetSlug = kgIdToSlug.get(edge.target) || edge.target;
+        if (!dedupMap.has(sourceSlug) || !dedupMap.has(targetSlug)) continue;
+        edgeElements.push({
+          data: {
+            id: `kg_${edge.id}`,
+            source: sourceSlug,
+            target: targetSlug,
+            label: edge.relation,
+            type: 'knowledge',
+            relation: edge.relation,
+            weight: edge.weight,
+            conf: 0.5,
+            evidence: [],
+          },
+        });
+      }
     }
 
     // Process hyperedges into Cytoscape edge elements
@@ -333,7 +401,7 @@ export default function CausalCanvas() {
     }
 
     return [...nodeElements, ...edgeElements];
-  }, [data, hypergraphData, nodeMap, viewState, getVisibleNodes, getVirtualNodeByChildId, isNodeHidden]);
+  }, [data, hypergraphData, graphData, nodeMap, viewState, getVisibleNodes, getVirtualNodeByChildId, isNodeHidden]);
 
   const nodeCount = useMemo(() => {
     if (!data) return 0;
@@ -348,11 +416,17 @@ export default function CausalCanvas() {
         for (const t of he.target_slugs) slugs.add(t);
       }
     }
+    if (graphData?.nodes) {
+      for (const gn of graphData.nodes) {
+        slugs.add(gn.slug || gn.id);
+      }
+    }
     return slugs.size;
-  }, [data, hypergraphData]);
+  }, [data, hypergraphData, graphData]);
 
   const edgeCount = (data?.edges.length || 0) +
-    (hypergraphData?.hyperedges?.reduce((sum, he) => sum + (he.source_slugs?.length || 0) * (he.target_slugs?.length || 0), 0) || 0);
+    (hypergraphData?.hyperedges?.reduce((sum, he) => sum + (he.source_slugs?.length || 0) * (he.target_slugs?.length || 0), 0) || 0) +
+    (graphData?.edges?.length || 0);
 
   const allNodeSlugs = useMemo(() => Array.from(nodeMap.keys()), [nodeMap]);
   const selectedNodes = useMemo(() => Array.from(selectedNodeIds), [selectedNodeIds]);
@@ -408,6 +482,16 @@ export default function CausalCanvas() {
           },
         },
         {
+          selector: 'node[type="knowledge"]',
+          style: {
+            'background-color': '#93c5fd',
+            'border-color': '#3b82f6',
+            'border-width': 2,
+            'color': '#1e3a5f',
+            'font-size': 12,
+          },
+        },
+        {
           selector: 'edge',
           style: {
             'width': 1.5,
@@ -451,6 +535,23 @@ export default function CausalCanvas() {
             'label': 'data(label)',
             'font-size': 10,
             'color': '#06b6d4',
+          },
+        },
+        {
+          selector: 'edge[type="knowledge"]',
+          style: {
+            'line-color': '#3b82f6',
+            'target-arrow-color': '#3b82f6',
+            'width': 1.5,
+            'line-style': 'dashed',
+            'curve-style': 'bezier',
+            'opacity': 0.6,
+            'target-arrow-shape': 'triangle',
+            'label': 'data(label)',
+            'font-size': 9,
+            'color': '#3b82f6',
+            'text-background-color': '#ffffff',
+            'text-background-opacity': 0.5,
           },
         },
         {
@@ -779,16 +880,25 @@ export default function CausalCanvas() {
     if (!cy) return;
 
     cy.edges().forEach(edge => {
+      const type = edge.data('type') as string | undefined;
       const relation = (edge.data('relation') || edge.data('type')) as string;
       const conf = edge.data('conf') as number;
 
       let hidden = false;
 
-      if (!showFeedbackLoops && relation.includes('feedbackLoop')) {
-        hidden = true;
-      }
-      if (!showLowConfidence && conf < 0.3) {
-        hidden = true;
+      // Top-level: edge type filtering
+      if (type === 'knowledge') {
+        if (!showKnowledgeEdges) hidden = true;
+        // Knowledge edges skip causal filters
+      } else {
+        if (!showCausalEdges) hidden = true;
+        // Apply causal edge filters
+        if (!showFeedbackLoops && relation.includes('feedbackLoop')) {
+          hidden = true;
+        }
+        if (!showLowConfidence && conf < 0.3) {
+          hidden = true;
+        }
       }
 
       edge.style('display', hidden ? 'none' : 'element');
@@ -801,7 +911,7 @@ export default function CausalCanvas() {
         edge.style('opacity', opacity);
       }
     });
-  }, [showFeedbackLoops, showLowConfidence]);
+  }, [showKnowledgeEdges, showCausalEdges, showFeedbackLoops, showLowConfidence]);
 
   // Apply triggered alert visual styles
   useEffect(() => {
@@ -906,6 +1016,12 @@ export default function CausalCanvas() {
         cy.pan({ x: view.snapshot.zoomPan.x, y: view.snapshot.zoomPan.y });
       }
     }
+    if (view.snapshot?.filters?.showKnowledgeEdges !== undefined) {
+      setShowKnowledgeEdges(view.snapshot.filters.showKnowledgeEdges);
+    }
+    if (view.snapshot?.filters?.showCausalEdges !== undefined) {
+      setShowCausalEdges(view.snapshot.filters.showCausalEdges);
+    }
     setShowViewManager(false);
   }, []);
 
@@ -921,12 +1037,15 @@ export default function CausalCanvas() {
         scale: cy?.zoom() || 1,
       },
       filters: {
-        visibleEdgeTypes: showFeedbackLoops ? undefined : [':causesIncrease', ':causesDecrease', ':inhibits', ':jointlyCause'],
+        showKnowledgeEdges,
+        showCausalEdges,
+        showFeedbackLoops,
+        showLowConfidence,
       },
     };
     await api.saveView(viewId, saveName, snapshot);
     queryClient.invalidateQueries({ queryKey: ['views'] });
-  }, [viewState.virtualNodes, layout, showFeedbackLoops, queryClient]);
+  }, [viewState.virtualNodes, layout, showKnowledgeEdges, showCausalEdges, showFeedbackLoops, showLowConfidence, queryClient]);
 
   const handleSearch = useCallback((query: string) => {
     const cy = cyInstanceRef.current;
@@ -1080,6 +1199,10 @@ export default function CausalCanvas() {
           onToggleFeedbackLoops={() => setShowFeedbackLoops(!showFeedbackLoops)}
           showLowConfidence={showLowConfidence}
           onToggleLowConfidence={() => setShowLowConfidence(!showLowConfidence)}
+          showKnowledgeEdges={showKnowledgeEdges}
+          onToggleKnowledgeEdges={() => setShowKnowledgeEdges(!showKnowledgeEdges)}
+          showCausalEdges={showCausalEdges}
+          onToggleCausalEdges={() => setShowCausalEdges(!showCausalEdges)}
           onSearch={handleSearch}
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
@@ -1193,6 +1316,10 @@ export default function CausalCanvas() {
               <span className="h-0.5 w-6 border-t-2 border-dashed border-cyan-500" />
               达成决议
             </div>
+            <div className="flex items-center gap-2">
+              <span className="h-0.5 w-6 border-t-2 border-dashed border-blue-500" />
+              知识图谱边
+            </div>
           </div>
         </div>
       </div>
@@ -1222,8 +1349,20 @@ export default function CausalCanvas() {
               case 'filter':
                 if (op.params?.edgeTypes) {
                   const edgeTypes = op.params.edgeTypes as string[];
-                  if (edgeTypes.includes('causal')) {
-                    setShowFeedbackLoops(false);
+                  // Both types selected: show all
+                  if (edgeTypes.includes('knowledge') && edgeTypes.includes('causal')) {
+                    setShowKnowledgeEdges(true);
+                    setShowCausalEdges(true);
+                  }
+                  // "只显示知识边"
+                  if (edgeTypes.includes('knowledge') && !edgeTypes.includes('causal')) {
+                    setShowKnowledgeEdges(true);
+                    setShowCausalEdges(false);
+                  }
+                  // "只显示因果边"
+                  if (edgeTypes.includes('causal') && !edgeTypes.includes('knowledge')) {
+                    setShowKnowledgeEdges(false);
+                    setShowCausalEdges(true);
                   }
                 }
                 if (op.params?.minConf !== undefined) {

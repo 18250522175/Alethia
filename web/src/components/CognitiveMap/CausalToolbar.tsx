@@ -1,4 +1,4 @@
-import { Plus, Minus, ArrowsOutSimple, MagnifyingGlass, Download, Funnel, X } from '@phosphor-icons/react';
+import { Plus, Minus, ArrowsOutSimple, MagnifyingGlass, Download, Funnel, X, Graph, Brain } from '@phosphor-icons/react';
 import { useState, useRef, useEffect } from 'react';
 
 export type LayoutType = 'cose' | 'breadthfirst' | 'circle' | 'grid';
@@ -14,6 +14,10 @@ interface CausalToolbarProps {
   onToggleFeedbackLoops: () => void;
   showLowConfidence: boolean;
   onToggleLowConfidence: () => void;
+  showKnowledgeEdges: boolean;
+  onToggleKnowledgeEdges: () => void;
+  showCausalEdges: boolean;
+  onToggleCausalEdges: () => void;
   onSearch: (query: string) => void;
   searchQuery: string;
   onSearchChange: (query: string) => void;
@@ -37,6 +41,10 @@ export default function CausalToolbar({
   onToggleFeedbackLoops,
   showLowConfidence,
   onToggleLowConfidence,
+  showKnowledgeEdges,
+  onToggleKnowledgeEdges,
+  showCausalEdges,
+  onToggleCausalEdges,
   onSearch,
   searchQuery,
   onSearchChange,
@@ -136,6 +144,32 @@ export default function CausalToolbar({
           </div>
         )}
       </div>
+
+      {/* Knowledge edge toggle */}
+      <button
+        onClick={onToggleKnowledgeEdges}
+        className={`flex items-center gap-1 px-2 py-1 text-xs rounded ${
+          showKnowledgeEdges
+            ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+            : 'bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500'
+        }`}
+        title="知识图谱边"
+      >
+        <Graph size={14} /> 知识边
+      </button>
+
+      {/* Causal edge toggle */}
+      <button
+        onClick={onToggleCausalEdges}
+        className={`flex items-center gap-1 px-2 py-1 text-xs rounded ${
+          showCausalEdges
+            ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
+            : 'bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500'
+        }`}
+        title="认知地图边"
+      >
+        <Brain size={14} /> 因果边
+      </button>
 
       {/* Search */}
       <div className="flex items-center gap-1 rounded border border-slate-200 bg-slate-50 px-2 dark:border-slate-700 dark:bg-slate-900">

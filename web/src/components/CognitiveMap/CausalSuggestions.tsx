@@ -10,6 +10,7 @@ interface Suggestion {
   nodes?: string[];
   node?: string;
   action: string;
+  moduleType?: 'knowledge' | 'causal' | 'mixed';
   confidence: number;
 }
 
@@ -22,6 +23,37 @@ function getConfidenceColor(conf: number): string {
   if (conf >= 0.8) return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400';
   if (conf >= 0.6) return 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400';
   return 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400';
+}
+
+function getModuleTypeBadge(moduleType?: string) {
+  if (!moduleType) return null;
+  switch (moduleType) {
+    case 'mixed':
+      return (
+        <span className="inline-flex shrink-0 rounded px-1 py-0.5 text-[10px] font-medium bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
+          混合
+        </span>
+      );
+    case 'knowledge':
+      return (
+        <span className="inline-flex shrink-0 rounded px-1 py-0.5 text-[10px] font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+          知识
+        </span>
+      );
+    case 'causal':
+      return (
+        <span className="inline-flex shrink-0 rounded px-1 py-0.5 text-[10px] font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+          因果
+        </span>
+      );
+    default:
+      return null;
+  }
+}
+
+function getBorderClass(moduleType?: string): string {
+  if (moduleType === 'mixed') return 'border-purple-300 dark:border-purple-700';
+  return 'border-slate-100 dark:border-slate-700';
 }
 
 function getTypeIcon(type: string) {
@@ -80,7 +112,7 @@ export default function CausalSuggestions({ visibleNodes, onApplySuggestion }: C
           {suggestions.map((suggestion, idx) => (
             <div
               key={idx}
-              className="rounded-md border border-slate-100 p-2.5 dark:border-slate-700"
+              className={`rounded-md border p-2.5 ${getBorderClass(suggestion.moduleType)}`}
             >
               <div className="flex items-start gap-2">
                 <span className="mt-0.5 text-slate-400 dark:text-slate-500">
@@ -91,6 +123,7 @@ export default function CausalSuggestions({ visibleNodes, onApplySuggestion }: C
                     <span className="text-xs font-medium text-slate-800 dark:text-slate-100 truncate">
                       {suggestion.title}
                     </span>
+                    {getModuleTypeBadge(suggestion.moduleType)}
                     <span className={`inline-flex shrink-0 rounded px-1 py-0.5 text-[10px] font-medium ${getConfidenceColor(suggestion.confidence)}`}>
                       {(suggestion.confidence * 100).toFixed(0)}%
                     </span>
