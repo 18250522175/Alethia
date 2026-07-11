@@ -1,4 +1,4 @@
-import { House, Graph, CheckCircle, ChatsCircle, Gauge, Clock, ClockCounterClockwise, Gear, BookOpen, Brain, CaretDown, CaretRight, Ghost, Eye } from '@phosphor-icons/react';
+import { House, CheckCircle, ChatsCircle, Gauge, Clock, ClockCounterClockwise, Gear, BookOpen, Brain, CaretDown, CaretRight, Ghost, Eye, MagnifyingGlass, Bell, Flask, Notebook, UploadSimple, Link, Sparkle } from '@phosphor-icons/react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
@@ -169,17 +169,26 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
   const { notifications } = useNotification();
 
   const reviewCount = notifications.filter(n => n.type === 'review' && !n.read).length;
+  const notificationCount = notifications.filter(n => !n.read).length;
 
   const navItems: NavItem[] = [
     { path: '/', icon: House, label: t('nav.home') },
-    { path: '/graph', icon: Graph, label: t('nav.graph') },
+    { path: '/cognitive-map', icon: Brain, label: t('nav.graph', '图谱') },
     { path: '/review', icon: CheckCircle, label: t('nav.review'), badge: reviewCount > 0 ? String(reviewCount) : undefined, badgeColor: 'yellow' },
     { path: '/qa', icon: ChatsCircle, label: t('nav.qa') },
     { path: '/dashboard', icon: Gauge, label: t('nav.dashboard') },
     { path: '/timeline', icon: Clock, label: t('nav.timeline') },
     { path: '/changelog', icon: ClockCounterClockwise, label: t('nav.changelog') },
     { path: '/settings', icon: Gear, label: t('nav.settings') },
-    { path: '/observed-files', icon: Eye, label: t('nav.observedFiles', '观察文件') }
+    { path: '/observed-files', icon: Eye, label: t('nav.observedFiles', '观察文件') },
+    { path: '/search', icon: MagnifyingGlass, label: t('nav.search', '搜索') },
+    { path: '/notifications', icon: Bell, label: t('nav.notifications', '通知'), badge: notificationCount > 0 ? String(notificationCount) : undefined, badgeColor: 'blue' },
+    { path: '/eval-report', icon: Flask, label: t('nav.evalReport', '评测报告') },
+    { path: '/library', icon: BookOpen, label: t('nav.library', '资料库') },
+    { path: '/notes', icon: Notebook, label: t('nav.notes', '笔记') },
+    { path: '/upload', icon: UploadSimple, label: t('nav.upload', '上传') },
+    { path: '/prompts', icon: Sparkle, label: t('nav.prompts', '提示词') },
+    { path: '/aliases', icon: Link, label: t('nav.aliases', '别名') }
   ];
 
   const healthQuery = useQuery({
@@ -189,7 +198,7 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
     retry: 1
   });
 
-  const ghostCount = healthQuery.data?.ghostRelations ?? 2;
+  const ghostCount = healthQuery.data?.ghostRelations ?? 0;
 
   const handleRebuild = async () => {
     try {

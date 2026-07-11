@@ -3,11 +3,13 @@ import logger from '../i18n/logger';
 import MarkdownIt from 'markdown-it';
 import { resolve } from 'path';
 import { storage } from '../storage/markdown';
+import { compileCausalGraph, generateInferNetJS, type CompactCausalGraph } from '../causal/infernet';
 
 export interface StaticSiteOptions {
   outputPath?: string;
   includeMedia?: boolean;
   includeGraph?: boolean;
+  includeCausal?: boolean;
   theme?: 'light' | 'dark' | 'both';
 }
 
@@ -16,6 +18,7 @@ export interface StaticSiteResult {
   pagesGenerated: number;
   mediaCopied: number;
   graphGenerated: boolean;
+  causalGraphGenerated: boolean;
   totalFiles: number;
   durationMs: number;
 }
@@ -55,7 +58,7 @@ function extractTitle(rawMd: string, slug: string): string {
   return slug;
 }
 
-function baseLayout(title: string, body: string, sidebar: string, activeSlug?: string): string {
+function baseLayout(title: string, body: string, sidebar: string, activeSlug?: string, causalGraphJson?: string): string {
   return `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -100,6 +103,76 @@ function filterPages(query) {
     item.style.display = (!q || title.includes(q)) ? '' : 'none';
   });
 }
+</script>
+<script src="../assets/infernet.js"></script>
+<script id="causal-graph-data" type="application/json">${causalGraphJson || 'null'}</script>
+<script>window.__causalGraph = JSON.parse(document.getElementById('causal-graph-data')?.textContent || 'null');</script>
+<script>
+// CPT Widget for static pages
+(function() {
+  if (!window.InferNet || !window.__causalGraph) return;
+  var graph = window.__causalGraph;
+
+  // Find all CPT containers on the page
+  var containers = document.querySelectorAll('[data-cpt-slug]');
+  containers.forEach(function(container) {
+    var slug = container.getAttribute('data-cpt-slug');
+    var cpt = graph.cpts && graph.cpts[slug];
+    if (!cpt) return;
+
+    // Render parent selectors
+    var selectors = document.createElement('div');
+    selectors.className = 'cpt-selectors';
+    var state = {};
+    var parentVars = cpt.parents || [];
+    var cptStates = cpt.states || [];
+    parentVars.forEach(function(parent) {
+      var label = document.createElement('label');
+      label.textContent = parent.replace(/_/g, ' ') + ': ';
+      var select = document.createElement('select');
+      cptStates.forEach(function(s) {
+        var opt = document.createElement('option');
+        opt.value = s;
+        opt.textContent = s;
+        select.appendChild(opt);
+      });
+      state[parent] = cptStates[0];
+      select.addEventListener('change', function() {
+        state[parent] = select.value;
+        updateChart();
+      });
+      selectors.appendChild(label);
+      selectors.appendChild(select);
+      selectors.appendChild(document.createElement('br'));
+    });
+    container.appendChild(selectors);
+
+    // Render bar chart
+    var chart = document.createElement('div');
+    chart.className = 'cpt-chart';
+    container.appendChild(chart);
+
+    function updateChart() {
+      try {
+        var probs = window.InferNet.inferProbability(graph, slug, state);
+        chart.innerHTML = '';
+        cptStates.forEach(function(s) {
+          var prob = probs[s] || 0;
+          var pct = (prob * 100).toFixed(0);
+          var bar = document.createElement('div');
+          bar.className = 'cpt-bar';
+          bar.innerHTML = '<span class="cpt-label">' + s + '</span>' +
+            '<div class="cpt-bar-fill" style="width:' + (prob * 100) + '%"></div>' +
+            '<span class="cpt-value">' + pct + '%</span>';
+          chart.appendChild(bar);
+        });
+      } catch(e) {
+        chart.innerHTML = '<span class="cpt-error">无法计算概率</span>';
+      }
+    }
+    updateChart();
+  });
+})();
 </script>
 </body>
 </html>`;
@@ -479,7 +552,7 @@ function buildSidebarList(pages: PageRow[], activeSlug?: string): string {
     .join('\n');
 }
 
-function renderWikiPage(page: PageRow, allPages: PageRow[]): string {
+function renderWikiPage(page: PageRow, allPages: PageRow[], causalGraphJson?: string): string {
   const sidebarHtml = buildSidebarList(allPages, page.slug);
   const contentHtml = md.render(page.content_md || page.raw_md);
   const contextsHtml = (page.contexts && page.contexts.length > 0)
@@ -504,10 +577,10 @@ function renderWikiPage(page: PageRow, allPages: PageRow[]): string {
   `;
 
   const body = `<h1>${escapeHtml(page.title)}</h1>${metaHtml}<div class="page-body">${contentHtml}</div>`;
-  return baseLayout(page.title, body, sidebarHtml, page.slug);
+  return baseLayout(page.title, body, sidebarHtml, page.slug, causalGraphJson);
 }
 
-function renderIndexPage(allPages: PageRow[], linkCount: number): string {
+function renderIndexPage(allPages: PageRow[], linkCount: number, causalGraphJson?: string): string {
   const sidebarHtml = buildSidebarList(allPages, '__index__');
   const recentPages = [...allPages]
     .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
@@ -549,10 +622,10 @@ function renderIndexPage(allPages: PageRow[], linkCount: number): string {
     </ul>
   `;
 
-  return baseLayout('首页 - Alethia 知识库', body, sidebarHtml, '__index__');
+  return baseLayout('首页 - Alethia 知识库', body, sidebarHtml, '__index__', causalGraphJson);
 }
 
-function renderSearchPage(allPages: PageRow[]): string {
+function renderSearchPage(allPages: PageRow[], causalGraphJson?: string): string {
   const sidebarHtml = buildSidebarList(allPages, '__search__');
 
   const pageListJson = JSON.stringify(allPages.map(p => ({
@@ -575,7 +648,7 @@ function renderSearchPage(allPages: PageRow[]): string {
     </div>
   `;
 
-  const layout = baseLayout('搜索 - Alethia 知识库', body, sidebarHtml, '__search__');
+  const layout = baseLayout('搜索 - Alethia 知识库', body, sidebarHtml, '__search__', causalGraphJson);
 
   const searchScript = `
 <script>
@@ -630,7 +703,7 @@ if (qParam) {
   return layout.replace('</body>', searchScript + '</body>');
 }
 
-function renderAboutPage(allPages: PageRow[], linkCount: number): string {
+function renderAboutPage(allPages: PageRow[], linkCount: number, causalGraphJson?: string): string {
   const sidebarHtml = buildSidebarList(allPages, '__about__');
   const generatedAt = new Date().toLocaleString('zh-CN');
 
@@ -666,7 +739,7 @@ function renderAboutPage(allPages: PageRow[], linkCount: number): string {
     </ul>
   `;
 
-  return baseLayout('关于 - Alethia 知识库', body, sidebarHtml, '__about__');
+  return baseLayout('关于 - Alethia 知识库', body, sidebarHtml, '__about__', causalGraphJson);
 }
 
 async function copyDirRecursive(src: string, dest: string): Promise<number> {
@@ -716,6 +789,55 @@ async function generateGraphJson(pages: PageRow[], links: LinkRow[]): Promise<an
   return { nodes, edges };
 }
 
+async function generateCausalGraphJson(): Promise<CompactCausalGraph | null> {
+  try {
+    const pool = getPool();
+
+    const { rows: causalEdges } = await pool.query(
+      'SELECT source_slug, target_slug, relation, weight, conf, lag FROM causal_edges ORDER BY id'
+    );
+
+    const { rows: hyperedges } = await pool.query(
+      'SELECT h.source_slugs, h.target_slugs, h.type, h.params FROM hyperedges h ORDER BY h.id'
+    );
+
+    const { rows: cpts } = await pool.query(
+      'SELECT variable_slug, conditions, probabilities FROM causal_cpt ORDER BY id'
+    );
+
+    if (causalEdges.length === 0 && cpts.length === 0) {
+      return null;
+    }
+
+    const edges = causalEdges.map((e: any) => ({
+      source_slug: e.source_slug,
+      target_slug: e.target_slug,
+      relation: e.relation,
+      weight: e.weight,
+      conf: e.conf,
+      lag: e.lag || '',
+    }));
+
+    const hes = hyperedges.map((he: any) => ({
+      source_slugs: he.source_slugs || [],
+      target_slugs: he.target_slugs || [],
+      type: he.type || 'jointlyCause',
+      params: typeof he.params === 'string' ? JSON.parse(he.params) : (he.params || {}),
+    }));
+
+    const cptEntries = cpts.map((c: any) => ({
+      variable_slug: c.variable_slug,
+      conditions: typeof c.conditions === 'string' ? JSON.parse(c.conditions) : (c.conditions || {}),
+      probabilities: typeof c.probabilities === 'string' ? JSON.parse(c.probabilities) : (c.probabilities || {}),
+    }));
+
+    return compileCausalGraph(edges, hes, cptEntries);
+  } catch (err) {
+    logger.error({ err }, '生成因果图 JSON 失败');
+    return null;
+  }
+}
+
 async function countFiles(dir: string): Promise<number> {
   let count = 0;
   try {
@@ -733,7 +855,8 @@ export async function generateStaticSite(options: StaticSiteOptions = {}): Promi
   const {
     outputPath,
     includeMedia = false,
-    includeGraph = false
+    includeGraph = false,
+    includeCausal = false
   } = options;
 
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -756,11 +879,12 @@ export async function generateStaticSite(options: StaticSiteOptions = {}): Promi
   }
   const outputDir = `${baseOutputDir}/${timestamp}`;
 
-  logger.info({ outputDir, includeMedia, includeGraph }, '开始生成静态站点');
+  logger.info({ outputDir, includeMedia, includeGraph, includeCausal }, '开始生成静态站点');
 
   let pagesGenerated = 0;
   let mediaCopied = 0;
   let graphGenerated = false;
+  let causalGraphGenerated = false;
 
   try {
     const pool = getPool();
@@ -785,20 +909,33 @@ export async function generateStaticSite(options: StaticSiteOptions = {}): Promi
 
     await Bun.write(`${assetsDir}/style.css`, cssContent());
 
+    // Generate causal graph first (if requested) so it can be embedded in pages
+    let causalGraphJson: string | undefined;
+    if (includeCausal) {
+      const causalGraph = await generateCausalGraphJson();
+      if (causalGraph) {
+        await Bun.write(`${outputDir}/causal_graph.json`, JSON.stringify(causalGraph, null, 2));
+        await Bun.write(`${assetsDir}/infernet.js`, generateInferNetJS());
+        causalGraphGenerated = true;
+        causalGraphJson = JSON.stringify(causalGraph);
+        logger.info('因果图 JSON 与 infernet.js 生成完成');
+      }
+    }
+
     for (const page of pages) {
-      const html = renderWikiPage(page, pages);
+      const html = renderWikiPage(page, pages, causalGraphJson);
       const filePath = `${wikiDir}/${page.slug}.html`;
       await Bun.write(filePath, html);
       pagesGenerated++;
     }
 
-    const indexHtml = renderIndexPage(pages, links.length);
+    const indexHtml = renderIndexPage(pages, links.length, causalGraphJson);
     await Bun.write(`${outputDir}/index.html`, indexHtml);
 
-    const searchHtml = renderSearchPage(pages);
+    const searchHtml = renderSearchPage(pages, causalGraphJson);
     await Bun.write(`${outputDir}/search.html`, searchHtml);
 
-    const aboutHtml = renderAboutPage(pages, links.length);
+    const aboutHtml = renderAboutPage(pages, links.length, causalGraphJson);
     await Bun.write(`${outputDir}/about.html`, aboutHtml);
 
     pagesGenerated += 3;
@@ -821,7 +958,7 @@ export async function generateStaticSite(options: StaticSiteOptions = {}): Promi
     const durationMs = Date.now() - startTime;
 
     logger.info(
-      { outputDir, pagesGenerated, mediaCopied, graphGenerated, totalFiles, durationMs },
+      { outputDir, pagesGenerated, mediaCopied, graphGenerated, causalGraphGenerated, totalFiles, durationMs },
       '静态站点生成完成'
     );
 
@@ -830,6 +967,7 @@ export async function generateStaticSite(options: StaticSiteOptions = {}): Promi
       pagesGenerated,
       mediaCopied,
       graphGenerated,
+      causalGraphGenerated,
       totalFiles,
       durationMs
     };

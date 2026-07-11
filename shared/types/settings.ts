@@ -25,7 +25,7 @@ export interface LanguageSettings {
   fallbackLanguage: string;
 }
 
-export type ModelTier = 'fact_extract' | 'whitelist_fix' | 'disambiguate' | 'nli_pre' | 'translate' | 'compress' | 'archive_summary' | 'ring_gen' | 'contradiction' | 'gap_analysis' | 'narrate' | 'qa_gen' | 'embed';
+export type ModelTier = 'fact_extract' | 'whitelist_fix' | 'disambiguate' | 'nli_pre' | 'translate' | 'compress' | 'archive_summary' | 'ring_gen' | 'contradiction' | 'gap_analysis' | 'narrate' | 'qa_gen' | 'embed' | 'nl_command';
 
 export interface ModelAssignment {
   [task: string]: { adapterId: string; model: string };
@@ -76,7 +76,15 @@ export interface IntegrationSettings {
   mcpHttpEnabled: boolean;
   mcpHttpPort: number;
   corsAllowedOrigins: string[];
-  llmAdapters: Record<AdapterId, { apiKey: string; enabled: boolean; defaultModel: string }>;
+  llmAdapters: Record<AdapterId, { 
+    apiKey: string; 
+    enabled: boolean; 
+    defaultModel: string;
+    temperature?: number;
+    maxTokens?: number;
+    topP?: number;
+    baseUrl?: string;
+  }>;
   reranker: { enabled: boolean; apiKey: string };
   nliProvider: 'hf-inference' | 'local';
   hfApiKey: string;
@@ -88,10 +96,17 @@ export interface ExperimentalSettings {
   autoTranscribeMedia: boolean;
 }
 
+export interface LLMGlobalConfig {
+  defaultTemperature: number;
+  defaultMaxTokens: number;
+  defaultTopP: number;
+}
+
 export interface Settings {
   appearance: AppearanceSettings;
   general: GeneralSettings;
   language: Language;
+  llmConfig: LLMGlobalConfig;
   budget: BudgetSettings;
   security: SecuritySettings;
   privacy: PrivacySettings;
@@ -114,7 +129,8 @@ export const RECOMMENDED_MODEL_ASSIGNMENT: ModelAssignment = {
   gap_analysis: { adapterId: 'deepseek', model: 'deepseek-chat' },
   narrate: { adapterId: 'deepseek', model: 'deepseek-chat' },
   qa_gen: { adapterId: 'deepseek', model: 'deepseek-chat' },
-  embed: { adapterId: 'deepseek', model: 'text-embedding-v1' }
+  embed: { adapterId: 'deepseek', model: 'text-embedding-v1' },
+  nl_command: { adapterId: 'deepseek', model: 'deepseek-chat' }
 };
 
 export const defaultSettings: Settings = {
@@ -126,6 +142,11 @@ export const defaultSettings: Settings = {
     timeFormat: '24h'
   },
   language: 'zh-CN',
+  llmConfig: {
+    defaultTemperature: 0.7,
+    defaultMaxTokens: 4096,
+    defaultTopP: 0.9
+  },
   budget: {
     dailyBudget: 5,
     monthlyBudget: 50,

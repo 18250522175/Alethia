@@ -20,7 +20,8 @@ import {
   ArrowsIn,
   ArrowsOut,
   Clock,
-  Trash
+  Trash,
+  Graph
 } from '@phosphor-icons/react';
 import api from '../lib/api';
 import MarkdownRenderer from '../components/MarkdownRenderer';
@@ -37,14 +38,6 @@ interface ChatMessage {
   estimatedCost?: number;
   conversationId?: string;
   ts: number;
-  compressed?: boolean;
-}
-
-interface Conversation {
-  id: string;
-  title: string;
-  preview: string;
-  updatedAt: number;
   compressed?: boolean;
 }
 
@@ -529,6 +522,14 @@ function MessageBubble({ message, viewMode, onEvidenceClick, onFeedback, navigat
     source_type: src.source_type || 'library_file'
   }));
 
+  // 从消息内容中提取实体 slug（wikilink 格式 [[slug]]）
+  const slugRegex = /\[\[([^\]]+)\]\]/g;
+  const mentionedSlugs: string[] = [];
+  let match;
+  while ((match = slugRegex.exec(message.content)) !== null) {
+    mentionedSlugs.push(match[1]);
+  }
+
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
       <div
@@ -606,6 +607,29 @@ function MessageBubble({ message, viewMode, onEvidenceClick, onFeedback, navigat
                     {e.title}
                   </button>
                 ))}
+                {message.relatedEntities.length > 0 && (
+                  <button
+                    onClick={() => navigate?.(`/cognitive-map?focus=${message.relatedEntities![0].slug}`)}
+                    className="rounded bg-knowledge-100 px-1.5 py-0.5 text-xs font-medium text-knowledge-700 transition-colors hover:bg-knowledge-200 dark:bg-knowledge-900/30 dark:text-knowledge-300 dark:hover:bg-knowledge-800/30"
+                    title={t('qa.viewInCognitiveMap', '在认知地图中查看')}
+                  >
+                    <Graph size={12} className="mr-0.5 inline" />
+                    在认知地图中查看
+                  </button>
+                )}
+              </div>
+            )}
+            {!message.relatedEntities?.length && mentionedSlugs.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1">
+                <Tag size={12} />
+                <button
+                  onClick={() => navigate?.(`/cognitive-map?focus=${mentionedSlugs[0]}`)}
+                  className="rounded bg-knowledge-100 px-1.5 py-0.5 text-xs font-medium text-knowledge-700 transition-colors hover:bg-knowledge-200 dark:bg-knowledge-900/30 dark:text-knowledge-300 dark:hover:bg-knowledge-800/30"
+                  title={t('qa.viewInCognitiveMap', '在认知地图中查看')}
+                >
+                  <Graph size={12} className="mr-0.5 inline" />
+                  在认知地图中查看
+                </button>
               </div>
             )}
           </div>

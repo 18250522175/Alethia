@@ -1,6 +1,7 @@
 import { executeQuery } from '../retrieval/router';
 import { graphTraverse } from '../retrieval/graph';
 import { getPool } from '../db/pool';
+import { withTimeout } from './utils';
 import logger from '../i18n/logger';
 import type { EvidenceSpan, QueryResultItem } from '@shared/index';
 import type { RetrievalPlan } from './planner';
@@ -12,6 +13,10 @@ export interface RetrievalResult {
 }
 
 export async function retrieve(plan: RetrievalPlan): Promise<RetrievalResult> {
+  return withTimeout(retrieveInternal(plan), 5 * 60 * 1000, 'retrieve');
+}
+
+async function retrieveInternal(plan: RetrievalPlan): Promise<RetrievalResult> {
   const query = plan.keywords.join(' ');
   logger.info({ query, depth: plan.depth }, '执行检索');
 

@@ -12,6 +12,7 @@ import {
   X,
   Check,
   ArrowRight,
+  Brain,
 } from '@phosphor-icons/react';
 import { formatRelativeTime } from '../lib/format';
 import api from '../lib/api';
@@ -57,7 +58,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       try {
         const result = await api.request<{ items: Notification[]; total: number }>('/notifications');
         return result.items || [];
-      } catch {
+      } catch (err) {
+        console.warn('获取通知列表失败', err);
         return [];
       }
     },
@@ -94,7 +96,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       if (!isNaN(numId)) {
         await api.markNotificationRead(numId);
       }
-    } catch {
+    } catch (err) {
+      console.warn('标记通知已读失败', err);
       // 忽略网络错误
     }
   }, []);
@@ -103,7 +106,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     setLocalNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
     try {
       await api.markAllNotificationsRead();
-    } catch {
+    } catch (err) {
+      console.warn('全部标为已读失败', err);
       // 忽略网络错误
     }
   }, []);
@@ -112,7 +116,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     setLocalNotifications([]);
     try {
       await api.clearAllNotifications();
-    } catch {
+    } catch (err) {
+      console.warn('清空通知失败', err);
       // 忽略网络错误
     }
   }, []);
@@ -318,6 +323,20 @@ export function NotificationCenter({ isOpen, onClose }: NotificationCenterProps)
                             </span>
                           )}
                         </div>
+                        {notification.type === 'anomaly' && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              markAsRead(notification.id);
+                              navigate('/cognitive-map');
+                              onClose();
+                            }}
+                            className="mt-2 flex items-center gap-1 text-xs font-medium text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
+                          >
+                            <Brain size={14} />
+                            {tNotif('notification.viewInCognitiveMap', '在认知地图中查看')}
+                          </button>
+                        )}
                       </div>
                     </div>
                   </button>

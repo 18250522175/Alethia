@@ -32,10 +32,10 @@ export async function rollbackBatch(batchId: string): Promise<RollbackResult> {
 
   try {
     const result = await pool.query(
-      `SELECT id, batch_id, op, target, payload, ts
+      `SELECT id, batch_id, op, target, payload, created_at as ts
        FROM auto_change_log
        WHERE batch_id = $1
-       ORDER BY ts DESC`,
+       ORDER BY created_at DESC`,
       [batchId]
     );
     entries = result.rows.map((r: any) => ({

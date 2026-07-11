@@ -721,7 +721,8 @@
     "dropToUpload": "释放以上传文件",
     "searching": "搜索中…",
     "noMatch": "无匹配结果",
-    "aliases": "别名: {{aliases}}"
+    "aliases": "别名: {{aliases}}",
+    "aliasMatch": "别名"
   },
   "changelog": {
     "subtitle": "查看最近 24 小时的自动变更记录，支持按批次回滚",
@@ -779,6 +780,7 @@
     "enterInsert": "↵ 确认插入",
     "escBack": "Esc 返回列表"
   },
+  // DEPRECATED: graphFull keys are deprecated, page merged into CausalCanvas
   "graphFull": {
     "layoutForce": "力导向",
     "layoutCircle": "同心圆",

@@ -101,10 +101,10 @@ export async function loadConversationMessages(conversationId: string): Promise<
   try {
     const pool = getPool();
     const result = await pool.query(
-      `SELECT id, conversation_id, role, content, ts, tokens, cost
+      `SELECT id, conversation_id, role, content, created_at as ts, tokens, cost
        FROM conversation_logs
        WHERE conversation_id = $1
-       ORDER BY ts ASC`,
+       ORDER BY created_at ASC`,
       [conversationId]
     );
 

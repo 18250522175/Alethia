@@ -1,5 +1,7 @@
 import { llmRouter } from '../llm/router';
 import logger from '../i18n/logger';
+import { mkdtempSync, writeFileSync, rmSync } from 'fs';
+import { tmpdir, join } from 'os';
 
 export interface ImageProcessResult {
   text: string;
@@ -48,33 +50,77 @@ async function runOcr(buffer: Buffer, _mime: string): Promise<string> {
   if (!recognize) {
     throw new Error('tesseract.js recognize 接口未找到');
   }
-  // 默认中英混合识别
-  const result = await recognize(buffer, 'chi_sim+eng', { logger: () => {} });
-  return (result?.data?.text || '').trim();
+  
+  try {
+    const langData = await detectLanguage(buffer);
+    const lang = langData || 'chi_sim+eng';
+    const result = await recognize(buffer, lang, { logger: () => {} });
+    return (result?.data?.text || '').trim();
+  } catch (err) {
+    logger.warn({ err }, 'OCR 语言检测失败，使用默认语言');
+    const result = await recognize(buffer, 'chi_sim+eng', { logger: () => {} });
+    return (result?.data?.text || '').trim();
+  }
+}
+
+async function detectLanguage(buffer: Buffer): Promise<string | null> {
+  try {
+    const sharp: any = await import('sharp');
+    const img = await sharp(buffer).resize(100, 100).toBuffer();
+    const histogram = await sharp(img).stats();
+    
+    const hasChineseCharacteristics = 
+      (histogram.channels[0].mean > 150) ||
+      (histogram.channels[1].mean > 150);
+    
+    if (hasChineseCharacteristics) {
+      return 'chi_sim+eng';
+    }
+    return 'eng';
+  } catch (err) {
+    logger.warn({ err }, '图像语言检测失败，使用默认语言');
+    return 'chi_sim+eng';
+  }
 }
 
 async function runVlm(buffer: Buffer, mime: string): Promise<string> {
-  // 借用 narrate 任务路由到默认聊天模型（OpenAI 兼容 chat 接口）
   const adapter = llmRouter.route('narrate');
-  const dataUrl = `data:${mime};base64,${buffer.toString('base64')}`;
+  
+  let imageUrl: string;
+  let cleanup: (() => void) | undefined;
+  
+  if (buffer.length > 2 * 1024 * 1024) {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'alethia-vlm-'));
+    const filePath = join(tmpDir, `image.${mime.split('/')[1]}`);
+    writeFileSync(filePath, buffer);
+    imageUrl = filePath;
+    cleanup = () => rmSync(tmpDir, { recursive: true, force: true });
+  } else {
+    imageUrl = `data:${mime};base64,${buffer.toString('base64')}`;
+  }
 
-  // OpenAI 视觉 API：content 为数组，含 image_url
-  const messages: any = [
-    {
-      role: 'user',
-      content: [
-        {
-          type: 'text',
-          text: '请用中文详细描述这张图片的内容，包括其中的文字、物体、场景、人物等关键信息。'
-        },
-        {
-          type: 'image_url',
-          image_url: { url: dataUrl }
-        }
-      ]
+  try {
+    const messages: any = [
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'text',
+            text: '请用中文详细描述这张图片的内容，包括其中的文字、物体、场景、人物等关键信息。'
+          },
+          {
+            type: 'image_url',
+            image_url: { url: imageUrl }
+          }
+        ]
+      }
+    ];
+
+    const response = await adapter.chat({ messages } as any);
+    return (response?.content || '').trim();
+  } finally {
+    if (cleanup) {
+      try { cleanup(); } catch (err) { logger.warn({ err }, 'VLM 临时文件清理失败'); }
     }
-  ];
-
-  const response = await adapter.chat({ messages } as any);
-  return (response?.content || '').trim();
+  }
 }

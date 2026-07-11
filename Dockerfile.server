@@ -79,9 +79,9 @@ USER app
 WORKDIR /app/server
 EXPOSE 3000
 
-# 健康检查：每 30s 探测 /health（oven/bun 镜像无 curl，用 wget）
+# 健康检查：每 30s 探测 /health（用 curl）
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD curl -sf http://127.0.0.1:3000/health > /dev/null || exit 1
+  CMD curl -sf --max-time 5 http://127.0.0.1:3000/health > /dev/null || exit 1
 
 # 启动编译产物（bun build 保留源目录结构：src/index.ts → dist/src/index.js）
 CMD ["bun", "dist/src/index.js"]

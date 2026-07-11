@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams, Link as RouterLink } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   FileText,
   ArrowLeft,
@@ -16,7 +16,12 @@ import {
   Download,
   PlayCircle,
   Code,
-  ListBullets
+  ListBullets,
+  Tag,
+  PencilSimple,
+  X,
+  Check,
+  Plus
 } from '@phosphor-icons/react';
 import api from '../lib/api';
 import { formatFileSize, formatDateTime } from '../lib/format';
@@ -28,6 +33,7 @@ interface LibraryFile {
   size: number;
   status: string;
   ingestedAt: string;
+  tags: string[];
 }
 
 interface EvidenceSpanItem {
@@ -84,6 +90,13 @@ export default function LibraryFilePage() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
+  const queryClient = useQueryClient();
+
+  // Tag editing state
+  const [isEditingTags, setIsEditingTags] = useState(false);
+  const [tagInput, setTagInput] = useState('');
+  const [editingTags, setEditingTags] = useState<string[]>([]);
+  const [isSavingTags, setIsSavingTags] = useState(false);
 
   const fileQuery = useQuery({
     queryKey: ['library-file', hash],
@@ -129,6 +142,46 @@ export default function LibraryFilePage() {
     if (!media) return;
     media.currentTime = seconds;
     void media.play().catch(() => undefined);
+  };
+
+  // Tag editing handlers
+  const startEditingTags = () => {
+    setEditingTags([...(file?.tags || [])]);
+    setIsEditingTags(true);
+  };
+
+  const cancelEditingTags = () => {
+    setIsEditingTags(false);
+    setTagInput('');
+    setEditingTags([]);
+  };
+
+  const addTag = () => {
+    const trimmed = tagInput.trim();
+    if (trimmed && !editingTags.includes(trimmed)) {
+      setEditingTags(prev => [...prev, trimmed]);
+    }
+    setTagInput('');
+  };
+
+  const removeTag = (tag: string) => {
+    setEditingTags(prev => prev.filter(t => t !== tag));
+  };
+
+  const saveTags = async () => {
+    if (!hash) return;
+    setIsSavingTags(true);
+    try {
+      await api.updateLibraryFileTags(hash, editingTags);
+      queryClient.invalidateQueries({ queryKey: ['library-file', hash] });
+      queryClient.invalidateQueries({ queryKey: ['library-files'] });
+      setIsEditingTags(false);
+      setTagInput('');
+    } catch (err: any) {
+      // Error handling is done in api layer
+    } finally {
+      setIsSavingTags(false);
+    }
   };
 
   if (!hash) {
@@ -226,6 +279,100 @@ export default function LibraryFilePage() {
               />
               <MetaRow label={t('libraryFile.fileHash')} value={file.hash} mono />
             </dl>
+          </section>
+
+          {/* Tags Section */}
+          <section className="card p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                <Tag size={12} />
+                {t('libraryFile.tags', '标签')}
+              </div>
+              {!isEditingTags && (
+                <button
+                  onClick={startEditingTags}
+                  className="flex items-center gap-1 rounded px-2 py-1 text-xs text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-700/60 transition-colors"
+                >
+                  <PencilSimple size={12} />
+                  {t('common.edit', '编辑')}
+                </button>
+              )}
+            </div>
+            {isEditingTags ? (
+              <div className="space-y-2">
+                <div className="flex gap-1.5">
+                  <input
+                    type="text"
+                    value={tagInput}
+                    onChange={(e) => setTagInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') { e.preventDefault(); addTag(); }
+                    }}
+                    placeholder={t('libraryFile.addTagPlaceholder', '输入标签名称...')}
+                    className="flex-1 rounded-md border border-slate-300 px-2 py-1 text-xs dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200"
+                    autoFocus
+                  />
+                  <button
+                    onClick={addTag}
+                    disabled={!tagInput.trim()}
+                    className="flex items-center gap-1 rounded-md bg-primary-500 px-2 py-1 text-xs text-white hover:bg-primary-600 disabled:opacity-50 transition-colors"
+                  >
+                    <Plus size={12} />
+                    {t('common.add', '添加')}
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {editingTags.map(tag => (
+                    <span
+                      key={tag}
+                      className="inline-flex items-center gap-1 rounded-full bg-primary-100 px-2 py-0.5 text-xs text-primary-700 dark:bg-primary-900/30 dark:text-primary-300"
+                    >
+                      {tag}
+                      <button
+                        onClick={() => removeTag(tag)}
+                        className="ml-0.5 rounded-full p-0.5 hover:bg-primary-200 dark:hover:bg-primary-700/50 transition-colors"
+                      >
+                        <X size={10} />
+                      </button>
+                    </span>
+                  ))}
+                  {editingTags.length === 0 && (
+                    <span className="text-xs text-slate-400">{t('libraryFile.noTags', '暂无标签')}</span>
+                  )}
+                </div>
+                <div className="flex gap-2 pt-1">
+                  <button
+                    onClick={saveTags}
+                    disabled={isSavingTags}
+                    className="flex items-center gap-1 rounded-md bg-green-500 px-2.5 py-1 text-xs text-white hover:bg-green-600 disabled:opacity-50 transition-colors"
+                  >
+                    <Check size={12} />
+                    {isSavingTags ? t('common.saving', '保存中...') : t('common.save', '保存')}
+                  </button>
+                  <button
+                    onClick={cancelEditingTags}
+                    className="flex items-center gap-1 rounded-md border border-slate-300 px-2.5 py-1 text-xs text-slate-600 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-400 dark:hover:bg-slate-700/60 transition-colors"
+                  >
+                    <X size={12} />
+                    {t('common.cancel', '取消')}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {(file?.tags || []).map(tag => (
+                  <span
+                    key={tag}
+                    className="inline-flex items-center gap-1 rounded-full bg-primary-100 px-2 py-0.5 text-xs text-primary-700 dark:bg-primary-900/30 dark:text-primary-300"
+                  >
+                    {tag}
+                  </span>
+                ))}
+                {(!file?.tags || file.tags.length === 0) && (
+                  <span className="text-xs text-slate-400">{t('libraryFile.noTags', '暂无标签')}</span>
+                )}
+              </div>
+            )}
           </section>
 
           {timecodes.length > 0 && (

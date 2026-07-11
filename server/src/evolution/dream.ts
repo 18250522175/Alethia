@@ -8,7 +8,7 @@ export interface DreamReport {
   budgetAllowed: boolean;
   phases: {
     budgetCheck: { allowed: boolean; reason?: string };
-    communityDetect: { skipped: boolean };
+    communityDetect: { skipped: boolean; clusters?: number; ghosts?: number; diffs?: number };
     nliPre: { skipped: boolean };
     forgetDecay: { ok: boolean; decayed: number };
     lint: { ok: boolean };
@@ -28,9 +28,9 @@ const FORGET_DECAY_CONFIDENCE = 0.3;
 /**
  * Dream Cycle 编排器（Task 6.1）
  *
- * 执行完整的六阶段夜间任务。当前已实现：预算检查、forget_decay、lint、幽灵清理。
- * community_detect、NLI 预检、topic_cluster、gap_analysis、enrich_external、Diff、
- * 年轮 等阶段暂时跳过（仅记录日志）。
+ * 执行完整的六阶段夜间任务。当前已实现：预算检查、community_detect（超图聚类+Ghost检测）、
+ * forget_decay、lint、幽灵清理。
+ * NLI 预检、topic_cluster、gap_analysis、enrich_external、Diff、年轮 等阶段暂时跳过（仅记录日志）。
  */
 export async function runDreamCycle(): Promise<DreamReport> {
   const start = Date.now();
@@ -42,7 +42,7 @@ export async function runDreamCycle(): Promise<DreamReport> {
     budgetAllowed: false,
     phases: {
       budgetCheck: { allowed: false },
-      communityDetect: { skipped: true },
+      communityDetect: { skipped: true, clusters: 0, ghosts: 0, diffs: 0 },
       nliPre: { skipped: true },
       forgetDecay: { ok: false, decayed: 0 },
       lint: { ok: false },
@@ -73,8 +73,30 @@ export async function runDreamCycle(): Promise<DreamReport> {
   }
   logger.info('阶段 1 预算检查通过');
 
-  // 阶段 2：community_detect（跳过）
-  logger.info('阶段 2 community_detect 跳过（暂未实现）');
+  // 阶段 2：community_detect（超图聚类 + Ghost Hyperedge 检测）
+  try {
+    const hgSpecifier = './hypergraph';
+    const hgModule: any = await import(hgSpecifier);
+    if (typeof hgModule.runHypergraphEvolution === 'function') {
+      const result = await hgModule.runHypergraphEvolution();
+      report.phases.communityDetect = {
+        skipped: false,
+        clusters: result.clusters?.length ?? 0,
+        ghosts: result.ghosts?.length ?? 0,
+        diffs: result.diffs?.length ?? 0,
+      };
+      logger.info(
+        { clusters: result.clusters?.length, ghosts: result.ghosts?.length, diffs: result.diffs?.length },
+        '阶段 2 community_detect 完成（超图聚类 + Ghost 检测）'
+      );
+    } else {
+      logger.warn('hypergraph 模块未导出 runHypergraphEvolution，跳过 community_detect');
+    }
+  } catch (err) {
+    report.phases.communityDetect = { skipped: true, clusters: 0, ghosts: 0, diffs: 0 };
+    errors.push(`community_detect 失败: ${(err as Error).message}`);
+    logger.warn({ err }, '阶段 2 community_detect 执行失败');
+  }
 
   // 阶段 3：NLI 预检（跳过）
   logger.info('阶段 3 NLI 预检跳过（暂未实现）');
@@ -180,18 +202,13 @@ async function runGhostCleanup(): Promise<{ detected: number; marked: number }> 
 
 /**
  * 定时任务分布式锁：通过 PostgreSQL advisory lock 确保多副本下只有一个实例执行。
- * 锁 key 使用 cron 任务名称的 hash 值，锁在事务提交或连接释放时自动释放。
+ * 使用 pool.connect() 获取专用连接，锁在连接释放时自动释放。
+ * 调用方必须在使用完毕后释放 client。
  */
-async function acquireCronLock(taskName: string): Promise<boolean> {
-  try {
-    const pool = getPool();
-    const lockKey = Array.from(taskName).reduce((acc, c) => acc + c.charCodeAt(0), 0);
-    const result = await pool.query('SELECT pg_try_advisory_lock($1) AS acquired', [lockKey]);
-    return result.rows[0]?.acquired === true;
-  } catch (err) {
-    logger.warn({ err, taskName }, '获取分布式锁失败，默认跳过');
-    return false;
-  }
+async function acquireCronLockOnClient(client: any, taskName: string): Promise<boolean> {
+  const lockKey = Array.from(taskName).reduce((acc, c) => acc + c.charCodeAt(0), 0);
+  const result = await client.query('SELECT pg_try_advisory_lock($1) AS acquired', [lockKey]);
+  return result.rows[0]?.acquired === true;
 }
 
 /**
@@ -202,17 +219,21 @@ function registerCron(): void {
   try {
     const bunCron = (globalThis as any).Bun?.cron;
     if (typeof bunCron === 'function') {
-      bunCron('0 2 * * *', () => {
-        // 使用 PostgreSQL advisory lock 防止多副本重复执行
-        acquireCronLock('dream_cycle').then(acquired => {
+      bunCron('0 2 * * *', async () => {
+        const pool = getPool();
+        const client = await pool.connect();
+        try {
+          const acquired = await acquireCronLockOnClient(client, 'dream_cycle');
           if (!acquired) {
             logger.debug('Dream Cycle: 未获取分布式锁，跳过（其他实例已执行）');
             return;
           }
-          runDreamCycle().catch((err) => {
-            logger.error({ err }, 'Dream Cycle 定时执行失败');
-          });
-        });
+          await runDreamCycle();
+        } catch (err) {
+          logger.error({ err }, 'Dream Cycle 定时执行失败');
+        } finally {
+          client.release();
+        }
       });
       logger.info('Dream Cycle 定时任务已注册（每晚 02:00，含分布式锁）');
       return;

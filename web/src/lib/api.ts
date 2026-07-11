@@ -215,6 +215,13 @@ export const api = {
     });
   },
 
+  testLlmConnection(adapterId: string, apiKey: string, model: string) {
+    return request<{ success: boolean; latency?: number; error?: string }>('/llm/test-connection', {
+      method: 'POST',
+      body: JSON.stringify({ adapterId, apiKey, model })
+    });
+  },
+
   rebuildStruct() {
     return request<{
       pages: number;
@@ -595,6 +602,7 @@ export const api = {
         size: number;
         status: string;
         ingestedAt: string;
+        tags: string[];
       };
       evidenceSpans: {
         spanId: string;
@@ -754,6 +762,7 @@ export const api = {
         size: number;
         status: string;
         ingestedAt: string;
+        tags: string[];
       }>;
       total: number;
     }>('/library-files');
@@ -761,6 +770,17 @@ export const api = {
 
   deleteLibraryFile(hash: string) {
     return request<{ success: boolean }>(`/library-files/${hash}`, { method: 'DELETE' });
+  },
+
+  updateLibraryFileTags(hash: string, tags: string[]) {
+    return request<{ success: boolean; hash: string; tags: string[] }>(`/library-files/${hash}/tags`, {
+      method: 'PUT',
+      body: JSON.stringify({ tags })
+    });
+  },
+
+  getLibraryFileTags() {
+    return request<{ tags: string[] }>('/library-files/tags');
   },
 
   getPages() {
@@ -832,7 +852,454 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ amount })
     });
-  }
+  },
+
+  // Notes API
+  listNotes() {
+    return request<{ items: Array<{ path: string; name: string; folder: string; status: string; updatedAt: string }> }>('/notes');
+  },
+  getNote(path: string) {
+    return request<{ content: string; status: string; updatedAt: string }>(`/notes/${encodeURIComponent(path)}`);
+  },
+  createNote(folder: string) {
+    return request<{ success: boolean; path: string }>('/notes', {
+      method: 'POST',
+      body: JSON.stringify({ folder })
+    });
+  },
+  saveNote(path: string, content: string) {
+    return request<{ success: boolean }>(`/notes/${encodeURIComponent(path)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ content })
+    });
+  },
+  deleteNote(path: string) {
+    return request<{ success: boolean }>(`/notes/${encodeURIComponent(path)}`, {
+      method: 'DELETE'
+    });
+  },
+  updateNoteStatus(path: string, status: string) {
+    return request<{ success: boolean }>(`/notes/${encodeURIComponent(path)}/status`, {
+      method: 'PUT',
+      body: JSON.stringify({ status })
+    });
+  },
+  extractNote(path: string) {
+    return request<{ success: boolean; diffs?: any[] }>(`/notes/${encodeURIComponent(path)}/extract`, {
+      method: 'POST'
+    });
+  },
+  getNoteTags() {
+    return request<{ tags: string[] }>('/notes/tags');
+  },
+  updateNoteTags(path: string, tags: string[]) {
+    return request<{ success: boolean; tags: string[] }>(`/notes/${encodeURIComponent(path)}/tags`, {
+      method: 'PUT',
+      body: JSON.stringify({ tags })
+    });
+  },
+
+  getPrompts() {
+    return request<{ items: Array<{ name: string; title: string; description: string }> }>('/prompts');
+  },
+  getPrompt(name: string) {
+    return request<string>(`/prompts/${encodeURIComponent(name)}`);
+  },
+  savePrompt(name: string, content: string) {
+    return request<{ success: boolean }>(`/prompts/${encodeURIComponent(name)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ content })
+    });
+  },
+
+  // Hypergraph API
+  getHypergraph() {
+    return request<{
+      hyperedges: Array<{
+        id: number;
+        source_slugs: string[];
+        target_slugs: string[];
+        type: string;
+        params: any;
+      }>;
+      causalHyperedges: Array<any>;
+      cpts: Array<any>;
+    }>('/hypergraph');
+  },
+
+  updateHyperedge(id: number, body: { type?: string; params?: { weight?: number; conf?: number }; source_slugs?: string[]; target_slugs?: string[] }) {
+    return request<{ hyperedge: any }>(`/hyperedge/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(body)
+    });
+  },
+
+  deleteHyperedge(id: number) {
+    return request<{ success: boolean }>(`/hyperedge/${id}`, { method: 'DELETE' });
+  },
+
+  // Causal Cognitive Map
+  getCausalGraph() {
+    return request<{
+      edges: Array<{
+        id: string;
+        source_slug: string;
+        target_slug: string;
+        relation: string;
+        lag: string;
+        weight: number;
+        conf: number;
+        evidence: unknown;
+      }>;
+      cpts: Array<{
+        id: string;
+        variable_slug: string;
+        conditions: Record<string, unknown>;
+        probabilities: unknown;
+      }>;
+    }>('/causal/graph');
+  },
+
+  getCausalNode(slug: string) {
+    return request<{
+      slug: string;
+      title: string;
+      incoming: Array<{
+        id: string;
+        source_slug: string;
+        relation: string;
+        weight: number;
+        conf: number;
+      }>;
+      outgoing: Array<{
+        id: string;
+        target_slug: string;
+        relation: string;
+        weight: number;
+        conf: number;
+      }>;
+      cpt: {
+        id: string;
+        variable_slug: string;
+        conditions: Record<string, unknown>;
+        probabilities: unknown;
+      } | null;
+    }>(`/causal/node/${encodeURIComponent(slug)}`);
+  },
+
+  postNlCommand(command: string, currentView: { nodes: string[]; selectedNodes: string[] }) {
+    return request<{
+      operations: Array<{
+        type: 'select' | 'pack' | 'unpack' | 'filter' | 'perspective' | 'expand' | 'layout';
+        target: string[];
+        params?: Record<string, any>;
+      }>;
+      explanation: string;
+    }>('/causal/nl-command', {
+      method: 'POST',
+      body: JSON.stringify({ command, currentView })
+    });
+  },
+
+  getCausalSuggestions(nodes?: string[], limit?: number) {
+    return request<{
+      suggestions: Array<{
+        type: string;
+        title: string;
+        description: string;
+        nodes?: string[];
+        node?: string;
+        action: string;
+        confidence: number;
+      }>;
+    }>('/causal/suggestions', {
+      params: {
+        nodes: nodes?.join(','),
+        limit: limit || 5
+      }
+    });
+  },
+
+  // Causal Reasoning API
+  postCausalReason(body: {
+    target: string;
+    intervention: { variable: string; fromState?: string; toState: string };
+    background?: Record<string, string>;
+  }) {
+    return request<{
+      baselineProbability: number;
+      interventionProbability: number;
+      delta: number;
+      confidenceInterval: [number, number];
+      method: 'cpt' | 'heuristic';
+      assumptions: string[];
+      evidence: Array<{ source: string; text: string }>;
+    }>('/causal/reason', { method: 'POST', body: JSON.stringify(body) });
+  },
+
+  postCausalCounterfactual(body: {
+    observed: Record<string, string>;
+    hypothetical: {
+      target: string;
+      intervention: { variable: string; fromState?: string; toState: string };
+      background?: Record<string, string>;
+    };
+  }) {
+    return request<{
+      baselineProbability: number;
+      interventionProbability: number;
+      delta: number;
+      confidenceInterval: [number, number];
+      method: 'cpt' | 'heuristic';
+      assumptions: string[];
+      evidence: Array<{ source: string; text: string }>;
+    }>('/causal/counterfactual', { method: 'POST', body: JSON.stringify(body) });
+  },
+
+  postCausalBackward(body: {
+    target: string;
+    desiredState: string;
+  }) {
+    return request<{
+      candidates: Array<{
+        variable: string;
+        effect: number;
+        confidence: number;
+      }>;
+    }>('/causal/backward', { method: 'POST', body: JSON.stringify(body) });
+  },
+
+  postCausalTimePulse(body: {
+    target: string;
+    intervention: { variable: string; fromState?: string; toState: string };
+    steps?: number;
+  }) {
+    return request<{
+      pulses: Array<{
+        step: number;
+        probability: number;
+        confidence: [number, number];
+      }>;
+    }>('/causal/time-pulse', { method: 'POST', body: JSON.stringify(body) });
+  },
+
+  getCausalEvidence(edgeId: number) {
+    return request<{
+      edge: {
+        id: number;
+        sourceSlug: string;
+        targetSlug: string;
+        relation: string;
+        lag: string;
+        weight: number;
+        conf: number;
+        evidence: string[];
+      };
+      evidenceSpans: Array<{
+        spanId: string;
+        source: string;
+        text: string;
+      }>;
+    }>(`/causal/evidence/${edgeId}`);
+  },
+
+  updateCausalEdge(edgeId: number, body: { weight?: number; conf?: number; relation?: string }) {
+    return request<{
+      edge: {
+        id: number;
+        source_slug: string;
+        target_slug: string;
+        relation: string;
+        weight: number;
+        conf: number;
+      };
+    }>(`/causal/edge/${edgeId}`, { method: 'PUT', body: JSON.stringify(body) });
+  },
+
+  deleteCausalEdge(edgeId: number) {
+    return request<{ success: boolean }>(`/causal/edge/${edgeId}`, { method: 'DELETE' });
+  },
+
+  getCausalEvalCheck() {
+    return request<{
+      warnings: string[];
+      cycleNodes: string[];
+      isolatedNodes: string[];
+    }>('/causal/eval-check');
+  },
+
+  // Causal Model Versioning
+  saveCausalVersion(comment: string) {
+    return request<{
+      version_id: string;
+      comment: string;
+      edges_count: number;
+      cpts_count: number;
+      created_at: string;
+      is_active: boolean;
+    }>('/causal/version/save', { method: 'POST', body: JSON.stringify({ comment }) });
+  },
+
+  listCausalVersions() {
+    return request<{
+      versions: Array<{
+        version_id: string;
+        comment: string;
+        is_active: boolean;
+        created_at: string;
+      }>;
+    }>('/causal/version/list');
+  },
+
+  switchCausalVersion(versionId: string) {
+    return request<{
+      success: boolean;
+      version_id: string;
+      edges_count: number;
+      cpts_count: number;
+    }>('/causal/version/switch', { method: 'POST', body: JSON.stringify({ versionId }) });
+  },
+
+  compareCausalVersions(v1: string, v2: string) {
+    return request<{
+      added: Array<{
+        source_slug: string;
+        target_slug: string;
+        relation: string;
+        weight: number;
+        conf: number;
+        lag: string;
+      }>;
+      removed: Array<{
+        source_slug: string;
+        target_slug: string;
+        relation: string;
+        weight: number;
+        conf: number;
+        lag: string;
+      }>;
+      modified: Array<{
+        source: string;
+        target: string;
+        relation: string;
+        changes: Array<{ field: string; old: unknown; new: unknown }>;
+      }>;
+    }>('/causal/version/compare', { params: { v1, v2 } });
+  },
+
+  // Causal Alert API
+  createCausalAlert(body: { edgeId: number; threshold: { condition: string; value: number }; enabled: boolean }) {
+    return request<{
+      alert: {
+        id: number;
+        edge_id: number;
+        threshold: { condition: string; value: number };
+        enabled: boolean;
+        last_triggered_at: string | null;
+        created_at: string;
+      };
+    }>('/causal/alert/create', { method: 'POST', body: JSON.stringify(body) });
+  },
+
+  listCausalAlerts() {
+    return request<{
+      alerts: Array<{
+        id: number;
+        edge_id: number;
+        source_slug: string;
+        target_slug: string;
+        relation: string;
+        threshold: { condition: string; value: number };
+        enabled: boolean;
+        last_triggered_at: string | null;
+        created_at: string;
+      }>;
+    }>('/causal/alert/list');
+  },
+
+  updateCausalAlert(id: number, body: { threshold?: { condition: string; value: number }; enabled?: boolean }) {
+    return request<{
+      alert: {
+        id: number;
+        edge_id: number;
+        threshold: { condition: string; value: number };
+        enabled: boolean;
+        last_triggered_at: string | null;
+        created_at: string;
+      };
+    }>(`/causal/alert/${id}`, { method: 'PUT', body: JSON.stringify(body) });
+  },
+
+  deleteCausalAlert(id: number) {
+    return request<{ success: boolean }>(`/causal/alert/${id}`, { method: 'DELETE' });
+  },
+
+  checkCausalAlerts() {
+    return request<{
+      triggered: Array<{
+        alertId: number;
+        edgeId: number;
+        sourceSlug: string;
+        targetSlug: string;
+        message: string;
+      }>;
+    }>('/causal/alert/check', { method: 'POST' });
+  },
+
+  // Views API
+  saveView(viewId: string, userLabel: string, snapshot: any) {
+    return request<{ viewId: string; message: string }>('/views/save', {
+      method: 'POST',
+      body: JSON.stringify({ viewId, userLabel, snapshot })
+    });
+  },
+
+  listViews() {
+    return request<{
+      views: Array<{
+        view_id: string;
+        user_label: string;
+        created_at: string;
+        updated_at: string;
+        node_count: number;
+      }>;
+    }>('/views/list');
+  },
+
+  loadView(viewId: string) {
+    return request<{
+      viewId: string;
+      userLabel: string;
+      snapshot: any;
+      createdAt: string;
+      updatedAt: string;
+    }>(`/views/${encodeURIComponent(viewId)}`);
+  },
+
+  deleteView(viewId: string) {
+    return request<{ message: string }>(`/views/${encodeURIComponent(viewId)}`, {
+      method: 'DELETE'
+    });
+  },
+
+  suggestViews() {
+    return request<{
+      suggestions: Array<{
+        type: string;
+        title: string;
+        description: string;
+        nodes: string[];
+        action: string;
+      }>;
+    }>('/views/suggest', { method: 'POST' });
+  },
+
+  solidifyView(viewId: string, hyperNodeId: string) {
+    return request<{ diff: any; message: string }>('/views/solidify', {
+      method: 'POST',
+      body: JSON.stringify({ viewId, hyperNodeId }),
+    });
+  },
 };
 
 export default api;

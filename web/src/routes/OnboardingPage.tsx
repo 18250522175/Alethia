@@ -4,7 +4,6 @@ import { useNavigate } from 'react-router-dom';
 import {
   BookOpen,
   Brain,
-  Graph as GraphIcon,
   ShieldCheck,
   GearSix,
   ArrowLeft,
@@ -103,7 +102,8 @@ export default function OnboardingPage() {
       const saved = localStorage.getItem(STEP_KEY);
       const step = saved ? parseInt(saved, 10) : 0;
       return step >= 0 && step < STEPS.length ? step : 0;
-    } catch {
+    } catch (err) {
+      console.warn('读取新手引导步骤进度失败', err);
       return 0;
     }
   });
@@ -112,7 +112,8 @@ export default function OnboardingPage() {
   const saveProgress = (step: number) => {
     try {
       localStorage.setItem(STEP_KEY, String(step));
-    } catch {
+    } catch (err) {
+      console.warn('保存新手引导步骤进度失败', err);
       // localStorage may be unavailable (private mode)
     }
   };
@@ -128,7 +129,8 @@ export default function OnboardingPage() {
     try {
       localStorage.setItem(STORAGE_KEY, 'true');
       localStorage.removeItem(STEP_KEY); // 清除进度
-    } catch {
+    } catch (err) {
+      console.warn('完成新手引导失败', err);
       // localStorage may be unavailable (private mode); proceed anyway
     }
     navigate('/', { replace: true });

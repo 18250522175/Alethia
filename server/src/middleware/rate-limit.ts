@@ -2,18 +2,14 @@ import { Context, Next } from 'hono';
 import { getErrorMessage } from '../i18n/errors.zh-CN';
 import logger from '../i18n/logger';
 
-interface RateLimitStore {
-  [key: string]: { count: number; resetAt: number };
-}
-
-const store: RateLimitStore = {};
+const store = new Map<string, { count: number; resetAt: number }>();
 
 // 定期清理过期条目
 setInterval(() => {
   const now = Date.now();
-  for (const key of Object.keys(store)) {
-    if (store[key].resetAt <= now) {
-      delete store[key];
+  for (const [key, entry] of store) {
+    if (entry.resetAt <= now) {
+      store.delete(key);
     }
   }
 }, 60_000);
@@ -35,10 +31,10 @@ export function rateLimiter(options: RateLimitOptions) {
         'unknown';
 
     const now = Date.now();
-    const entry = store[key];
+    const entry = store.get(key);
 
     if (!entry || entry.resetAt <= now) {
-      store[key] = { count: 1, resetAt: now + windowMs };
+      store.set(key, { count: 1, resetAt: now + windowMs });
       return next();
     }
 

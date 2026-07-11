@@ -127,7 +127,7 @@ class BrainAPI {
       const gradeResult = await grade(request.question, retrievalResult);
       bestGrade = gradeResult;
 
-      const generationResult = await generate(request.question, retrievalResult, gradeResult);
+      const generationResult = await generate(request.question, retrievalResult, gradeResult, request.causalContext);
       finalAnswer = generationResult.answer;
       totalTokens += generationResult.tokensUsed;
       totalCost += generationResult.estimatedCost;
@@ -202,7 +202,9 @@ class BrainAPI {
             entities.push({ slug: result.rows[0].slug, title: result.rows[0].title });
             seen.add(ctxSlug);
           }
-        } catch { }
+        } catch (err) {
+          logger.warn({ err }, '获取图谱上下文实体信息失败');
+        }
       }
     }
 
@@ -262,11 +264,33 @@ class BrainAPI {
         pool.query(`SELECT COUNT(*) as count FROM pages p
                     WHERE NOT EXISTS (SELECT 1 FROM links WHERE source_slug = p.slug AND NOT orphaned)
                       AND NOT EXISTS (SELECT 1 FROM links WHERE target_slug = p.slug AND NOT orphaned)`),
-        pool.query(`SELECT DATE(created_at) as day, COUNT(*) as cnt
-                    FROM auto_change_log
-                    WHERE created_at > NOW() - INTERVAL '7 days'
+        pool.query(`WITH dates AS (
+                    SELECT generate_series(
+                      CURRENT_DATE - INTERVAL '6 days',
+                      CURRENT_DATE,
+                      '1 day'::interval
+                    )::date AS day
+                  ),
+                  page_counts AS (
+                    SELECT DATE(created_at) as day, COUNT(*) as nodes
+                    FROM pages
+                    WHERE created_at <= CURRENT_DATE
                     GROUP BY DATE(created_at)
-                    ORDER BY day`),
+                  ),
+                  link_counts AS (
+                    SELECT DATE(created_at) as day, COUNT(*) as edges
+                    FROM links
+                    WHERE created_at <= CURRENT_DATE
+                    GROUP BY DATE(created_at)
+                  )
+                  SELECT 
+                    d.day,
+                    COALESCE(SUM(pc.nodes) OVER (ORDER BY d.day), 0) as nodes,
+                    COALESCE(SUM(lc.edges) OVER (ORDER BY d.day), 0) as edges
+                  FROM dates d
+                  LEFT JOIN page_counts pc ON pc.day = d.day
+                  LEFT JOIN link_counts lc ON lc.day = d.day
+                  ORDER BY d.day`),
         pool.query(`SELECT COUNT(*) FILTER (WHERE passed = true) as passed, COUNT(*) as total
                     FROM eval_results WHERE created_at > NOW() - INTERVAL '30 days'`),
         pool.query(`SELECT unnest(contexts) as context, COUNT(*) as activity
@@ -295,7 +319,7 @@ class BrainAPI {
           nodes: parseInt(nodesResult.rows[0].count),
           edges: parseInt(edgesResult.rows[0].count),
           pages: parseInt(nodesResult.rows[0].count),
-          trend: trendResult.rows.map((r: any) => ({ date: r.day, count: parseInt(r.cnt) }))
+          trend: trendResult.rows.map((r: any) => ({ date: r.day, nodes: parseInt(r.nodes), edges: parseInt(r.edges) }))
         },
         contextHeatmap: contextResult.rows.map((r: any) => ({
           context: r.context,
@@ -360,7 +384,8 @@ class BrainAPI {
         'SELECT * FROM pending_diffs WHERE resolved = false ORDER BY created_at DESC'
       );
       return result.rows;
-    } catch {
+    } catch (err) {
+      logger.warn({ err }, '获取待审核变更失败');
       return [];
     }
   }
@@ -373,7 +398,8 @@ class BrainAPI {
         getGraphEdges(1000)
       ]);
       return { nodes, edges };
-    } catch {
+    } catch (err) {
+      logger.warn({ err }, '获取图谱数据失败');
       return { nodes: [], edges: [] };
     }
   }
@@ -469,7 +495,7 @@ class BrainAPI {
       return {
         diffId,
         applied: true,
-        newVersion: 1,
+        newVersion: nextVersion,
         modifiedFiles
       };
     } catch (err) {
@@ -970,8 +996,8 @@ ${relationsBlock}
               score = similarity;
             }
           }
-        } catch {
-          // 评估失败时保持 null
+        } catch (err) {
+          logger.warn({ err, slug: row.slug }, '基准评估失败');
         }
 
         return {
@@ -1114,10 +1140,10 @@ ${relationsBlock}
           [queryString, offset, limit]
         ),
         pool.query(
-          `SELECT conversation_id, content, ts, role
+          `SELECT conversation_id, content, created_at as ts, role
            FROM conversation_logs
            WHERE content ILIKE $1 AND role = 'user'
-           ORDER BY ts DESC
+           ORDER BY created_at DESC
            OFFSET $2 LIMIT $3`,
           [queryString, offset, limit]
         ),
@@ -1165,7 +1191,7 @@ ${relationsBlock}
     try {
       const pool = getPool();
       const fileResult = await pool.query(
-        'SELECT hash, mime, original_name, size, status, ingested_at FROM library_files WHERE hash = $1',
+        'SELECT hash, mime, original_name, size, status, ingested_at, tags FROM library_files WHERE hash = $1',
         [hash]
       );
 
@@ -1190,7 +1216,8 @@ ${relationsBlock}
           originalName: file.original_name,
           size: file.size,
           status: file.status,
-          ingestedAt: file.ingested_at
+          ingestedAt: file.ingested_at,
+          tags: file.tags || []
         },
         evidenceSpans: evidenceResult.rows.map((r: any) => ({
           spanId: r.span_id,
@@ -1697,7 +1724,8 @@ ${relationsBlock}
             category: parsed.data.category || '其他'
           });
         }
-      } catch {
+      } catch (err) {
+        logger.warn({ err, file }, '解析片段 frontmatter 失败');
         continue;
       }
     }

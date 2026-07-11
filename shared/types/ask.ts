@@ -7,6 +7,7 @@ export interface AskRequest {
   maxReflections?: number;
   enableTranslation?: boolean;
   compressionThreshold?: number;
+  causalContext?: string;
 }
 
 export interface EntityRef {

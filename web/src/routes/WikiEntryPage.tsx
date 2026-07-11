@@ -23,7 +23,8 @@ import {
   ChatCircleDots,
   Plus,
   Trash,
-  Link
+  Link,
+  Brain
 } from '@phosphor-icons/react';
 import api from '../lib/api';
 import { useNotification } from '../contexts/NotificationContext';
@@ -383,7 +384,18 @@ export default function WikiEntryPage() {
                 <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
                   <span className="text-slate-400">别名:</span>
                   {page.aliases.map(alias => (
-                    <span key={alias} className="badge badge-yellow cursor-pointer" onClick={() => navigate(`/wiki/${encodeURIComponent(alias)}`)}>
+                    <span
+                      key={alias}
+                      className="badge badge-yellow cursor-pointer"
+                      onClick={async () => {
+                        const resolved = await api.resolveAlias(alias);
+                        if (resolved.slug) {
+                          navigate(`/wiki/${encodeURIComponent(resolved.slug)}`);
+                        } else {
+                          navigate(`/wiki/${encodeURIComponent(alias)}`);
+                        }
+                      }}
+                    >
                       {alias}
                     </span>
                   ))}
@@ -408,6 +420,14 @@ export default function WikiEntryPage() {
               <span className="inline-flex items-center gap-1">
                 <span className={`badge ${typeBadge}`}>{page.type}</span>
               </span>
+              <button
+                onClick={() => navigate(`/cognitive-map?focus=${encodeURIComponent(page.slug)}`)}
+                className="btn btn-secondary gap-1 text-xs"
+                title="在认知地图中查看"
+              >
+                <Brain size={12} />
+                认知地图
+              </button>
               <span className="inline-flex items-center gap-1">
                 <Hash size={12} />
                 <span className="font-mono">{page.slug}</span>

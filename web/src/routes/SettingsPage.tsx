@@ -12,7 +12,6 @@ import {
   ArrowDown,
   ClipboardText,
   SlidersHorizontal,
-  Link,
   FloppyDisk,
   ArrowCounterClockwise,
   Trash,
@@ -29,10 +28,10 @@ const sections = [
   { id: 'language', icon: Translate },
   { id: 'budget', icon: Wallet },
   { id: 'models', icon: Brain },
+  { id: 'llm-config', icon: Brain },
   { id: 'embedding', icon: Database },
   { id: 'reranking', icon: ArrowDown },
   { id: 'nli', icon: ClipboardText },
-  { id: 'aliases', icon: Link },
   { id: 'data', icon: Folder },
   { id: 'advanced', icon: SlidersHorizontal },
 ] as const;
@@ -175,6 +174,9 @@ export default function SettingsPage() {
           {activeSection === 'models' && (
             <ModelAllocationSettings settings={localSettings} onChange={handleChange} />
           )}
+          {activeSection === 'llm-config' && (
+            <LLMConfigSettings settings={localSettings} onChange={handleChange} />
+          )}
           {activeSection === 'embedding' && (
             <EmbeddingSettings settings={localSettings} onChange={handleChange} />
           )}
@@ -183,9 +185,6 @@ export default function SettingsPage() {
           )}
           {activeSection === 'nli' && (
             <NLISettings settings={localSettings} onChange={handleChange} />
-          )}
-          {activeSection === 'aliases' && (
-            <AliasSettings />
           )}
           {activeSection === 'data' && (
             <DataSettings settings={localSettings} onChange={handleChange} />
@@ -624,7 +623,30 @@ function EmbeddingSettings({ settings, onChange }: SettingsSectionProps) {
             <option value="bge-large-zh">BAAI/bge-large-zh-v1.5（中文）</option>
             <option value="text-embedding-3">text-embedding-3-large（OpenAI）</option>
             <option value="gte-large">thenlper/gte-large</option>
+            <option value="custom">{t('settings.customModel', '自定义模型...')}</option>
           </select>
+        </div>
+        {(settings.embedding?.model === 'custom') && (
+          <div>
+            <label className="mb-2 block text-sm font-medium">{t('settings.customModelName', '自定义模型名称')}</label>
+            <input
+              type="text"
+              value={settings.embedding?.customModel || ''}
+              onChange={e => onChange('embedding.customModel', e.target.value)}
+              placeholder="e.g. sentence-transformers/all-MiniLM-L6-v2"
+              className="input max-w-md font-mono text-sm"
+            />
+          </div>
+        )}
+        <div>
+          <label className="mb-2 block text-sm font-medium">{t('settings.embeddingBaseUrl', '嵌入模型 Base URL')}</label>
+          <input
+            type="text"
+            value={settings.embedding?.baseUrl || ''}
+            onChange={e => onChange('embedding.baseUrl', e.target.value)}
+            placeholder={t('settings.embeddingBaseUrlPlaceholder', '默认端点（留空使用官方）')}
+            className="input max-w-md font-mono text-sm"
+          />
         </div>
         <div>
           <label className="mb-2 block text-sm font-medium">{t('settings.dimensions')}</label>
@@ -955,75 +977,220 @@ function AdvancedSettings({ settings, onChange }: SettingsSectionProps) {
   );
 }
 
-function AliasSettings() {
+function LLMConfigSettings({ settings, onChange }: SettingsSectionProps) {
   const { t } = useTranslation();
-  const navigate = useNavigate();
+  const [showKeys, setShowKeys] = useState<Record<string, boolean>>({});
+  const [testingAdapter, setTestingAdapter] = useState<string | null>(null);
+  const [testResults, setTestResults] = useState<Record<string, { success: boolean; message: string }>>({});
 
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['alias-conflicts'],
-    queryFn: () => api.getAliasConflicts(),
-    staleTime: 60_000
-  });
+  const toggleShowKey = (adapterId: string) => {
+    setShowKeys(prev => ({ ...prev, [adapterId]: !prev[adapterId] }));
+  };
+
+  const handleTestConnection = async (adapterId: string) => {
+    const adapterConfig = settings.integration?.llmAdapters?.[adapterId] || {};
+    const apiKey = adapterConfig.apiKey || '';
+    const model = adapterConfig.defaultModel || '';
+
+    if (!apiKey.trim()) {
+      setTestResults(prev => ({ ...prev, [adapterId]: { success: false, message: '请先输入 API Key' } }));
+      return;
+    }
+
+    setTestingAdapter(adapterId);
+    try {
+      const result = await api.testLlmConnection(adapterId, apiKey, model);
+      if (result.success) {
+        setTestResults(prev => ({ ...prev, [adapterId]: { success: true, message: `连接成功 (${result.latency}ms)` } }));
+      } else {
+        setTestResults(prev => ({ ...prev, [adapterId]: { success: false, message: result.error || '连接失败' } }));
+      }
+    } catch (err: any) {
+      setTestResults(prev => ({ ...prev, [adapterId]: { success: false, message: err.message || '测试失败' } }));
+    } finally {
+      setTestingAdapter(null);
+    }
+  };
+
+  const adapterList: Array<{ id: string; name: string; defaultModel: string }> = [
+    { id: 'bailian', name: '阿里云百炼（通义千问）', defaultModel: 'qwen-turbo' },
+    { id: 'zhipu', name: '智谱 AI（ChatGLM）', defaultModel: 'glm-4-flash' },
+    { id: 'moonshot', name: '月之暗面（Kimi）', defaultModel: 'moonshot-v1-8k' },
+    { id: 'ernie', name: '百度文心一言', defaultModel: 'ernie-speed-128k' },
+    { id: 'spark', name: '科大讯飞星火', defaultModel: 'spark-lite' },
+    { id: 'hunyuan', name: '腾讯混元', defaultModel: 'hunyuan-lite' },
+    { id: 'minimax', name: 'MiniMax', defaultModel: 'abab6.5-chat' },
+    { id: 'deepseek', name: 'DeepSeek', defaultModel: 'deepseek-chat' },
+    { id: 'yi', name: '零一万物 Yi', defaultModel: 'yi-large' },
+    { id: 'baichuan', name: '百川智能', defaultModel: 'Baichuan2-Turbo' },
+  ];
 
   return (
-    <div className="card p-6">
-      <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold">
-        <Link size={20} className="text-primary-500" />
-        {t('aliases.title', '别名冲突管理')}
-      </h2>
-      <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
-        {t('aliases.desc', '检测多个实体共享同一别名的情况，帮助维护知识图谱的链接准确性。')}
-      </p>
-
-      {isLoading && (
-        <div className="py-8 text-center text-sm text-slate-400">{t('common.loading')}</div>
-      )}
-
-      {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400">
-          {t('aliases.loadError', '加载别名冲突列表失败')}
-        </div>
-      )}
-
-      {data && data.conflicts && data.conflicts.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-10 text-slate-400">
-          <Check size={36} className="mb-2 opacity-40" />
-          <p className="text-sm">{t('aliases.noConflicts', '没有别名冲突')}</p>
-        </div>
-      )}
-
-      {data && data.conflicts && data.conflicts.length > 0 && (
-        <div className="overflow-hidden rounded-lg border border-amber-200 dark:border-amber-800">
-          <div className="bg-amber-50 px-4 py-2 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
-            {t('aliases.conflictCount', '共 {{count}} 个别名冲突', { count: data.conflicts.length })}
+    <div className="space-y-6">
+      {/* Global Parameters */}
+      <div className="card p-6">
+        <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold">
+          <SlidersHorizontal size={20} className="text-primary-500" />
+          {t('settings.llmGlobalTitle', '全局参数')}
+        </h2>
+        <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
+          {t('settings.llmGlobalDesc', '这些参数将作为所有模型的默认值，可在各厂商配置中覆盖。')}
+        </p>
+        <div className="grid gap-6 sm:grid-cols-3">
+          <div>
+            <label className="mb-2 flex items-center justify-between text-sm font-medium">
+              <span>{t('settings.temperature', '温度')}</span>
+              <span className="text-xs text-slate-500">{(settings.llmConfig?.defaultTemperature ?? 0.7).toFixed(2)}</span>
+            </label>
+            <input
+              type="range"
+              min={0}
+              max={2}
+              step={0.01}
+              value={settings.llmConfig?.defaultTemperature ?? 0.7}
+              onChange={e => onChange('llmConfig.defaultTemperature', parseFloat(e.target.value))}
+              className="w-full"
+            />
+            <p className="mt-1 text-xs text-slate-400">{t('settings.temperatureHint', '越低越确定，越高越有创意')}</p>
           </div>
-          <div className="divide-y divide-slate-100 dark:divide-slate-700">
-            {data.conflicts.map((conflict: { alias: string; slugs: string[] }, i: number) => (
-              <div key={i} className="px-4 py-3">
-                <div className="mb-1.5 flex items-center gap-2">
-                  <span className="rounded bg-amber-100 px-1.5 py-0.5 font-mono text-xs text-amber-700 dark:bg-amber-900/40 dark:text-amber-400">
-                    {conflict.alias}
-                  </span>
-                  <span className="text-xs text-slate-400">
-                    {t('aliases.sharedBy', '被 {{count}} 个页面共享', { count: conflict.slugs.length })}
-                  </span>
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {conflict.slugs.map((slug: string) => (
+          <div>
+            <label className="mb-2 block text-sm font-medium">
+              {t('settings.maxTokens', '上下文窗口')}
+            </label>
+            <select
+              value={settings.llmConfig?.defaultMaxTokens ?? 4096}
+              onChange={e => onChange('llmConfig.defaultMaxTokens', parseInt(e.target.value))}
+              className="input w-full"
+            >
+              <option value={1024}>1,024</option>
+              <option value={2048}>2,048</option>
+              <option value={4096}>4,096</option>
+              <option value={8192}>8,192</option>
+              <option value={16384}>16,384</option>
+              <option value={32768}>32,768</option>
+              <option value={65536}>65,536</option>
+              <option value={131072}>131,072</option>
+            </select>
+          </div>
+          <div>
+            <label className="mb-2 flex items-center justify-between text-sm font-medium">
+              <span>{t('settings.topP', 'Top P')}</span>
+              <span className="text-xs text-slate-500">{(settings.llmConfig?.defaultTopP ?? 0.9).toFixed(2)}</span>
+            </label>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.01}
+              value={settings.llmConfig?.defaultTopP ?? 0.9}
+              onChange={e => onChange('llmConfig.defaultTopP', parseFloat(e.target.value))}
+              className="w-full"
+            />
+            <p className="mt-1 text-xs text-slate-400">{t('settings.topPHint', '核采样概率阈值')}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Adapter Cards */}
+      {adapterList.map(adapter => {
+        const adapterConfig = settings.integration?.llmAdapters?.[adapter.id] || {};
+        const isEnabled = adapterConfig.enabled || false;
+        return (
+          <div key={adapter.id} className={`card p-6 transition-all ${isEnabled ? 'border-primary-300 dark:border-primary-700' : ''}`}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="flex items-center gap-2 text-base font-semibold">
+                <Brain size={18} className={isEnabled ? 'text-primary-500' : 'text-slate-400'} />
+                {adapter.name}
+              </h3>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <span className="text-xs text-slate-500">{t('settings.enabled', '启用')}</span>
+                <input
+                  type="checkbox"
+                  checked={isEnabled}
+                  onChange={e => onChange(`integration.llmAdapters.${adapter.id}.enabled`, e.target.checked)}
+                  className="h-4 w-4 rounded"
+                />
+              </label>
+            </div>
+            {isEnabled && (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-500">
+                    {t('settings.apiKey', 'API Key')}
+                  </label>
+                  <div className="flex gap-1">
+                    <input
+                      type={showKeys[adapter.id] ? 'text' : 'password'}
+                      value={adapterConfig.apiKey || ''}
+                      onChange={e => onChange(`integration.llmAdapters.${adapter.id}.apiKey`, e.target.value)}
+                      placeholder={t('settings.apiKeyPlaceholder', '输入 API Key')}
+                      className="input flex-1 font-mono text-sm"
+                    />
                     <button
-                      key={slug}
-                      onClick={() => navigate(`/wiki/${encodeURIComponent(slug)}`)}
-                      className="rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-primary-600 hover:bg-primary-50 hover:text-primary-700 dark:bg-slate-700 dark:text-primary-400 dark:hover:bg-primary-900/30"
+                      onClick={() => toggleShowKey(adapter.id)}
+                      className="btn btn-secondary px-2 text-xs"
+                      title={showKeys[adapter.id] ? t('settings.hide', '隐藏') : t('settings.show', '显示')}
                     >
-                      {slug}
+                      {showKeys[adapter.id] ? '***' : 'abc'}
                     </button>
-                  ))}
+                    <button
+                      onClick={() => handleTestConnection(adapter.id)}
+                      disabled={testingAdapter === adapter.id}
+                      className="btn btn-secondary px-2 text-xs whitespace-nowrap"
+                    >
+                      {testingAdapter === adapter.id ? '测试中...' : '测试连接'}
+                    </button>
+                  </div>
+                  {testResults[adapter.id] && (
+                    <div className={`mt-1 text-xs ${testResults[adapter.id].success ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                      {testResults[adapter.id].message}
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-500">
+                    {t('settings.baseUrl', 'Base URL')}
+                  </label>
+                  <input
+                    type="text"
+                    value={adapterConfig.baseUrl || ''}
+                    onChange={e => onChange(`integration.llmAdapters.${adapter.id}.baseUrl`, e.target.value)}
+                    placeholder={t('settings.baseUrlPlaceholder', '默认端点（留空使用官方）')}
+                    className="input w-full font-mono text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-500">
+                    {t('settings.model', '模型')}
+                  </label>
+                  <input
+                    type="text"
+                    value={adapterConfig.defaultModel || adapter.defaultModel}
+                    onChange={e => onChange(`integration.llmAdapters.${adapter.id}.defaultModel`, e.target.value)}
+                    placeholder={adapter.defaultModel}
+                    className="input w-full text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 flex items-center justify-between text-xs font-medium text-slate-500">
+                    <span>{t('settings.temperature', '温度')}</span>
+                    <span className="text-[10px]">{(adapterConfig.temperature ?? settings.llmConfig?.defaultTemperature ?? 0.7).toFixed(2)}</span>
+                  </label>
+                  <input
+                    type="range"
+                    min={0}
+                    max={2}
+                    step={0.01}
+                    value={adapterConfig.temperature ?? settings.llmConfig?.defaultTemperature ?? 0.7}
+                    onChange={e => onChange(`integration.llmAdapters.${adapter.id}.temperature`, parseFloat(e.target.value))}
+                    className="w-full"
+                  />
                 </div>
               </div>
-            ))}
+            )}
           </div>
-        </div>
-      )}
+        );
+      })}
     </div>
   );
 }

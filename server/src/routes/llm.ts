@@ -53,4 +53,44 @@ app.post('/api/llm/test', async (c) => {
   }
 });
 
+app.post('/api/llm/test-connection', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { adapterId, apiKey, model } = body as { adapterId: string; apiKey: string; model: string };
+
+    if (!adapterId || !apiKey) {
+      return c.json({
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: getErrorMessage('VALIDATION_ERROR')
+        }
+      }, 400);
+    }
+
+    const adapter = llmRouter.createTestAdapter(adapterId, apiKey, model || '');
+    if (!adapter) {
+      return c.json({
+        error: {
+          code: 'NOT_FOUND',
+          message: getErrorMessage('NOT_FOUND')
+        }
+      }, 404);
+    }
+
+    const startTime = Date.now();
+    const result = await adapter.probe();
+    const latency = Date.now() - startTime;
+
+    if (result.ok) {
+      return c.json({ success: true, latency });
+    } else {
+      return c.json({ success: false, error: result.error || '连接测试失败' });
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : '未知错误';
+    logger.error({ err }, 'LLM 连接测试失败');
+    return c.json({ success: false, error: message });
+  }
+});
+
 export default app;

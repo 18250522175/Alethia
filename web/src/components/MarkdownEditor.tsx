@@ -22,12 +22,9 @@ interface MarkdownEditorProps {
   onChange: (value: string) => void;
 }
 
-interface SuggestionItem {
+interface WikilinkSuggestion {
   slug: string;
   title: string;
-  aliases: string[];
-  namespace: string;
-  matchType: 'canonical' | 'alias' | 'fuzzy';
 }
 
 function getCursorPixelPosition(textarea: HTMLTextAreaElement, pos: number) {
@@ -84,7 +81,6 @@ export default function MarkdownEditor({ value, onChange }: MarkdownEditorProps)
 
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
-  const [debouncedQuery, setDebouncedQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [triggerStart, setTriggerStart] = useState(-1);
   const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0, lineHeight: 0 });
@@ -95,14 +91,21 @@ export default function MarkdownEditor({ value, onChange }: MarkdownEditorProps)
   const [isPaletteOpen, setIsPaletteOpen] = useState(false);
   const [paletteTriggerStart, setPaletteTriggerStart] = useState(-1);
 
-  const { data: searchData, isFetching } = useQuery({
-    queryKey: ['entity-search', debouncedQuery],
-    queryFn: () => api.searchEntities(debouncedQuery, 8),
-    enabled: isOpen && debouncedQuery.length > 0,
-    staleTime: 30_000
+  const { data: pagesData, isFetching: isFetchingPages } = useQuery({
+    queryKey: ['pages-list'],
+    queryFn: () => api.getPages(),
+    enabled: isOpen,
+    staleTime: 60_000
   });
 
-  const suggestions: SuggestionItem[] = debouncedQuery ? (searchData?.items ?? []) : [];
+  const wikilinkSuggestions: WikilinkSuggestion[] = (() => {
+    const pages = pagesData?.items ?? [];
+    if (!query) return pages.map(p => ({ slug: p.slug, title: p.title }));
+    const lowerQuery = query.toLowerCase();
+    return pages
+      .filter(p => p.slug.toLowerCase().includes(lowerQuery) || p.title.toLowerCase().includes(lowerQuery))
+      .map(p => ({ slug: p.slug, title: p.title }));
+  })();
 
   const calculateSHA256 = useCallback(async (file: File): Promise<string> => {
     const arrayBuffer = await new Promise<ArrayBuffer>((resolve, reject) => {
@@ -237,7 +240,6 @@ export default function MarkdownEditor({ value, onChange }: MarkdownEditorProps)
   const closeAutocomplete = useCallback(() => {
     setIsOpen(false);
     setQuery('');
-    setDebouncedQuery('');
     setSelectedIndex(0);
     setTriggerStart(-1);
   }, []);
@@ -269,12 +271,11 @@ export default function MarkdownEditor({ value, onChange }: MarkdownEditorProps)
     setDropdownPos(getCursorPixelPosition(textarea, cursorPos));
   }, []);
 
-  const insertSuggestion = useCallback((item: SuggestionItem) => {
+  const insertWikilink = useCallback((item: WikilinkSuggestion) => {
     const textarea = textareaRef.current;
     if (!textarea || triggerStart < 0) return;
 
-    const aliasBehavior = localStorage.getItem('brain_alias_behavior') || 'normalize';
-    const insertText = aliasBehavior === 'keep' ? (query || item.title) : item.title;
+    const insertText = query ? item.slug : item.slug;
 
     const before = value.slice(0, triggerStart);
     const after = value.slice(textarea.selectionStart);
@@ -347,20 +348,20 @@ export default function MarkdownEditor({ value, onChange }: MarkdownEditorProps)
 
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      setSelectedIndex(prev => (suggestions.length > 0 ? (prev + 1) % suggestions.length : 0));
+      setSelectedIndex(prev => (wikilinkSuggestions.length > 0 ? (prev + 1) % wikilinkSuggestions.length : 0));
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      setSelectedIndex(prev => (suggestions.length > 0 ? (prev - 1 + suggestions.length) % suggestions.length : 0));
+      setSelectedIndex(prev => (wikilinkSuggestions.length > 0 ? (prev - 1 + wikilinkSuggestions.length) % wikilinkSuggestions.length : 0));
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      if (suggestions[selectedIndex]) {
-        insertSuggestion(suggestions[selectedIndex]);
+      if (wikilinkSuggestions[selectedIndex]) {
+        insertWikilink(wikilinkSuggestions[selectedIndex]);
       }
     } else if (e.key === 'Escape') {
       e.preventDefault();
       closeAutocomplete();
     }
-  }, [isOpen, isPaletteOpen, suggestions, selectedIndex, insertSuggestion, closeAutocomplete]);
+  }, [isOpen, isPaletteOpen, wikilinkSuggestions, selectedIndex, insertWikilink, closeAutocomplete]);
 
   const handleScroll = useCallback(() => {
     if (isOpen && textareaRef.current) {
@@ -382,13 +383,6 @@ export default function MarkdownEditor({ value, onChange }: MarkdownEditorProps)
     textarea.addEventListener('scroll', handleScroll);
     return () => textarea.removeEventListener('scroll', handleScroll);
   }, [handleScroll]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedQuery(query);
-    }, 200);
-    return () => clearTimeout(timer);
-  }, [query]);
 
   // 组件卸载时清理定时器
   useEffect(() => {
@@ -508,22 +502,22 @@ export default function MarkdownEditor({ value, onChange }: MarkdownEditorProps)
               left: Math.min(dropdownPos.left, 300)
             }}
           >
-            {isFetching && suggestions.length === 0 && (
+            {isFetchingPages && wikilinkSuggestions.length === 0 && (
               <div className="flex items-center gap-2 px-3 py-2.5 text-sm text-slate-500 dark:text-slate-400">
                 <Spinner size={14} className="animate-spin" />
                 {t('editor.searching')}
               </div>
             )}
 
-            {!isFetching && suggestions.length === 0 && query.length > 0 && (
+            {!isFetchingPages && wikilinkSuggestions.length === 0 && query.length > 0 && (
               <div className="px-3 py-2.5 text-sm text-slate-500 dark:text-slate-400">
                 {t('editor.noMatch')}
               </div>
             )}
 
-            {suggestions.length > 0 && (
+            {wikilinkSuggestions.length > 0 && (
               <ul className="max-h-64 overflow-auto py-1">
-                {suggestions.map((item, idx) => {
+                {wikilinkSuggestions.map((item, idx) => {
                   const isSelected = idx === selectedIndex;
                   return (
                     <li key={item.slug}>
@@ -531,7 +525,7 @@ export default function MarkdownEditor({ value, onChange }: MarkdownEditorProps)
                         type="button"
                         onMouseDown={e => {
                           e.preventDefault();
-                          insertSuggestion(item);
+                          insertWikilink(item);
                         }}
                         onMouseEnter={() => setSelectedIndex(idx)}
                         className={`flex w-full items-start gap-2 px-3 py-2 text-left transition-colors ${
@@ -545,15 +539,10 @@ export default function MarkdownEditor({ value, onChange }: MarkdownEditorProps)
                             <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">
                               <HighlightText text={item.title} keyword={query} />
                             </span>
-                            <span className={`badge text-[10px] ${getNamespaceBadgeClass(item.namespace)}`}>
-                              {item.namespace}
+                            <span className="text-xs text-slate-400 font-mono">
+                              {item.slug}
                             </span>
                           </div>
-                          {item.aliases.length > 0 && (
-                            <div className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-                              {t('editor.aliases', { aliases: item.aliases.join(', ') })}
-                            </div>
-                          )}
                         </div>
                       </button>
                     </li>
@@ -582,19 +571,4 @@ export default function MarkdownEditor({ value, onChange }: MarkdownEditorProps)
       />
     </div>
   );
-}
-
-function getNamespaceBadgeClass(namespace: string): string {
-  switch (namespace) {
-    case 'concept':
-      return 'badge-blue';
-    case 'person':
-      return 'badge-green';
-    case 'company':
-      return 'badge-yellow';
-    case 'meeting':
-      return 'badge-red';
-    default:
-      return 'badge-blue';
-  }
 }

@@ -53,23 +53,50 @@ class LLMRouter {
     return this.adapters.get(adapterId);
   }
 
+  createTestAdapter(adapterId: string, apiKey: string, model: string, baseUrl?: string): LLMAdapter | undefined {
+    const adapterConfigs: Record<string, { cls: any; defaultModel: string }> = {
+      bailian: { cls: BailianAdapter, defaultModel: 'qwen-turbo' },
+      zhipu: { cls: ZhipuAdapter, defaultModel: 'glm-4-flash' },
+      moonshot: { cls: MoonshotAdapter, defaultModel: 'moonshot-v1-8k' },
+      ernie: { cls: ErnieAdapter, defaultModel: 'ernie-speed-128k' },
+      spark: { cls: SparkAdapter, defaultModel: 'spark-lite' },
+      hunyuan: { cls: HunyuanAdapter, defaultModel: 'hunyuan-lite' },
+      minimax: { cls: MiniMaxAdapter, defaultModel: 'abab6.5-chat' },
+      deepseek: { cls: DeepSeekAdapter, defaultModel: 'deepseek-chat' },
+      yi: { cls: YiAdapter, defaultModel: 'yi-large' },
+      baichuan: { cls: BaichuanAdapter, defaultModel: 'Baichuan2-Turbo' },
+    };
+
+    const config = adapterConfigs[adapterId];
+    if (!config) return undefined;
+
+    return new config.cls(apiKey, model || config.defaultModel, baseUrl || undefined);
+  }
+
   route(task: ModelTier | string): LLMAdapter {
     const assignment = this.modelAssignment[task];
     if (!assignment) {
       throw new Error(`未找到任务 ${task} 的模型分配配置`);
     }
 
-    const adapter = this.adapters.get(assignment.adapterId);
-    if (!adapter) {
-      throw new Error(`未找到适配器 ${assignment.adapterId}`);
+    // 优先尝试分配的适配器
+    const primaryAdapter = this.adapters.get(assignment.adapterId);
+    if (primaryAdapter) {
+      if (typeof (primaryAdapter as any).setDefaultModel === 'function') {
+        (primaryAdapter as any).setDefaultModel(assignment.model);
+      }
+      return primaryAdapter;
     }
 
-    // Update adapter's default model to match the current assignment
-    if (typeof (adapter as any).setDefaultModel === 'function') {
-      (adapter as any).setDefaultModel(assignment.model);
+    // 降级：尝试任意可用适配器
+    logger.warn({ adapterId: assignment.adapterId }, '主适配器不可用，尝试降级');
+    const fallbackAdapter = this.adapters.values().next().value;
+    if (fallbackAdapter) {
+      logger.warn({ fallbackAdapterId: (fallbackAdapter as any).adapterId }, '使用降级适配器');
+      return fallbackAdapter as LLMAdapter;
     }
 
-    return adapter;
+    throw new Error(`未找到适配器 ${assignment.adapterId}，且无可用降级适配器`);
   }
 
   getModelForTask(task: ModelTier | string): { adapterId: string; model: string } | undefined {

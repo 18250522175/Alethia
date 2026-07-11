@@ -1,5 +1,5 @@
 import { llmRouter } from '../llm/router';
-import { loadPrompt } from './utils';
+import { loadPrompt, withTimeout } from './utils';
 import logger from '../i18n/logger';
 import type { LLMMessage, EvidenceSpan } from '@shared/index';
 import type { RetrievalResult } from './retriever';
@@ -16,9 +16,10 @@ const generatorPrompt = loadPrompt('generator.zh-CN.md');
 export async function generate(
   question: string,
   retrievalResult: RetrievalResult,
-  grade: GradeResult
+  grade: GradeResult,
+  causalContext?: string,
 ): Promise<GenerationResult> {
-  const context = buildGenerationContext(question, retrievalResult, grade);
+  const context = buildGenerationContext(question, retrievalResult, grade, causalContext);
 
   const messages: LLMMessage[] = [
     { role: 'system', content: generatorPrompt },
@@ -27,11 +28,15 @@ export async function generate(
 
   try {
     const adapter = llmRouter.route('qa_gen');
-    const response = await adapter.chat({
-      messages,
-      temperature: 0.4,
-      maxTokens: 2000
-    });
+    const response = await withTimeout(
+      adapter.chat({
+        messages,
+        temperature: 0.4,
+        maxTokens: 2000
+      }),
+      5 * 60 * 1000,
+      'generate'
+    );
 
     return {
       answer: response.content,
@@ -51,7 +56,8 @@ export async function generate(
 function buildGenerationContext(
   question: string,
   result: RetrievalResult,
-  grade: GradeResult
+  grade: GradeResult,
+  causalContext?: string,
 ): string {
   const itemsText = result.items
     .map((item, i) => `### 知识片段 ${i + 1}: ${item.title}\n${item.snippet}`)
@@ -66,7 +72,9 @@ function buildGenerationContext(
 
   const gradeText = `\n\n## 检索质量评估\n- 事实准确度: ${grade.factual_accuracy}\n- 覆盖完整度: ${grade.coverage_completeness}\n- 评估说明: ${grade.reasoning}`;
 
-  return `## 用户问题\n${question}\n\n## 检索到的知识片段 (${result.items.length} 条)\n${itemsText}${evidenceText}${gradeText}\n\n请根据以上信息生成回答，使用 [^span_id] 格式引用证据。`;
+  const causalText = causalContext ? `\n\n${causalContext}` : '';
+
+  return `## 用户问题\n${question}\n\n## 检索到的知识片段 (${result.items.length} 条)\n${itemsText}${evidenceText}${gradeText}${causalText}\n\n请根据以上信息生成回答，使用 [^span_id] 格式引用证据。`;
 }
 
 function buildFallbackAnswer(question: string, result: RetrievalResult): string {

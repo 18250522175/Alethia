@@ -6,10 +6,45 @@ import { getPool } from '../db/pool';
 import { storage } from '../storage/markdown';
 import { syncEngine } from '../storage/sync';
 import { join } from 'path';
-import { existsSync, statSync, unlinkSync } from 'fs';
+import { existsSync, statSync, unlinkSync, mkdirSync, readFileSync, writeFileSync, readdirSync, renameSync } from 'fs';
+import matter from 'gray-matter';
 import type { AskRequest, QueryParams } from '@shared/index';
 
 const app = new Hono();
+
+// ── 因果意图检测 ─────────────────────────────────────────────────────────────
+
+const CAUSAL_KEYWORDS = ['如果', '会怎样', '干预', '提高', '降低', '概率', '影响', 'what if', 'how would', 'cause', 'effect'];
+
+function detectCausalIntent(question: string): boolean {
+  return CAUSAL_KEYWORDS.some(kw => question.toLowerCase().includes(kw.toLowerCase()));
+}
+
+async function buildCausalContext(): Promise<string | undefined> {
+  try {
+    const pool = getPool();
+    const { rows: edges } = await pool.query(
+      'SELECT source_slug, target_slug, relation, weight, conf, lag FROM causal_edges ORDER BY id'
+    );
+    if (edges.length === 0) return undefined;
+
+    const lines: string[] = ['## 因果知识图谱'];
+    lines.push(`共 ${edges.length} 条因果边:`);
+    for (const edge of edges) {
+      const relLabel = (edge.relation || '').includes('causesIncrease') ? '正向因果' :
+        (edge.relation || '').includes('causesDecrease') ? '负向因果' :
+        (edge.relation || '').includes('inhibits') ? '抑制' :
+        (edge.relation || '').includes('feedbackLoop') ? '反馈回路' : edge.relation;
+      const lagStr = edge.lag ? ` (延迟: ${edge.lag})` : '';
+      const confStr = `置信度: ${((edge.conf || 0) * 100).toFixed(0)}%`;
+      lines.push(`- ${edge.source_slug} → ${edge.target_slug}: ${relLabel} (权重: ${edge.weight}) ${confStr}${lagStr}`);
+    }
+    return lines.join('\n');
+  } catch (err) {
+    loggerInstance.warn({ err }, '构建因果上下文失败');
+    return undefined;
+  }
+}
 
 app.post('/api/ask', async (c) => {
   try {
@@ -45,6 +80,14 @@ app.post('/api/ask', async (c) => {
         : undefined,
       enableTranslation
     };
+
+    // 因果意图检测: 如果问题包含因果关键词，附加因果图谱上下文
+    if (detectCausalIntent(trimmed)) {
+      const causalContext = await buildCausalContext();
+      if (causalContext) {
+        request.causalContext = causalContext;
+      }
+    }
 
     const response = await brainAPI.askQuestion(request);
     return c.json(response);
@@ -196,7 +239,7 @@ app.get('/api/conversations', async (c) => {
       SELECT conversation_id, 
              MAX(CASE WHEN role = 'user' THEN content END) as last_question,
              MAX(CASE WHEN role = 'assistant' THEN content END) as last_answer,
-             MAX(ts) as updated_at,
+             MAX(created_at) as updated_at,
              BOOL_OR(compressed) as compressed,
              SUM(tokens) as total_tokens,
              SUM(cost) as total_cost
@@ -437,12 +480,13 @@ app.post('/api/generate-draft', async (c) => {
 app.post('/api/generate-static-site', async (c) => {
   try {
     const body = await c.req.json().catch(() => ({}));
-    const { outputPath, includeMedia, includeGraph, theme } = body;
+    const { outputPath, includeMedia, includeGraph, includeCausal, theme } = body;
 
     const options: any = {};
     if (outputPath !== undefined) options.outputPath = outputPath;
     if (includeMedia !== undefined) options.includeMedia = includeMedia;
     if (includeGraph !== undefined) options.includeGraph = includeGraph;
+    if (includeCausal !== undefined) options.includeCausal = includeCausal;
     if (theme !== undefined) options.theme = theme;
 
     const result = await brainAPI.generateStaticSite(options);
@@ -464,7 +508,7 @@ app.get('/api/pages', async (c) => {
   try {
     const pool = getPool();
     const result = await pool.query(
-      'SELECT slug, title, type, contexts, aliases, updated_at FROM pages ORDER BY updated_at DESC LIMIT 100'
+      `SELECT slug, COALESCE(NULLIF(title, ''), slug) AS title, type, contexts, aliases, updated_at FROM pages ORDER BY updated_at DESC LIMIT 100`
     );
     const pages = result.rows.map((r: any) => ({
       slug: r.slug,
@@ -709,7 +753,7 @@ app.get('/api/library-files', async (c) => {
   try {
     const pool = getPool();
     const result = await pool.query(
-      'SELECT hash, mime, original_name, size, status, ingested_at FROM library_files ORDER BY ingested_at DESC'
+      'SELECT hash, mime, original_name, size, status, ingested_at, tags FROM library_files ORDER BY ingested_at DESC'
     );
     const files = result.rows.map((r: any) => ({
       hash: r.hash,
@@ -717,11 +761,58 @@ app.get('/api/library-files', async (c) => {
       originalName: r.original_name,
       size: r.size,
       status: r.status,
-      ingestedAt: r.ingested_at
+      ingestedAt: r.ingested_at,
+      tags: r.tags || []
     }));
     return c.json({ items: files, total: files.length });
   } catch (err) {
     loggerInstance.error({ err }, '获取库文件列表失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+// Get all unique tags across library files
+app.get('/api/library-files/tags', async (c) => {
+  try {
+    const pool = getPool();
+    const result = await pool.query(
+      'SELECT DISTINCT unnest(tags) AS tag FROM library_files WHERE tags IS NOT NULL AND array_length(tags, 1) > 0 ORDER BY tag'
+    );
+    const tags = result.rows.map((r: any) => r.tag);
+    return c.json({ tags });
+  } catch (err) {
+    loggerInstance.error({ err }, '获取标签列表失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+// Update tags on a library file
+app.put('/api/library-files/:hash/tags', async (c) => {
+  try {
+    const hash = c.req.param('hash');
+    if (!/^[a-fA-F0-9]{8,128}$/.test(hash)) {
+      return c.json({ error: { code: 'VALIDATION_ERROR', message: getErrorMessage('VALIDATION_ERROR') } }, 400);
+    }
+    const body = await c.req.json().catch(() => ({}));
+    const { tags } = body;
+    if (!Array.isArray(tags)) {
+      return c.json({ error: { code: 'VALIDATION_ERROR', message: 'tags must be an array' } }, 400);
+    }
+    // Validate each tag is a string
+    for (const tag of tags) {
+      if (typeof tag !== 'string' || tag.trim().length === 0 || tag.length > 100) {
+        return c.json({ error: { code: 'VALIDATION_ERROR', message: 'Each tag must be a non-empty string (max 100 chars)' } }, 400);
+      }
+    }
+    const pool = getPool();
+    const result = await pool.query('SELECT hash FROM library_files WHERE hash = $1', [hash]);
+    if (result.rows.length === 0) {
+      return c.json({ error: { code: 'NOT_FOUND', message: getErrorMessage('NOT_FOUND') } }, 404);
+    }
+    await pool.query('UPDATE library_files SET tags = $1 WHERE hash = $2', [tags, hash]);
+    return c.json({ success: true, hash, tags });
+  } catch (err) {
+    loggerInstance.error({ err }, '更新文件标签失败');
     return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
   }
 });
@@ -1318,6 +1409,320 @@ app.get('/exports/*', async (c) => {
     return new Response(file);
   } catch (err) {
     loggerInstance.error({ err }, '读取导出文件失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+// Notes API
+const NOTES_PATH = join(process.cwd(), '..', 'notes');
+
+// Ensure notes directories exist
+function ensureNotesDirs() {
+  for (const dir of ['inbox', 'drafts', 'ready-for-review']) {
+    const p = join(NOTES_PATH, dir);
+    if (!existsSync(p)) mkdirSync(p, { recursive: true });
+  }
+}
+
+app.get('/api/notes', async (c) => {
+  try {
+    ensureNotesDirs();
+    const items: any[] = [];
+    const folders = ['inbox', 'drafts', 'ready-for-review'];
+    for (const folder of folders) {
+      const dirPath = join(NOTES_PATH, folder);
+      if (!existsSync(dirPath)) continue;
+      const files = readdirSync(dirPath).filter(f => f.endsWith('.md'));
+      for (const file of files) {
+        const filePath = join(dirPath, file);
+        const stat = statSync(filePath);
+        let tags: string[] = [];
+        try {
+          const raw = readFileSync(filePath, 'utf-8');
+          const parsed = matter(raw);
+          const frontmatterTags = parsed.data.tags;
+          if (Array.isArray(frontmatterTags)) {
+            tags = frontmatterTags.filter((t: unknown) => typeof t === 'string' && t.trim());
+          }
+        } catch (err) {
+          loggerInstance.warn({ err, file }, '解析笔记 frontmatter 失败');
+          // skip files with invalid frontmatter
+        }
+        items.push({
+          path: `${folder}/${file}`,
+          name: file.replace('.md', ''),
+          folder,
+          status: folder === 'ready-for-review' ? 'ready' : 'draft',
+          updatedAt: stat.mtime.toISOString(),
+          tags
+        });
+      }
+    }
+    return c.json({ items, total: items.length });
+  } catch (err) {
+    loggerInstance.error({ err }, '获取笔记列表失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+app.get('/api/notes/tags', async (c) => {
+  try {
+    ensureNotesDirs();
+    const allTags = new Set<string>();
+    const folders = ['inbox', 'drafts', 'ready-for-review'];
+    for (const folder of folders) {
+      const dirPath = join(NOTES_PATH, folder);
+      if (!existsSync(dirPath)) continue;
+      const files = readdirSync(dirPath).filter(f => f.endsWith('.md'));
+      for (const file of files) {
+        const filePath = join(dirPath, file);
+        try {
+          const raw = readFileSync(filePath, 'utf-8');
+          const parsed = matter(raw);
+          const tags = parsed.data.tags;
+          if (Array.isArray(tags)) {
+            for (const tag of tags) {
+              if (typeof tag === 'string' && tag.trim()) {
+                allTags.add(tag.trim());
+              }
+            }
+          }
+        } catch (err) {
+          loggerInstance.warn({ err, file }, '解析笔记标签失败');
+          // skip files with invalid frontmatter
+        }
+      }
+    }
+    return c.json({ tags: Array.from(allTags).sort() });
+  } catch (err) {
+    loggerInstance.error({ err }, '获取笔记标签失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+app.get('/api/notes/:path', async (c) => {
+  try {
+    const notePath = c.req.param('path');
+    if (notePath.includes('..')) {
+      return c.json({ error: { code: 'FORBIDDEN', message: 'Invalid path' } }, 403);
+    }
+    const fullPath = join(NOTES_PATH, notePath);
+    if (!existsSync(fullPath)) {
+      return c.json({ error: { code: 'NOT_FOUND', message: getErrorMessage('NOT_FOUND') } }, 404);
+    }
+    const content = readFileSync(fullPath, 'utf-8');
+    const stat = statSync(fullPath);
+    const folder = notePath.split('/')[0];
+    let tags: string[] = [];
+    try {
+      const parsed = matter(content);
+      const frontmatterTags = parsed.data.tags;
+      if (Array.isArray(frontmatterTags)) {
+        tags = frontmatterTags.filter((t: unknown) => typeof t === 'string' && t.trim());
+      }
+    } catch (err) {
+      loggerInstance.warn({ err, notePath }, '解析笔记内容失败');
+      // skip invalid frontmatter
+    }
+    return c.json({ content, status: folder === 'ready-for-review' ? 'ready' : 'draft', updatedAt: stat.mtime.toISOString(), tags });
+  } catch (err) {
+    loggerInstance.error({ err }, '获取笔记内容失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+app.post('/api/notes', async (c) => {
+  try {
+    const body = await c.req.json().catch(() => ({}));
+    const folder = body.folder || 'drafts';
+    if (!['inbox', 'drafts', 'ready-for-review'].includes(folder)) {
+      return c.json({ error: { code: 'VALIDATION_ERROR', message: 'Invalid folder' } }, 400);
+    }
+    ensureNotesDirs();
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const fileName = `note-${timestamp}.md`;
+    const filePath = join(NOTES_PATH, folder, fileName);
+    const content = `# 新笔记\n\n> 创建于 ${new Date().toLocaleString('zh-CN')}\n\n`;
+    writeFileSync(filePath, content, 'utf-8');
+    return c.json({ success: true, path: `${folder}/${fileName}` });
+  } catch (err) {
+    loggerInstance.error({ err }, '创建笔记失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+app.put('/api/notes/:path', async (c) => {
+  try {
+    const notePath = c.req.param('path');
+    if (notePath.includes('..')) {
+      return c.json({ error: { code: 'FORBIDDEN', message: 'Invalid path' } }, 403);
+    }
+    const body = await c.req.json().catch(() => ({}));
+    const { content } = body;
+    if (content === undefined) {
+      return c.json({ error: { code: 'VALIDATION_ERROR', message: getErrorMessage('VALIDATION_ERROR') } }, 400);
+    }
+    const fullPath = join(NOTES_PATH, notePath);
+    writeFileSync(fullPath, content, 'utf-8');
+    return c.json({ success: true });
+  } catch (err) {
+    loggerInstance.error({ err }, '保存笔记失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+app.delete('/api/notes/:path', async (c) => {
+  try {
+    const notePath = c.req.param('path');
+    if (notePath.includes('..')) {
+      return c.json({ error: { code: 'FORBIDDEN', message: 'Invalid path' } }, 403);
+    }
+    const fullPath = join(NOTES_PATH, notePath);
+    if (existsSync(fullPath)) {
+      unlinkSync(fullPath);
+    }
+    return c.json({ success: true });
+  } catch (err) {
+    loggerInstance.error({ err }, '删除笔记失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+app.put('/api/notes/:path/status', async (c) => {
+  try {
+    const notePath = c.req.param('path');
+    if (notePath.includes('..')) {
+      return c.json({ error: { code: 'FORBIDDEN', message: 'Invalid path' } }, 403);
+    }
+    const body = await c.req.json().catch(() => ({}));
+    const { status } = body;
+    if (!['draft', 'ready'].includes(status)) {
+      return c.json({ error: { code: 'VALIDATION_ERROR', message: 'Invalid status' } }, 400);
+    }
+    const oldPath = join(NOTES_PATH, notePath);
+    const fileName = notePath.split('/').pop() || '';
+    const targetFolder = status === 'ready' ? 'ready-for-review' : 'drafts';
+    const newPath = join(NOTES_PATH, targetFolder, fileName);
+    if (existsSync(oldPath) && oldPath !== newPath) {
+      ensureNotesDirs();
+      renameSync(oldPath, newPath);
+    }
+    return c.json({ success: true });
+  } catch (err) {
+    loggerInstance.error({ err }, '更新笔记状态失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+app.put('/api/notes/:path/tags', async (c) => {
+  try {
+    const notePath = c.req.param('path');
+    if (notePath.includes('..')) {
+      return c.json({ error: { code: 'FORBIDDEN', message: 'Invalid path' } }, 403);
+    }
+    const body = await c.req.json().catch(() => ({}));
+    const { tags } = body;
+    if (!Array.isArray(tags)) {
+      return c.json({ error: { code: 'VALIDATION_ERROR', message: 'tags must be an array' } }, 400);
+    }
+    const fullPath = join(NOTES_PATH, notePath);
+    if (!existsSync(fullPath)) {
+      return c.json({ error: { code: 'NOT_FOUND', message: getErrorMessage('NOT_FOUND') } }, 404);
+    }
+    const raw = readFileSync(fullPath, 'utf-8');
+    const parsed = matter(raw);
+    parsed.data.tags = tags.filter((t: unknown) => typeof t === 'string' && t.trim());
+    const newContent = matter.stringify(parsed.content, parsed.data);
+    writeFileSync(fullPath, newContent, 'utf-8');
+    return c.json({ success: true, tags: parsed.data.tags });
+  } catch (err) {
+    loggerInstance.error({ err }, '更新笔记标签失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+app.post('/api/notes/:path/extract', async (c) => {
+  try {
+    const notePath = c.req.param('path');
+    if (notePath.includes('..')) {
+      return c.json({ error: { code: 'FORBIDDEN', message: 'Invalid path' } }, 403);
+    }
+    const fullPath = join(NOTES_PATH, notePath);
+    if (!existsSync(fullPath)) {
+      return c.json({ error: { code: 'NOT_FOUND', message: getErrorMessage('NOT_FOUND') } }, 404);
+    }
+    const content = readFileSync(fullPath, 'utf-8');
+    const result = await brainAPI.extractFacts(content, notePath);
+    // Move note to library after extraction
+    const fileName = notePath.split('/').pop() || '';
+    const libraryPath = join(NOTES_PATH, '..', 'library', 'objects', fileName);
+    const libraryDir = join(NOTES_PATH, '..', 'library', 'objects');
+    if (!existsSync(libraryDir)) mkdirSync(libraryDir, { recursive: true });
+    if (existsSync(fullPath)) {
+      renameSync(fullPath, libraryPath);
+    }
+    return c.json({ success: true, diffs: result });
+  } catch (err) {
+    loggerInstance.error({ err }, '提取笔记失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+const PROMPTS_DIR = join(process.cwd(), 'skills', 'prompts');
+
+app.get('/api/prompts', async (c) => {
+  try {
+    const prompts: Array<{ name: string; title: string; description: string }> = [];
+    if (!existsSync(PROMPTS_DIR)) {
+      return c.json({ items: prompts });
+    }
+    const files = readdirSync(PROMPTS_DIR).filter(f => f.endsWith('.md'));
+    for (const file of files) {
+      const name = file.replace('.zh-CN.md', '');
+      const content = readFileSync(join(PROMPTS_DIR, file), 'utf-8');
+      const titleMatch = content.match(/^#\s+(.+)/);
+      const descMatch = content.match(/^-+\s*\n(.+)/);
+      prompts.push({
+        name,
+        title: titleMatch?.[1] || name,
+        description: descMatch?.[1] || ''
+      });
+    }
+    return c.json({ items: prompts });
+  } catch (err) {
+    loggerInstance.error({ err }, '获取提示词列表失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+app.get('/api/prompts/:name', async (c) => {
+  try {
+    const name = c.req.param('name');
+    const filePath = join(PROMPTS_DIR, `${name}.zh-CN.md`);
+    if (!existsSync(filePath)) {
+      return c.json({ error: { code: 'NOT_FOUND', message: getErrorMessage('NOT_FOUND') } }, 404);
+    }
+    const content = readFileSync(filePath, 'utf-8');
+    return c.text(content);
+  } catch (err) {
+    loggerInstance.error({ err }, '获取提示词内容失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+app.put('/api/prompts/:name', async (c) => {
+  try {
+    const name = c.req.param('name');
+    const body = await c.req.json().catch(() => ({}));
+    const { content } = body;
+    if (typeof content !== 'string') {
+      return c.json({ error: { code: 'VALIDATION_ERROR', message: getErrorMessage('VALIDATION_ERROR') } }, 400);
+    }
+    const filePath = join(PROMPTS_DIR, `${name}.zh-CN.md`);
+    writeFileSync(filePath, content, 'utf-8');
+    return c.json({ success: true });
+  } catch (err) {
+    loggerInstance.error({ err }, '保存提示词失败');
     return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
   }
 });

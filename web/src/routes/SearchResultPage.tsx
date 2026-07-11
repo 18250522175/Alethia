@@ -21,7 +21,8 @@ import {
   X,
   Trash,
   ClockCounterClockwise,
-  Check
+  Check,
+  Compass
 } from '@phosphor-icons/react';
 import api from '../lib/api';
 import { formatRelativeTime, formatFileSize, truncateText } from '../lib/format';
@@ -1332,6 +1333,14 @@ function PageResultCard({ page, query, filters }: { page: PageResult; query: str
       <div className="mt-1.5 flex flex-wrap items-center gap-2">
         {page.type && <span className="badge badge-blue text-[10px]">{page.type}</span>}
         <ResultFilterChips filters={filters} />
+        <RouterLink
+          to={`/cognitive-map`}
+          onClick={(e) => e.stopPropagation()}
+          className="ml-auto inline-flex items-center gap-1 rounded bg-indigo-50 px-2 py-0.5 text-[10px] font-medium text-indigo-600 transition-colors hover:bg-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-400 dark:hover:bg-indigo-900/50"
+        >
+          <Compass size={11} />
+          在认知地图中查看
+        </RouterLink>
       </div>
     </RouterLink>
   );

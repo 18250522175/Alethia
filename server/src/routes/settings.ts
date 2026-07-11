@@ -24,6 +24,16 @@ app.get('/api/settings', async (c) => {
     const envKeys = getApiKeys();
     settings.security.apiKey = envKeys.join(',') ?? '';
 
+    // 脱敏 LLM 适配器 API Key
+    if (settings.integration?.llmAdapters) {
+      for (const key of Object.keys(settings.integration.llmAdapters) as Array<keyof typeof settings.integration.llmAdapters>) {
+        const adapter = settings.integration.llmAdapters[key];
+        if (adapter.apiKey && adapter.apiKey.length > 4) {
+          adapter.apiKey = adapter.apiKey.slice(0, 4) + '****';
+        }
+      }
+    }
+
     return c.json({ settings });
   } catch (err) {
     logger.error({ err }, '获取设置失败');

@@ -84,11 +84,21 @@ export async function executeQuery(params: QueryParams): Promise<QueryResult> {
     // 高级搜索模式：先应用 SQL 过滤条件
     items = await executeAdvancedSearch(parsed, effectiveQuery, topK);
   } else {
-    // 普通检索模式：使用混合检索
-    const [vectorResults, fulltextResults] = await Promise.all([
+    // 普通检索模式：使用混合检索，单路失败时降级
+    const [vectorSettled, fulltextSettled] = await Promise.allSettled([
       vectorSearch(effectiveQuery, topK),
       fulltextSearch(effectiveQuery, topK)
     ]);
+
+    const vectorResults = vectorSettled.status === 'fulfilled' ? vectorSettled.value : [];
+    const fulltextResults = fulltextSettled.status === 'fulfilled' ? fulltextSettled.value : [];
+
+    if (vectorSettled.status === 'rejected') {
+      logger.warn({ err: vectorSettled.reason }, '向量搜索失败，降级为仅全文搜索');
+    }
+    if (fulltextSettled.status === 'rejected') {
+      logger.warn({ err: fulltextSettled.reason }, '全文搜索失败，降级为仅向量搜索');
+    }
 
     const vectorWeight = finalIntent === 'factual' ? 0.7 : 0.5;
     const fulltextWeight = finalIntent === 'factual' ? 0.3 : 0.5;
@@ -123,9 +133,16 @@ export async function executeQuery(params: QueryParams): Promise<QueryResult> {
       const topSlugs = items.slice(0, 3).map(i => i.slug);
       const existingSlugs = new Set(items.map(i => i.slug));
       const allLinks: Awaited<ReturnType<typeof graphTraverse>> = [];
+      const seenPairs = new Set<string>();
       for (const slug of topSlugs) {
         const links = await graphTraverse(slug, 2);
-        allLinks.push(...links);
+        for (const link of links) {
+          const key = `${link.sourceSlug}||${link.targetSlug}`;
+          if (!seenPairs.has(key)) {
+            seenPairs.add(key);
+            allLinks.push(link);
+          }
+        }
       }
       logger.debug({ graphLinks: allLinks.length }, '图谱扩展完成');
       for (const link of allLinks) {
@@ -221,11 +238,11 @@ async function executeAdvancedSearch(
   const whereClause = whereParts.length > 0 ? 'WHERE ' + whereParts.join(' AND ') : '';
 
   const result = await pool.query(
-    `SELECT slug, title, type, contexts, tags, aliases, quality, cv_score, created_at,
+    `SELECT slug, title, type, contexts, COALESCE(tags, '{}') AS tags, aliases, created_at,
             LEFT(content_md, 200) as snippet,
             CASE
-              WHEN pages.quality = 'A' THEN 1.0
-              WHEN pages.quality = 'B' THEN 0.7
+              WHEN COALESCE(pages.quality, 'B') = 'A' THEN 1.0
+              WHEN COALESCE(pages.quality, 'B') = 'B' THEN 0.7
               ELSE 0.4
             END * 0.6
             + LEAST(COALESCE(pages.cv_score, 0.0), 1.0) * 0.3

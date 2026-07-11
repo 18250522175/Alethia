@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { MagnifyingGlass, X, Command, FileText, Graph, ChatsCircle, Hash } from '@phosphor-icons/react';
+import { MagnifyingGlass, X, Command, FileText, Graph, ChatsCircle, Hash, Compass } from '@phosphor-icons/react';
 import { Combobox, ComboboxInput, ComboboxOptions, ComboboxOption } from '@headlessui/react';
 import api from '../lib/api';
 
@@ -11,6 +11,7 @@ interface SearchSuggestion {
   title: string;
   description?: string;
   path: string;
+  slug?: string;
 }
 
 function getTypeIcon(type: string) {
@@ -56,7 +57,8 @@ export default function SearchCombobox() {
             type: r.type === 'file' ? 'file' : 'wiki',
             title: r.title || r.name || '',
             description: r.snippet || r.description || '',
-            path: r.type === 'file' ? `/library/${r.hash}` : `/wiki/${r.slug || r.id}`
+            path: r.type === 'file' ? `/library/${r.hash}` : `/wiki/${r.slug || r.id}`,
+            slug: r.slug || r.id || '',
           }));
           setSearchResults(suggestions);
         } catch {
@@ -174,6 +176,21 @@ export default function SearchCombobox() {
                     </div>
                   )}
                 </div>
+                {suggestion.slug && suggestion.type === 'wiki' && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      navigate(`/cognitive-map?focus=${encodeURIComponent(suggestion.slug!)}`);
+                      setQuery('');
+                      setOpen(false);
+                    }}
+                    className="flex-shrink-0 rounded-md p-1.5 text-slate-400 opacity-0 group-hover:opacity-100 hover:bg-indigo-100 hover:text-indigo-600 dark:hover:bg-indigo-900/30 dark:hover:text-indigo-400 transition-all"
+                    title="在认知地图中查看"
+                  >
+                    <Compass size={16} />
+                  </button>
+                )}
               </ComboboxOption>
             ))}
           </ComboboxOptions>

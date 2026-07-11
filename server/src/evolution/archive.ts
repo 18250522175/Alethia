@@ -105,10 +105,10 @@ async function fetchEarliestActiveVersions(
   limit: number
 ): Promise<VersionRow[]> {
   const result = await pool.query(
-    `SELECT id, slug, version, ts, change_summary
+    `SELECT id, slug, version, created_at as ts, change_summary
      FROM knowledge_versions
      WHERE slug = $1 AND archived = false
-     ORDER BY version ASC, ts ASC
+     ORDER BY version ASC, created_at ASC
      LIMIT $2`,
     [slug, limit]
   );
@@ -218,10 +218,10 @@ async function fetchRemainingActiveVersions(
   slug: string
 ): Promise<VersionRow[]> {
   const result = await pool.query(
-    `SELECT id, slug, version, ts, change_summary
+    `SELECT id, slug, version, created_at as ts, change_summary
      FROM knowledge_versions
      WHERE slug = $1 AND archived = false
-     ORDER BY version DESC, ts DESC
+     ORDER BY version DESC, created_at DESC
      LIMIT $2`,
     [slug, KEEP_RECENT]
   );

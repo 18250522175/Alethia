@@ -5,6 +5,7 @@ export interface BrainMediaProps {
   start?: number;
   type: 'audio' | 'video' | 'image';
   label?: string;
+  mimeType?: string;
 }
 
 function resolveSrc(src: string): string {
@@ -12,7 +13,28 @@ function resolveSrc(src: string): string {
     const hash = src.slice('library://'.length).split('?')[0];
     return `/api/library-files/${hash}/content`;
   }
+  if (src.startsWith('/api/library/')) {
+    const match = src.match(/\/api\/library\/([^/?]+)\/content/);
+    if (match) {
+      return `/api/library-files/${match[1]}/content`;
+    }
+  }
   return src;
+}
+
+function detectMediaType(src: string, mimeType?: string): 'audio' | 'video' | 'image' {
+  if (mimeType) {
+    if (mimeType.startsWith('image/')) return 'image';
+    if (mimeType.startsWith('video/')) return 'video';
+    if (mimeType.startsWith('audio/')) return 'audio';
+  }
+  const ext = src.split('?')[0].split('.').pop()?.toLowerCase();
+  if (ext) {
+    if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico'].includes(ext)) return 'image';
+    if (['mp4', 'webm', 'mov', 'avi', 'mkv'].includes(ext)) return 'video';
+    if (['mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a'].includes(ext)) return 'audio';
+  }
+  return 'image';
 }
 
 function formatTime(seconds: number): string {
@@ -30,6 +52,9 @@ class BrainMediaElement extends HTMLElement {
   private errorDisplay: HTMLElement | null = null;
   private lastSrc: string = '';
   private lastType: string = '';
+  private _collapsed: boolean = false;
+  private contentContainer: HTMLElement | null = null;
+  private toggleBtn: HTMLButtonElement | null = null;
 
   static get observedAttributes() {
     return ['src', 'start', 'type', 'label'];
@@ -150,6 +175,13 @@ class BrainMediaElement extends HTMLElement {
         cursor: pointer; margin-left: 0.5rem;
       }
       .retry-btn:hover { background: var(--bm-accent); color: #fff; }
+      .toggle-btn {
+        background: transparent; color: var(--bm-accent); border: 1px solid var(--bm-border);
+        border-radius: 0.25rem; padding: 0.15rem 0.4rem; font-size: 0.7rem;
+        cursor: pointer; white-space: nowrap; flex-shrink: 0;
+      }
+      .toggle-btn:hover { background: var(--bm-accent); color: #fff; border-color: var(--bm-accent); }
+      .content { margin-top: 0.5rem; }
     `;
     shadow.appendChild(style);
 
@@ -167,9 +199,30 @@ class BrainMediaElement extends HTMLElement {
     labelEl.className = 'label';
     labelEl.textContent = label || rawSrc;
 
+    const toggleBtn = document.createElement('button');
+    toggleBtn.className = 'toggle-btn';
+    toggleBtn.textContent = this._collapsed ? '▶ 展开预览' : '▼ 收起预览';
+    toggleBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this._collapsed = !this._collapsed;
+      toggleBtn.textContent = this._collapsed ? '▶ 展开预览' : '▼ 收起预览';
+      if (this.contentContainer) {
+        this.contentContainer.style.display = this._collapsed ? 'none' : '';
+      }
+    });
+    this.toggleBtn = toggleBtn;
+
     header.appendChild(badge);
     header.appendChild(labelEl);
+    header.appendChild(toggleBtn);
     container.appendChild(header);
+
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'content';
+    if (this._collapsed) {
+      contentDiv.style.display = 'none';
+    }
+    this.contentContainer = contentDiv;
 
     if (type === 'image') {
       const img = document.createElement('img');
@@ -181,14 +234,14 @@ class BrainMediaElement extends HTMLElement {
       img.addEventListener('load', () => {
         this.hideError();
       });
-      container.appendChild(img);
+      contentDiv.appendChild(img);
     } else {
       const media = document.createElement(type === 'video' ? 'video' : 'audio');
       media.controls = true;
       media.src = src;
       media.style.width = '100%';
       this.mediaEl = media;
-      container.appendChild(media);
+      contentDiv.appendChild(media);
 
       media.addEventListener('error', () => {
         this.showError(`媒体加载失败：${label || rawSrc}。请检查文件是否存在或格式是否支持。`);
@@ -221,7 +274,7 @@ class BrainMediaElement extends HTMLElement {
 
       controls.appendChild(time);
       controls.appendChild(jumpBtn);
-      container.appendChild(controls);
+      contentDiv.appendChild(controls);
 
       media.addEventListener('timeupdate', () => {
         if (this.timeDisplay) this.timeDisplay.textContent = formatTime(media.currentTime);
@@ -234,6 +287,7 @@ class BrainMediaElement extends HTMLElement {
       }
     }
 
+    container.appendChild(contentDiv);
     shadow.appendChild(container);
   }
 }
@@ -244,7 +298,7 @@ if (typeof window !== 'undefined' && !customElements.get('brain-media')) {
 
 export { BrainMediaElement };
 
-export function BrainMedia({ src, start, type, label }: BrainMediaProps) {
+export function BrainMedia({ src, start, type, label, mimeType }: BrainMediaProps) {
   const ref = useRef<HTMLElement>(null);
 
   useEffect(() => {
@@ -253,14 +307,19 @@ export function BrainMedia({ src, start, type, label }: BrainMediaProps) {
     }
   }, []);
 
+  // Auto-detect media type from src or mimeType
+  const detectedType = detectMediaType(src, mimeType);
+  const finalType = type || detectedType;
+
   return (
     // @ts-expect-error custom element not in JSX intrinsic elements
     <brain-media
       ref={ref}
       src={src}
       start={start !== undefined ? String(start) : undefined}
-      type={type}
+      type={finalType}
       label={label}
+      mime-type={mimeType}
     />
   );
 }
