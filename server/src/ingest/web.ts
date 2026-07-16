@@ -18,7 +18,7 @@ export async function fetchWebContent(url: string): Promise<WebContentResult> {
   const maxRetries = 3;
   const timeoutMs = Number(process.env.WEB_FETCH_TIMEOUT_MS) || 15000;
 
-  let html: string;
+  let html = '';
   let lastError: string = '';
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {

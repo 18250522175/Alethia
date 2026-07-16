@@ -68,9 +68,7 @@ export async function transcribeAudio(filePath: string, maxRetries: number = 2):
         await execAsync(
           `"${whisperBin}" "${filePath}" --output_format json -of "${baseName}"`,
           {
-            encoding: 'utf-8',
             maxBuffer: 100 * 1024 * 1024,
-            stdio: ['ignore', 'pipe', 'pipe']
           }
         );
 

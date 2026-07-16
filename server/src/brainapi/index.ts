@@ -498,6 +498,7 @@ class BrainAPI {
       const wikiPath = storage.getWikiPath();
       const targetFile = join(wikiPath, `${diff.slug}.md`);
       const modifiedFiles: string[] = [];
+      let nextVersion = 0;
 
       if (existsSync(targetFile)) {
         const currentContent = storage.readFile(targetFile);
@@ -513,7 +514,7 @@ class BrainAPI {
             `SELECT COALESCE(MAX(version), 0)::bigint as max_version FROM knowledge_versions WHERE slug = $1`,
             [diff.slug]
           );
-          const nextVersion = (maxVersionResult.rows[0]?.max_version || 0) + 1;
+          nextVersion = (maxVersionResult.rows[0]?.max_version || 0) + 1;
           // 防止 INTEGER 溢出（上限 2,147,483,647）
           if (nextVersion > 2147483647) {
             await client.query('ROLLBACK');
@@ -1918,7 +1919,7 @@ ${relationsBlock}
         case 'stock': {
           const symbol = params.symbol;
           const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`;
-          const response = await fetch(url, { timeout: 5000 });
+          const response = await fetch(url);
           const json = await response.json();
           const meta = json.chart?.result?.[0]?.meta || {};
           data = {
@@ -1938,7 +1939,7 @@ ${relationsBlock}
             break;
           }
           const url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&appid=${apiKey}&units=${params.units || 'metric'}`;
-          const response = await fetch(url, { timeout: 5000 });
+          const response = await fetch(url);
           const json = await response.json();
           data = {
             city: json.name,
@@ -1953,10 +1954,10 @@ ${relationsBlock}
         }
         case 'rss': {
           const url = params.url;
-          const response = await fetch(url, { timeout: 5000 });
+          const response = await fetch(url);
           const xml = await response.text();
           const parser = new (require('xml2js').Parser)({ trim: true, explicitArray: false });
-          const json = await new Promise((resolve) => parser.parseString(xml, (_, result) => resolve(result)));
+          const json: any = await new Promise((resolve) => parser.parseString(xml, (_: any, result: any) => resolve(result)));
           const items = json.rss?.channel?.item || [];
           const limit = parseInt(params.limit || '5');
           data = {
@@ -1972,7 +1973,7 @@ ${relationsBlock}
         case 'crypto': {
           const symbol = params.symbol;
           const url = `https://api.coingecko.com/api/v3/simple/price?ids=${symbol}&vs_currencies=usd`;
-          const response = await fetch(url, { timeout: 5000 });
+          const response = await fetch(url);
           const json = await response.json();
           data = {
             symbol,
@@ -1982,7 +1983,7 @@ ${relationsBlock}
         }
         case 'json': {
           const url = params.url;
-          const response = await fetch(url, { timeout: 5000 });
+          const response = await fetch(url);
           data = await response.json();
           break;
         }

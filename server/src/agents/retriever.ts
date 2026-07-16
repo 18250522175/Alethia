@@ -28,7 +28,7 @@ async function retrieveInternal(plan: RetrievalPlan): Promise<RetrievalResult> {
     withGraph: plan.depth === 'deep'
   });
 
-  const evidence = await getEvidenceForPages(queryResult.items);
+  const evidence = await getEvidenceForPages(queryResult.items, plan);
 
   let graphContext: string[] = [];
   if (queryResult.items.length > 0) {
@@ -56,7 +56,7 @@ async function retrieveInternal(plan: RetrievalPlan): Promise<RetrievalResult> {
   };
 }
 
-async function getEvidenceForPages(items: QueryResultItem[]): Promise<EvidenceSpan[]> {
+async function getEvidenceForPages(items: QueryResultItem[], plan: RetrievalPlan): Promise<EvidenceSpan[]> {
   if (items.length === 0) return [];
 
   try {

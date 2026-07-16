@@ -54,16 +54,25 @@ export class MarkdownStorage {
     return this.libraryPath;
   }
 
+  getSkillsPath(): string {
+    return join(this.rootPath, 'skills');
+  }
+
+  saveLibraryFile(hash: string, content: Buffer): void {
+    const filePath = join(this.libraryPath, hash);
+    this.writeFile(filePath, content);
+  }
+
   readFile(filePath: string): string {
     return readFileSync(filePath, 'utf-8');
   }
 
-  writeFile(filePath: string, content: string): void {
+  writeFile(filePath: string, content: string | Buffer): void {
     const dir = join(filePath, '..');
     if (!existsSync(dir)) {
       mkdirSync(dir, { recursive: true });
     }
-    writeFileSync(filePath, content, 'utf-8');
+    writeFileSync(filePath, content);
   }
 
   atomicWrite(filePath: string, content: string): void {

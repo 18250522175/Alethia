@@ -1014,6 +1014,7 @@ export const api = {
         node?: string;
         action: string;
         confidence: number;
+        moduleType?: string;
       }>;
     }>('/causal/suggestions', {
       params: {

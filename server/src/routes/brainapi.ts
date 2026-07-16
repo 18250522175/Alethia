@@ -6,6 +6,7 @@ import { getPool } from '../db/pool';
 import { validateHyperedge } from '../causal/ontologyValidator';
 import { storage } from '../storage/markdown';
 import { syncEngine } from '../storage/sync';
+import { extractFacts } from '../agents/observe';
 import { join } from 'path';
 import { existsSync, statSync, unlinkSync, mkdirSync, readFileSync, writeFileSync, readdirSync, renameSync } from 'fs';
 import matter from 'gray-matter';
@@ -1333,7 +1334,7 @@ app.get('/api/embed-proxy', async (c) => {
     const refresh = c.req.query('refresh') === 'true';
 
     const params: Record<string, string> = {};
-    for (const [key, value] of c.req.query.entries()) {
+    for (const [key, value] of Object.entries(c.req.query())) {
       if (key !== 'type' && key !== 'refresh') {
         params[key] = value;
       }
@@ -1480,7 +1481,9 @@ app.delete('/api/saved-searches/:name', async (c) => {
 app.get('/exports/*', async (c) => {
   try {
     const exportsDir = join(process.cwd(), 'exports');
-    const filePath = join(exportsDir, c.req.param('*'));
+    const paramStar = c.req.param('*');
+    if (!paramStar) return c.json({ error: { code: 'BAD_REQUEST', message: 'Missing path' } }, 400);
+    const filePath = join(exportsDir, paramStar);
     // 防止路径遍历
     if (!filePath.startsWith(exportsDir)) {
       return c.json({ error: { code: 'FORBIDDEN', message: 'Access denied' } }, 403);
@@ -1735,7 +1738,7 @@ app.post('/api/notes/:path/extract', async (c) => {
       return c.json({ error: { code: 'NOT_FOUND', message: getErrorMessage('NOT_FOUND') } }, 404);
     }
     const content = readFileSync(fullPath, 'utf-8');
-    const result = await brainAPI.extractFacts(content, notePath);
+    const result = await extractFacts(notePath);
     // Move note to library after extraction
     const fileName = notePath.split('/').pop() || '';
     const libraryPath = join(NOTES_PATH, '..', 'library', 'objects', fileName);

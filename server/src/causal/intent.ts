@@ -67,7 +67,7 @@ export class RemoteLLMResolver implements IntentResolver {
         explanation: parsed.explanation || '操作已执行',
       };
     } catch (error) {
-      logger.warn('Remote LLM intent resolution failed, falling back to template', error);
+      logger.warn({ err: String(error) }, 'Remote LLM intent resolution failed, falling back to template');
       throw error;
     }
   }
@@ -221,7 +221,7 @@ export class OllamaResolver implements IntentResolver {
 
       throw new Error('No JSON found in Ollama response');
     } catch (error) {
-      logger.warn('Ollama intent resolution failed', error);
+      logger.warn({ err: String(error) }, 'Ollama intent resolution failed');
       throw error;
     }
   }

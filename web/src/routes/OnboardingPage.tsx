@@ -10,6 +10,7 @@ import {
   ArrowRight,
   Sparkle,
   X,
+  Graph,
 } from '@phosphor-icons/react';
 
 type Accent = 'primary' | 'knowledge' | 'parchment' | 'slate';
@@ -62,7 +63,7 @@ const STEPS: OnboardingStep[] = [
     accent: 'knowledge',
   },
   {
-    icon: GraphIcon,
+    icon: Graph,
     titleKey: 'onboarding.graphTitle',
     titleDefault: '知识图谱',
     descKey: 'onboarding.graphDesc',
