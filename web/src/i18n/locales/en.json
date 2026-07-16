@@ -780,7 +780,6 @@
     "enterInsert": "↵ Confirm Insert",
     "escBack": "Esc Back to List"
   },
-  // DEPRECATED: graphFull keys are deprecated, page merged into CausalCanvas
   "graphFull": {
     "layoutForce": "Force-Directed",
     "layoutCircle": "Circle",
