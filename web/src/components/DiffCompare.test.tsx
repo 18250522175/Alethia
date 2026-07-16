@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 // Mock react-i18next 的 useTranslation
 vi.mock('react-i18next', () => ({
@@ -104,7 +104,7 @@ describe('DiffCompare', () => {
     const bigger = Array(1001).fill('changed').map((l, i) => `${l}${i}`).join('\n');
     render(<DiffCompare oldValue={big} newValue={bigger} />);
     expect(
-      screen.getByText(/已使用简化对比模式/)
+      screen.getByText(/diffCompare.truncatedWarning/)
     ).toBeInTheDocument();
   });
 
@@ -119,12 +119,14 @@ describe('DiffCompare', () => {
     expect(rows.length).toBeGreaterThan(10);
   });
 
-  it('copy button calls clipboard.writeText with newValue', () => {
+  it('copy button calls clipboard.writeText with newValue', async () => {
     render(<DiffCompare oldValue="old" newValue="new content" />);
     // 按钮的可访问名称来自其文字内容 "复制"，title 为辅助提示
     const copyBtn = screen.getByTitle('复制新内容');
     fireEvent.click(copyBtn);
-    expect(navigator.clipboard.writeText).toHaveBeenCalledWith('new content');
+    await waitFor(() => {
+      expect(navigator.clipboard.writeText).toHaveBeenCalledWith('new content');
+    });
   });
 
   it('copy button disabled when newValue empty', () => {
