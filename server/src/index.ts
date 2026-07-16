@@ -19,6 +19,7 @@ import { budgetManager } from './evolution/budget';
 import { runHypergraphEvolution } from './evolution/hypergraph';
 import { runCausalDiscovery } from './causal/discovery';
 import { generateWeeklyReport } from './evolution/weekly';
+import { checkOntologyConsistency } from './causal/ontologyChecker';
 
 const VERSION = '5.0.0';
 
@@ -230,6 +231,42 @@ async function bootstrap() {
       loggerInstance.info('因果发现任务完成');
     } catch (err) {
       loggerInstance.warn({ err }, '因果发现任务失败');
+    }
+    try {
+      const issues = await checkOntologyConsistency();
+      if (issues.length > 0) {
+        loggerInstance.info({ issueCount: issues.length }, '本体一致性检查发现不符合项');
+        // 为每个问题创建 pending_diff
+        for (const issue of issues) {
+          try {
+            const { randomUUID } = await import('crypto');
+            const diffId = randomUUID();
+            await getPool().query(
+              `INSERT INTO pending_diffs (id, slug, type, payload, confidence, impact, tier, created_at, resolved)
+               VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, NOW(), false)
+               ON CONFLICT DO NOTHING`,
+              [
+                diffId,
+                issue.slug,
+                'ontology_violation',
+                JSON.stringify({
+                  field: 'ontology_consistency',
+                  message: issue.message,
+                  severity: issue.severity,
+                  source: 'nightly_check',
+                }),
+                0.7,
+                issue.severity === 'error' ? 'high' : 'medium',
+                issue.severity === 'error' ? 'red' : 'yellow',
+              ]
+            );
+          } catch (diffErr) {
+            loggerInstance.warn({ diffErr, issue }, '创建本体一致性 pending_diff 失败');
+          }
+        }
+      }
+    } catch (err) {
+      loggerInstance.warn({ err }, '本体一致性检查失败');
     }
   }, EVOLUTION_INTERVAL);
 

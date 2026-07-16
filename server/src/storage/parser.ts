@@ -25,6 +25,7 @@ export interface ParsedPage {
   causalEdges: ParsedCausalEdge[];
   causalCpt: ParsedCausalCPT | null;
   hyperRelations: ParsedHyperEdge[];
+  ontology?: ParsedOntology;
 }
 
 export interface ParsedRelation {
@@ -76,6 +77,41 @@ export interface ParsedCausalCPT {
   table: Array<Record<string, string>>;
 }
 
+export interface ParsedOntology {
+  classes: ParsedOntologyClass[];
+  classHierarchy: Record<string, string[]>; // parent -> child classes
+  properties: ParsedOntologyProperty[];
+  hyperedgeTypes: ParsedOntologyHyperedgeType[];
+  causalConstraints: string[];
+  inferenceRules: ParsedOntologyRule[];
+}
+
+export interface ParsedOntologyClass {
+  name: string;
+  parent?: string;
+  description?: string;
+}
+
+export interface ParsedOntologyProperty {
+  name: string;
+  domain: string; // class name
+  range: string; // class name or datatype
+  inverseOf?: string;
+}
+
+export interface ParsedOntologyHyperedgeType {
+  name: string; // e.g. ":jointlyCause"
+  signature: string;
+  domainClasses: string[]; // allowed source entity classes
+  rangeClasses: string[]; // allowed target entity classes
+}
+
+export interface ParsedOntologyRule {
+  ruleType: string;
+  description: string;
+  body: string;
+}
+
 const SECTION_NAMES = [
   'State',
   'Assessment',
@@ -87,7 +123,8 @@ const SECTION_NAMES = [
   'Evidence',
   'Causal Model',
   'Causal CPT',
-  'Hyper Relations'
+  'Hyper Relations',
+  'Ontology'
 ];
 
 export class CompiledTruthParser {
@@ -117,6 +154,8 @@ export class CompiledTruthParser {
       ...causalResult.hyperEdges
     ];
 
+    const ontology = this.parseOntologySection(this.getSectionByPrefix(sections, 'Ontology'));
+
     return {
       slug,
       path: filePath,
@@ -140,7 +179,8 @@ export class CompiledTruthParser {
       evidence,
       causalEdges,
       causalCpt,
-      hyperRelations
+      hyperRelations,
+      ontology
     };
   }
 
@@ -552,6 +592,197 @@ export class CompiledTruthParser {
     }
 
     return hyperEdges;
+  }
+
+  private parseOntologySection(raw: string): ParsedOntology | undefined {
+    if (!raw || !raw.trim()) return undefined;
+
+    const subsections = this.extractSubSections(raw);
+
+    const classes: ParsedOntologyClass[] = [];
+    const classHierarchy: Record<string, string[]> = {};
+    const properties: ParsedOntologyProperty[] = [];
+    const hyperedgeTypes: ParsedOntologyHyperedgeType[] = [];
+    const causalConstraints: string[] = [];
+    const inferenceRules: ParsedOntologyRule[] = [];
+
+    // Parse ### Classes
+    const classesRaw = this.getSectionByPrefix(subsections, 'Classes');
+    if (classesRaw) {
+      let currentClass: ParsedOntologyClass | null = null;
+      const lines = classesRaw.split('\n');
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith('- ') && !trimmed.startsWith('- parent:') && !trimmed.startsWith('- desc:')) {
+          // New class definition
+          if (currentClass) {
+            classes.push(currentClass);
+          }
+          currentClass = { name: trimmed.replace(/^-\s*/, '').trim() };
+        } else if (currentClass && trimmed.startsWith('- parent:')) {
+          currentClass.parent = trimmed.replace(/^-\s*parent:\s*/, '').trim();
+        } else if (currentClass && trimmed.startsWith('- desc:')) {
+          currentClass.description = trimmed.replace(/^-\s*desc:\s*/, '').trim();
+        }
+      }
+      if (currentClass) {
+        classes.push(currentClass);
+      }
+    }
+
+    // Parse ### Class Hierarchy
+    const hierarchyRaw = this.getSectionByPrefix(subsections, 'Class Hierarchy');
+    if (hierarchyRaw) {
+      const lines = hierarchyRaw.split('\n').filter(l => l.trim().startsWith('-'));
+      for (const line of lines) {
+        const match = line.match(/-\s*([^:]+):\s*(.+)/);
+        if (match) {
+          const parent = match[1].trim();
+          const children = match[2].split(',').map(s => s.trim()).filter(Boolean);
+          classHierarchy[parent] = children;
+        }
+      }
+    }
+
+    // Parse ### Properties
+    const propsRaw = this.getSectionByPrefix(subsections, 'Properties');
+    if (propsRaw) {
+      let currentProp: ParsedOntologyProperty | null = null;
+      const lines = propsRaw.split('\n');
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith('- ') && !trimmed.startsWith('- inverse:')) {
+          if (currentProp) {
+            properties.push(currentProp);
+          }
+          const match = trimmed.match(/-\s*(\w+)\s*:\s*(\w+)\s*->\s*(\w+)/);
+          if (match) {
+            currentProp = {
+              name: match[1].trim(),
+              domain: match[2].trim(),
+              range: match[3].trim()
+            };
+          } else {
+            currentProp = null;
+          }
+        } else if (currentProp && trimmed.startsWith('- inverse:')) {
+          currentProp.inverseOf = trimmed.replace(/^-\s*inverse:\s*/, '').trim();
+        }
+      }
+      if (currentProp) {
+        properties.push(currentProp);
+      }
+    }
+
+    // Parse ### Hyperedge Types
+    const heTypesRaw = this.getSectionByPrefix(subsections, 'Hyperedge Types');
+    if (heTypesRaw) {
+      let currentHE: ParsedOntologyHyperedgeType | null = null;
+      const lines = heTypesRaw.split('\n');
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith('- :') && !trimmed.startsWith('- signature:') && !trimmed.startsWith('- domain:') && !trimmed.startsWith('- range:')) {
+          if (currentHE) {
+            hyperedgeTypes.push(currentHE);
+          }
+          currentHE = {
+            name: trimmed.replace(/^-\s*/, '').trim(),
+            signature: '',
+            domainClasses: [],
+            rangeClasses: []
+          };
+        } else if (currentHE && trimmed.startsWith('- signature:')) {
+          currentHE.signature = trimmed.replace(/^-\s*signature:\s*/, '').trim();
+        } else if (currentHE && trimmed.startsWith('- domain:')) {
+          const domainMatch = trimmed.match(/-\s*domain:\s*\[([^\]]*)\]/);
+          if (domainMatch) {
+            currentHE.domainClasses = domainMatch[1].split(',').map(s => s.trim()).filter(Boolean);
+          }
+        } else if (currentHE && trimmed.startsWith('- range:')) {
+          const rangeMatch = trimmed.match(/-\s*range:\s*\[([^\]]*)\]/);
+          if (rangeMatch) {
+            currentHE.rangeClasses = rangeMatch[1].split(',').map(s => s.trim()).filter(Boolean);
+          }
+        }
+      }
+      if (currentHE) {
+        hyperedgeTypes.push(currentHE);
+      }
+    }
+
+    // Parse ### Causal Constraints
+    const constraintsRaw = this.getSectionByPrefix(subsections, 'Causal Constraints');
+    if (constraintsRaw) {
+      const lines = constraintsRaw.split('\n').filter(l => l.trim().startsWith('-'));
+      for (const line of lines) {
+        causalConstraints.push(line.replace(/^-\s*/, '').trim());
+      }
+    }
+
+    // Parse ### Inference Rules
+    const rulesRaw = this.getSectionByPrefix(subsections, 'Inference Rules');
+    if (rulesRaw) {
+      let currentRule: ParsedOntologyRule | null = null;
+      const lines = rulesRaw.split('\n');
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith('- ') && !trimmed.startsWith('  -')) {
+          if (currentRule) {
+            inferenceRules.push(currentRule);
+          }
+          const match = trimmed.match(/-\s*(\w+)\s*:\s*(.+)/);
+          if (match) {
+            currentRule = {
+              ruleType: match[1].trim(),
+              description: match[2].trim(),
+              body: ''
+            };
+          } else {
+            currentRule = null;
+          }
+        } else if (currentRule && trimmed.startsWith('  -')) {
+          currentRule.body += (currentRule.body ? '\n' : '') + trimmed.replace(/^\s*-\s*/, '').trim();
+        }
+      }
+      if (currentRule) {
+        inferenceRules.push(currentRule);
+      }
+    }
+
+    return {
+      classes,
+      classHierarchy,
+      properties,
+      hyperedgeTypes,
+      causalConstraints,
+      inferenceRules
+    };
+  }
+
+  private extractSubSections(content: string): Record<string, string> {
+    const sections: Record<string, string> = {};
+    const lines = content.split('\n');
+
+    let currentSection = '';
+    let currentLines: string[] = [];
+
+    for (const line of lines) {
+      const headingMatch = line.match(/^###\s+(.+)$/);
+      if (headingMatch) {
+        if (currentSection) {
+          sections[currentSection] = currentLines.join('\n').trim();
+        }
+        currentSection = headingMatch[1].trim();
+        currentLines = [];
+      } else {
+        currentLines.push(line);
+      }
+    }
+
+    if (currentSection) {
+      sections[currentSection] = currentLines.join('\n').trim();
+    }
+    return sections;
   }
 
   private nameToSlug(name: string): string {

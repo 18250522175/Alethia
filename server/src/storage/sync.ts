@@ -1,10 +1,11 @@
 import { storage } from './markdown';
-import { parser, type ParsedPage, type ParsedCausalEdge, type ParsedCausalCPT, type ParsedHyperEdge } from './parser';
+import { parser, type ParsedPage, type ParsedCausalEdge, type ParsedCausalCPT, type ParsedHyperEdge, type ParsedOntology } from './parser';
 import { syncSummaries } from './summary';
 import { getPool } from '../db/pool';
 import logger from '../i18n/logger';
 import { createHash, randomUUID } from 'crypto';
 import { llmRouter } from '../llm/router';
+import { validateHyperedge } from '../causal/ontologyValidator';
 
 const EXTRACTABLE_MIME_PREFIXES = ['text/', 'application/json', 'application/xml'];
 const LIBRARY_EXTRACTION_PROMPT = `请从以下文本中提取知识实体和关系，输出 JSON 格式：
@@ -56,6 +57,15 @@ export class SyncEngine {
       await client.query('DELETE FROM hyperedges');
       await client.query('DELETE FROM causal_hyperedges');
 
+      // 清空本体论缓存表
+      await client.query('TRUNCATE TABLE ontology_classes');
+      await client.query('TRUNCATE TABLE ontology_properties');
+      await client.query('TRUNCATE TABLE ontology_hyperedge_signatures');
+      await client.query('TRUNCATE TABLE ontology_rules');
+
+      // 全局本体论（core.md）优先处理
+      let globalOntology: ParsedOntology | undefined;
+
       for (const filePath of wikiFiles) {
         try {
           const content = storage.readFile(filePath);
@@ -82,9 +92,23 @@ export class SyncEngine {
 
           const chEdges = await this.syncCausalHyperedges(client, parsed);
           hyperEdgeCount += chEdges;
+
+          // 本体论同步：全局本体论（core.md）作为基础，本地本体论可覆盖
+          if (parsed.ontology) {
+            if (filePath.includes('core.md') || filePath.includes('ontology/core.md')) {
+              globalOntology = parsed.ontology;
+            } else {
+              await this.syncOntology(client, parsed.ontology, parsed.slug);
+            }
+          }
         } catch (err) {
           logger.error({ err, filePath }, '同步文件失败');
         }
+      }
+
+      // 全局本体论最后同步（作为基础，本地本体论已覆盖）
+      if (globalOntology) {
+        await this.syncOntology(client, globalOntology, 'wiki/ontology/core');
       }
 
       logger.info(`同步完成: ${pageCount} 页, ${linkCount} 链接, ${timelineCount} 时间线, ${versionCount} 版本, ${causalEdgeCount} 因果边, ${hyperEdgeCount} 超边`);
@@ -291,6 +315,82 @@ export class SyncEngine {
     // The auto_change_log table is used for file-level Markdown changes.
 
     for (const hyperEdge of parsed.hyperRelations) {
+      // 本体论验证：检查超边是否符合类型签名约束
+      const report = await validateHyperedge({
+        type: hyperEdge.type,
+        sourceSlugs: hyperEdge.sourceSlugs,
+        targetSlugs: hyperEdge.targetSlugs
+      });
+
+      if (!report.valid) {
+        logger.warn({ hyperEdge, violations: report.violations }, '超边本体论验证失败');
+
+        // 检查是否已有已批准的例外覆盖
+        const key = `hyperedge:${hyperEdge.type}:${hyperEdge.sourceSlugs.sort().join(',')}:${hyperEdge.targetSlugs.sort().join(',')}`;
+        const existingException = await client.query(
+          `SELECT id FROM pending_diffs WHERE slug = $1 AND type = 'ontology_violation'
+           AND payload->>'action' = 'hyperedge_validation_failed'
+           AND payload->>'exception' = 'true'
+           AND resolved = true AND approved = true
+           AND payload->>'key' = $2
+           LIMIT 1`,
+          [parsed.slug, key]
+        );
+
+        if (existingException.rows.length > 0) {
+          logger.info({ hyperEdge, key }, '超边已有例外覆盖，跳过验证');
+          // 仍然插入超边，但置信度降低
+          await client.query(`
+            INSERT INTO hyperedges (source_slugs, target_slugs, type, params)
+            VALUES ($1::text[], $2::text[], $3, $4::jsonb)
+          `, [
+            hyperEdge.sourceSlugs,
+            hyperEdge.targetSlugs,
+            hyperEdge.type,
+            JSON.stringify({ ...hyperEdge.params, conf: 0.5, ontologyViolations: report.violations, exceptionOverridden: true })
+          ]);
+          continue;
+        }
+
+        // 创建 pending_diff 标记为低置信度
+        const diffId = randomUUID();
+        await client.query(`
+          INSERT INTO pending_diffs (id, slug, type, payload, confidence, impact, tier, created_at, resolved)
+          VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, NOW(), false)
+          ON CONFLICT DO NOTHING
+        `, [
+          diffId,
+          parsed.slug,
+          'ontology_violation',
+          JSON.stringify({
+            action: 'hyperedge_validation_failed',
+            key,
+            hyperedge: {
+              sourceSlugs: hyperEdge.sourceSlugs,
+              targetSlugs: hyperEdge.targetSlugs,
+              type: hyperEdge.type
+            },
+            violations: report.violations,
+            exception: false,
+            exception_reason: ''
+          }),
+          0.5,
+          'high',
+          'red'
+        ]);
+        // 仍然插入超边，但置信度降低
+        await client.query(`
+          INSERT INTO hyperedges (source_slugs, target_slugs, type, params)
+          VALUES ($1::text[], $2::text[], $3, $4::jsonb)
+        `, [
+          hyperEdge.sourceSlugs,
+          hyperEdge.targetSlugs,
+          hyperEdge.type,
+          JSON.stringify({ ...hyperEdge.params, conf: 0.5, ontologyViolations: report.violations })
+        ]);
+        continue;
+      }
+
       await client.query(`
         INSERT INTO hyperedges (source_slugs, target_slugs, type, params)
         VALUES ($1::text[], $2::text[], $3, $4::jsonb)
@@ -311,6 +411,62 @@ export class SyncEngine {
     let count = 0;
 
     for (const edge of parsed.causalEdges) {
+      // 本体论验证
+      const report = await validateHyperedge({
+        type: edge.relation,
+        sourceSlugs: [edge.sourceSlug],
+        targetSlugs: [edge.targetSlug]
+      });
+
+      let conf = edge.conf;
+      if (!report.valid) {
+        logger.warn({ edge, violations: report.violations }, '因果超边本体论验证失败');
+
+        // 检查是否已有已批准的例外覆盖
+        const key = `causal:${edge.relation}:${edge.sourceSlug}:${edge.targetSlug}`;
+        const existingException = await client.query(
+          `SELECT id FROM pending_diffs WHERE slug = $1 AND type = 'ontology_violation'
+           AND payload->>'action' = 'causal_edge_validation_failed'
+           AND payload->>'exception' = 'true'
+           AND resolved = true AND approved = true
+           AND payload->>'key' = $2
+           LIMIT 1`,
+          [parsed.slug, key]
+        );
+
+        if (existingException.rows.length > 0) {
+          logger.info({ edge, key }, '因果边已有例外覆盖，跳过验证');
+          conf = 0.5;
+        } else {
+          conf = 0.5;
+          const diffId = randomUUID();
+          await client.query(`
+          INSERT INTO pending_diffs (id, slug, type, payload, confidence, impact, tier, created_at, resolved)
+          VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, NOW(), false)
+          ON CONFLICT DO NOTHING
+        `, [
+          diffId,
+          parsed.slug,
+          'ontology_violation',
+          JSON.stringify({
+            action: 'causal_edge_validation_failed',
+            key,
+            edge: {
+              sourceSlug: edge.sourceSlug,
+              targetSlug: edge.targetSlug,
+              relation: edge.relation
+            },
+            violations: report.violations,
+            exception: false,
+            exception_reason: ''
+          }),
+          0.5,
+          'high',
+          'red'
+        ]);
+        }
+      }
+
       // Create a hyperedge entry for each causal edge (single source/target)
       const { rows: existingHyper } = await client.query(
         'SELECT id FROM hyperedges WHERE source_slugs = $1::text[] AND target_slugs = $2::text[] AND type = $3 LIMIT 1',
@@ -326,7 +482,7 @@ export class SyncEngine {
            VALUES ($1::text[], $2::text[], $3, $4::jsonb)
            ON CONFLICT DO NOTHING
            RETURNING id`,
-          [[edge.sourceSlug], [edge.targetSlug], edge.relation, JSON.stringify({ conf: edge.conf, evidence: edge.evidence })]
+          [[edge.sourceSlug], [edge.targetSlug], edge.relation, JSON.stringify({ conf, evidence: edge.evidence })]
         );
         if (inserted.length > 0) {
           hyperedgeId = inserted[0].id;
@@ -350,7 +506,7 @@ export class SyncEngine {
         hyperedgeId,
         edge.lag,
         edge.weight,
-        edge.conf,
+        conf,
         edge.evidence
       ]);
 
@@ -358,6 +514,50 @@ export class SyncEngine {
     }
 
     return count;
+  }
+
+  private async syncOntology(client: any, ontology: ParsedOntology, sourceSlug: string): Promise<void> {
+    // 同步本体论类
+    for (const cls of ontology.classes) {
+      await client.query(`
+        INSERT INTO ontology_classes (name, parent, description, source_slug)
+        VALUES ($1, $2, $3, $4)
+        ON CONFLICT DO NOTHING
+      `, [cls.name, cls.parent || null, cls.description || null, sourceSlug]);
+    }
+
+    // 同步本体论属性
+    for (const prop of ontology.properties) {
+      await client.query(`
+        INSERT INTO ontology_properties (name, domain_class, range_class, inverse_of, source_slug)
+        VALUES ($1, $2, $3, $4, $5)
+        ON CONFLICT DO NOTHING
+      `, [prop.name, prop.domain, prop.range, prop.inverseOf || null, sourceSlug]);
+    }
+
+    // 同步超边类型签名
+    for (const heType of ontology.hyperedgeTypes) {
+      await client.query(`
+        INSERT INTO ontology_hyperedge_signatures (type_name, signature, domain_classes, range_classes, source_slug)
+        VALUES ($1, $2, $3::text[], $4::text[], $5)
+        ON CONFLICT (type_name) DO UPDATE SET
+          signature = EXCLUDED.signature,
+          domain_classes = EXCLUDED.domain_classes,
+          range_classes = EXCLUDED.range_classes,
+          source_slug = EXCLUDED.source_slug
+      `, [heType.name, heType.signature, heType.domainClasses, heType.rangeClasses, sourceSlug]);
+    }
+
+    // 同步推理规则
+    for (const rule of ontology.inferenceRules) {
+      await client.query(`
+        INSERT INTO ontology_rules (rule_type, description, body, source_slug)
+        VALUES ($1, $2, $3, $4)
+        ON CONFLICT DO NOTHING
+      `, [rule.ruleType, rule.description, rule.body, sourceSlug]);
+    }
+
+    logger.debug({ sourceSlug, classes: ontology.classes.length, properties: ontology.properties.length, heTypes: ontology.hyperedgeTypes.length, rules: ontology.inferenceRules.length }, '本体论同步完成');
   }
 
   async rebuildGhostRelations(): Promise<number> {
@@ -592,6 +792,10 @@ export class SyncEngine {
       await client.query('TRUNCATE TABLE causal_cpt CASCADE');
       await client.query('TRUNCATE TABLE hyperedges CASCADE');
       await client.query('TRUNCATE TABLE causal_hyperedges CASCADE');
+      await client.query('TRUNCATE TABLE ontology_classes CASCADE');
+      await client.query('TRUNCATE TABLE ontology_properties CASCADE');
+      await client.query('TRUNCATE TABLE ontology_hyperedge_signatures CASCADE');
+      await client.query('TRUNCATE TABLE ontology_rules CASCADE');
       await client.query('TRUNCATE TABLE pages CASCADE');
       await client.query('COMMIT');
       logger.info('所有缓存表已清空');

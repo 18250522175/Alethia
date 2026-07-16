@@ -3,6 +3,7 @@ import { brainAPI } from '../brainapi';
 import loggerInstance from '../i18n/logger';
 import { getErrorMessage } from '../i18n/errors.zh-CN';
 import { getPool } from '../db/pool';
+import { validateHyperedge } from '../causal/ontologyValidator';
 import { storage } from '../storage/markdown';
 import { syncEngine } from '../storage/sync';
 import { join } from 'path';
@@ -210,6 +211,54 @@ app.post('/api/diffs/:id/reject', async (c) => {
       error: {
         code: 'INTERNAL_ERROR',
         message
+      }
+    }, 500);
+  }
+});
+
+// 本体论超边验证与提交
+app.post('/api/hyperedges/validate', async (c) => {
+  try {
+    const body = await c.req.json().catch(() => ({}));
+    const { type, sourceSlugs, targetSlugs, exception, exception_reason } = body;
+
+    if (!type || !Array.isArray(sourceSlugs) || !Array.isArray(targetSlugs)) {
+      return c.json({
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: '缺少 type, sourceSlugs, targetSlugs'
+        }
+      }, 400);
+    }
+
+    if (sourceSlugs.length === 0 || targetSlugs.length === 0) {
+      return c.json({
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'sourceSlugs 和 targetSlugs 不能为空'
+        }
+      }, 400);
+    }
+
+    // 如果有例外覆盖标记，跳过验证直接返回通过
+    if (exception === true) {
+      loggerInstance.info({ type, sourceSlugs, targetSlugs, exception_reason }, '超边验证例外：用户手动覆盖');
+      return c.json({
+        valid: true,
+        violations: [],
+        exceptionOverridden: true,
+        exceptionReason: exception_reason || ''
+      });
+    }
+
+    const report = await validateHyperedge({ type, sourceSlugs, targetSlugs });
+    return c.json(report);
+  } catch (err) {
+    loggerInstance.error({ err }, '超边验证失败');
+    return c.json({
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: getErrorMessage('INTERNAL_ERROR')
       }
     }, 500);
   }
@@ -1143,6 +1192,40 @@ app.get('/api/pages/:slug/backlinks', async (c) => {
     return c.json({ backlinks: result });
   } catch (err) {
     loggerInstance.error({ err }, '获取反向链接失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+// Ontology classes list
+app.get('/api/ontology/classes', async (c) => {
+  try {
+    const pool = getPool();
+    const result = await pool.query('SELECT * FROM ontology_classes ORDER BY name');
+    const hierarchy = await pool.query(
+      'SELECT name, parent FROM ontology_classes WHERE parent IS NOT NULL'
+    );
+    return c.json({
+      classes: result.rows,
+      hierarchy: hierarchy.rows
+    });
+  } catch (err) {
+    loggerInstance.error({ err }, '获取本体类列表失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+// Ontology entities by class
+app.get('/api/ontology/entities-by-class/:className', async (c) => {
+  try {
+    const className = c.req.param('className');
+    const pool = getPool();
+    const result = await pool.query(
+      'SELECT slug, title FROM pages WHERE type = $1 ORDER BY slug',
+      [className]
+    );
+    return c.json(result.rows);
+  } catch (err) {
+    loggerInstance.error({ err }, '获取本体类实体列表失败');
     return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
   }
 });

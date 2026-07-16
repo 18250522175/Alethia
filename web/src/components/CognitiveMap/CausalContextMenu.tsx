@@ -12,6 +12,7 @@ interface CausalContextMenuProps {
   onUnpack: () => void;
   onTogglePerspective: () => void;
   onExpandKnowledgeGraph: () => void;
+  onAddOntologyEntity?: () => void;
 }
 
 export default function CausalContextMenu({
@@ -26,6 +27,7 @@ export default function CausalContextMenu({
   onUnpack,
   onTogglePerspective,
   onExpandKnowledgeGraph,
+  onAddOntologyEntity,
 }: CausalContextMenuProps) {
   if (!visible) return null;
 
@@ -95,6 +97,16 @@ export default function CausalContextMenu({
         <span className="text-primary-500">📖</span>
         展开知识图谱
       </button>
+
+      {onAddOntologyEntity && (
+        <button
+          onClick={onAddOntologyEntity}
+          className="flex w-full items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700"
+        >
+          <span className="text-primary-500">➕</span>
+          添加符合本体的新实体
+        </button>
+      )}
     </div>
   );
 }

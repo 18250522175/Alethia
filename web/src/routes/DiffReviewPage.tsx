@@ -26,6 +26,7 @@ export default function DiffReviewPage() {
   const { addNotification } = useNotification();
   const [activeTier, setActiveTier] = useState<string>('yellow');
   const [activeIndex, setActiveIndex] = useState<number>(0);
+  const [filterOntology, setFilterOntology] = useState(false);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
@@ -80,7 +81,11 @@ export default function DiffReviewPage() {
   });
 
   const allDiffs = allDiffsQuery.data?.items || [];
-  const diffs = allDiffs.filter(d => d.tier === activeTier);
+  const diffs = allDiffs.filter(d => {
+    if (d.tier !== activeTier) return false;
+    if (filterOntology && !d.tags?.includes('本体')) return false;
+    return true;
+  });
 
   const tierCounts: Record<string, number> = { green: 0, yellow: 0, red: 0 };
   allDiffs.forEach(d => {
@@ -233,6 +238,12 @@ export default function DiffReviewPage() {
           )}
         </h2>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setFilterOntology(!filterOntology)}
+            className={`btn btn-ghost text-xs px-2 py-1 ${filterOntology ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' : ''}`}
+          >
+            本体相关
+          </button>
           {diffs.length > 0 && (
             <div className="flex items-center gap-1">
               <button
@@ -350,6 +361,11 @@ function DiffCard({ diff, onApply, onReject, applying, rejecting, isActive, navi
             <span className="badge badge-red flex items-center gap-1">
               <Ghost size={12} />
               {t('review.ghostCleanup', '幽灵清理')}
+            </span>
+          )}
+          {diff.tags?.includes('本体') && (
+            <span className="badge badge-red flex items-center gap-1">
+              本体
             </span>
           )}
           <span className="text-xs text-slate-500 dark:text-slate-400">

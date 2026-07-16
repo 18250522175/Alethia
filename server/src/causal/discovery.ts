@@ -4,6 +4,7 @@
 
 import { getPool } from '../db/pool';
 import logger from '../i18n/logger';
+import { checkConstraint } from './ontologyReasoner';
 
 // ── 频繁子图挖掘 ────────────────────────────────────────────────────────────
 
@@ -282,7 +283,10 @@ export async function runCausalDiscovery(): Promise<{
     });
   }
 
-  for (const pc of pcResults) {
+  // Ontology filtering: filter pcResults through ontology constraints
+  const filteredPcResults = await filterPcCandidatesWithOntology(pcResults);
+
+  for (const pc of filteredPcResults) {
     diffs.push({
       type: 'potential_causal',
       tier: 'yellow',
@@ -304,9 +308,75 @@ export async function runCausalDiscovery(): Promise<{
     }
   }
 
-  logger.info(`Causal discovery complete: ${patterns.length} patterns, ${pcResults.length} pc results, ${cptUpdates.length} cpt updates`);
+  logger.info(`Causal discovery complete: ${patterns.length} patterns, ${filteredPcResults.length} pc results (${pcResults.length - filteredPcResults.length} filtered by ontology), ${cptUpdates.length} cpt updates`);
 
-  return { patterns, pcResults, cptUpdates, diffs };
+  return { patterns, pcResults: filteredPcResults, cptUpdates, diffs };
+}
+
+// ── 本体过滤：将候选因果对通过本体约束过滤 ──────────────────────────────────
+
+async function filterPcCandidatesWithOntology(
+  candidates: Array<{
+    pair: [string, string];
+    correlation: number;
+    partialCorrelation: number;
+    suggestion: string;
+  }>,
+): Promise<Array<{
+  pair: [string, string];
+  correlation: number;
+  partialCorrelation: number;
+  suggestion: string;
+}>> {
+  if (candidates.length === 0) return [];
+
+  const pool = getPool();
+
+  // Collect all unique slugs
+  const allSlugs = new Set<string>();
+  for (const c of candidates) {
+    allSlugs.add(c.pair[0]);
+    allSlugs.add(c.pair[1]);
+  }
+
+  // Get entity types for all slugs
+  const typeResult = await pool.query(
+    'SELECT slug, type FROM pages WHERE slug = ANY($1)',
+    [Array.from(allSlugs)]
+  );
+  const entityTypes = new Map<string, string>();
+  for (const row of typeResult.rows) {
+    entityTypes.set(row.slug, row.type || 'unknown');
+  }
+
+  const filtered: Array<{
+    pair: [string, string];
+    correlation: number;
+    partialCorrelation: number;
+    suggestion: string;
+  }> = [];
+
+  for (const candidate of candidates) {
+    const sourceType = entityTypes.get(candidate.pair[0]) || 'unknown';
+    const targetType = entityTypes.get(candidate.pair[1]) || 'unknown';
+
+    // Check if this combination violates causal constraints
+    const constraints = await checkConstraint(sourceType, targetType, 'causes');
+
+    if (constraints.length > 0) {
+      logger.debug({ candidate: candidate.pair, constraints }, '候选因果对被本体过滤');
+      continue; // Skip invalid combinations
+    }
+
+    // Boost confidence for candidates that match causal constraints
+    filtered.push({
+      ...candidate,
+      correlation: Math.min(candidate.correlation * 1.1, 0.95),
+      partialCorrelation: Math.min(candidate.partialCorrelation * 1.1, 0.95),
+    });
+  }
+
+  return filtered;
 }
 
 export default {
