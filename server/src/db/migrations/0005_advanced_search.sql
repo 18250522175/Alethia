@@ -13,7 +13,6 @@ ALTER TABLE pages ADD COLUMN IF NOT EXISTS quality VARCHAR(10) NOT NULL DEFAULT 
 
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_pages_tags ON pages USING gin(tags);
-CREATE INDEX IF NOT EXISTS idx_pages_type ON pages(type);
 CREATE INDEX IF NOT EXISTS idx_pages_quality ON pages(quality);
 CREATE INDEX IF NOT EXISTS idx_pages_cv_score ON pages(cv_score);
 CREATE INDEX IF NOT EXISTS idx_pages_created_at ON pages(created_at);

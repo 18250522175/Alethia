@@ -8,6 +8,7 @@ import { getErrorMessage } from './i18n/errors.zh-CN';
 import { bearerAuth, validateApiKeyOnStartup, getApiKeys } from './auth/bearer';
 import { rateLimiter } from './middleware/rate-limit';
 import { waitForDatabase, getPool } from './db/pool';
+import { runMigrations } from './db/migrate';
 import llmRoutes from './routes/llm';
 import settingsRoutes from './routes/settings';
 import healthRoutes from './routes/health';
@@ -177,6 +178,14 @@ async function bootstrap() {
   validateApiKeyOnStartup();
 
   await waitForDatabase();
+
+  // 执行数据库迁移
+  try {
+    await runMigrations();
+  } catch (err) {
+    loggerInstance.fatal({ err }, '数据库迁移失败，服务终止');
+    process.exit(1);
+  }
 
   // 启动时从数据库恢复预算计数
   try {
