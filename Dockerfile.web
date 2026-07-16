@@ -1,10 +1,11 @@
 # Alethia Web 前端 Dockerfile
 # 多阶段构建：bun 构建 → nginx 静态服务
+# 已针对中国大陆网络环境优化：npm 镜像源、重试机制
 
 # === 阶段 1：构建 ===
 FROM oven/bun:1.3.14 AS builder
 
-# 设置镜像源
+# 设置镜像源（国内使用 npmmirror）
 ENV BUN_REGISTRY=https://registry.npmmirror.com
 
 WORKDIR /app
@@ -15,16 +16,23 @@ COPY shared/package.json ./shared/package.json
 COPY server/package.json ./server/package.json
 COPY web/package.json ./web/package.json
 
-# 安装所有依赖（简单可靠，避免 filter 过滤带来的问题）
-RUN bun install --frozen-lockfile --registry https://registry.npmmirror.com
+# 安装所有依赖（带重试，应对国内网络不稳定）
+RUN for i in 1 2 3; do \
+      bun install --frozen-lockfile --registry https://registry.npmmirror.com \
+      && break \
+      || { echo "[重试 $i/3] bun install 失败，5秒后重试..."; sleep 5; }; \
+    done
 
 # 拷贝源码
 COPY shared ./shared
 COPY web ./web
 
-# 构建生产包
+# 构建生产包（带重试）
 ENV NODE_ENV=production
-RUN cd web && bunx vite build
+RUN cd web && for i in 1 2; do \
+      bunx vite build && break \
+      || { echo "[重试 $i/2] vite build 失败，3秒后重试..."; sleep 3; }; \
+    done
 
 # === 阶段 2：nginx 静态服务 ===
 FROM nginx:alpine AS runtime

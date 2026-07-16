@@ -4,6 +4,7 @@ export const errorMessages: Record<string, string> = {
   NOT_FOUND: '请求的资源不存在',
   BUDGET_EXCEEDED: '预算已超出限制',
   LLM_UNAVAILABLE: '未配置可用的大模型适配器，请在设置页→集成中填入至少一个厂商 API Key',
+  SERVICE_UNAVAILABLE: '服务暂不可用，请稍后重试',
   INTERNAL_ERROR: '服务器内部错误',
   DATABASE_CONNECTION_FAILED: '无法连接到 PostgreSQL，请检查 DATABASE_URL 与容器健康状态',
   MIGRATION_FAILED: '数据库迁移执行失败',

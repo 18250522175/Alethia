@@ -130,6 +130,16 @@ function getRelationLabel(relation: string): string {
   return map[relation] || relation;
 }
 
+const ONTOLOGY_COLORS: Record<string, string> = {
+  '人': '#f59e0b',
+  '组织': '#3b82f6',
+  '事件': '#ef4444',
+  '指标': '#10b981',
+  '决策': '#8b5cf6',
+  '产品': '#ec4899',
+  'default': '#94a3b8'
+};
+
 export default function CausalCanvas() {
   const cyRef = useRef<HTMLDivElement>(null);
   const cyInstanceRef = useRef<Core | null>(null);
@@ -237,6 +247,7 @@ export default function CausalCanvas() {
     causalQuery,
     hypergraphQuery,
     graphQuery,
+    ontologyQuery,
   ] = useQueries({
     queries: [
       {
@@ -254,6 +265,11 @@ export default function CausalCanvas() {
         queryFn: () => api.getGraphData(),
         staleTime: 60_000,
       },
+      {
+        queryKey: ['ontology-classes'],
+        queryFn: () => api.getOntologyClasses(),
+        staleTime: 300_000,
+      },
     ],
   });
 
@@ -262,6 +278,8 @@ export default function CausalCanvas() {
   const error = causalQuery.error || hypergraphQuery.error || graphQuery.error;
   const hypergraphData = hypergraphQuery.data as HypergraphData | undefined;
   const graphData = graphQuery.data as KnowledgeGraphData | undefined;
+  const ontologyData = ontologyQuery.data as { classes: Array<{ name: string; parent: string | null }>; hierarchy: Array<{ name: string; parent: string }> } | undefined;
+  const ontologyClasses = ontologyData?.classes || [];
 
   // Build node/edge maps from data
   const nodeMap = useMemo(() => {
@@ -366,6 +384,25 @@ export default function CausalCanvas() {
           expanded: vn.expanded,
         },
       });
+    }
+
+    // Apply ontology class colors to node elements
+    // Build a map from page slug to type
+    const pageTypeMap = new Map<string, string>();
+    if (graphData?.nodes) {
+      for (const gn of graphData.nodes) {
+        const slug = gn.slug || gn.id;
+        if (gn.type) pageTypeMap.set(slug, gn.type);
+      }
+    }
+    for (const nodeEl of nodeElements) {
+      const nodeData = nodeEl.data as any;
+      if (nodeData.isVirtual) continue;
+      const pageType = pageTypeMap.get(nodeData.id);
+      if (pageType && ONTOLOGY_COLORS[pageType]) {
+        nodeData.color = ONTOLOGY_COLORS[pageType];
+        nodeData.pageType = pageType;
+      }
     }
 
     const edgeElements: ElementDefinition[] = [];
@@ -698,9 +735,14 @@ export default function CausalCanvas() {
     // Apply node colors based on conf
     cy.nodes().forEach(node => {
       const conf = node.data('conf') as number;
-      const color = getNodeStatusColor(conf);
+      const color = node.data('color') as string | undefined;
       if (!node.data('isVirtual')) {
-        node.style('background-color', color);
+        if (color) {
+          // Use ontology class color if available
+          node.style('background-color', color);
+        } else {
+          node.style('background-color', getNodeStatusColor(conf));
+        }
       }
     });
 
@@ -987,9 +1029,13 @@ export default function CausalCanvas() {
     // Rebuild happens through elements change, but we need to update styles
     cy.nodes().forEach(node => {
       const conf = node.data('conf') as number;
+      const color = node.data('color') as string | undefined;
       if (!node.data('isVirtual')) {
-        const color = getNodeStatusColor(conf);
-        node.style('background-color', color);
+        if (color) {
+          node.style('background-color', color);
+        } else {
+          node.style('background-color', getNodeStatusColor(conf));
+        }
       }
     });
     cy.edges().forEach(edge => {
@@ -1401,6 +1447,14 @@ export default function CausalCanvas() {
     setContextMenu(prev => ({ ...prev, visible: false }));
   }, [contextMenu.selectedNodeIds]);
 
+  const handleAddOntologyEntity = useCallback(() => {
+    const nodeId = contextMenu.selectedNodeIds[0];
+    if (nodeId) {
+      window.open(`/wiki/${encodeURIComponent(nodeId)}?edit=new`, '_blank');
+    }
+    setContextMenu(prev => ({ ...prev, visible: false }));
+  }, [contextMenu.selectedNodeIds]);
+
   const handleApplySuggestion = useCallback((suggestion: {
     type: string;
     action: string;
@@ -1643,6 +1697,21 @@ export default function CausalCanvas() {
             </div>
           </div>
         </div>
+        {ontologyClasses.length > 0 && (
+          <div className="mt-1.5 pt-1.5 border-t border-slate-100 dark:border-slate-700">
+            <div className="mb-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
+              本体类
+            </div>
+            <div className="space-y-0.5">
+              {ontologyClasses.map((cls: any) => (
+                <div key={cls.name} className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full" style={{ backgroundColor: ONTOLOGY_COLORS[cls.name] || ONTOLOGY_COLORS.default }} />
+                  <span className="text-xs text-slate-600 dark:text-slate-300">{cls.name}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* IntentBar - NL Command Input */}
@@ -1800,6 +1869,7 @@ export default function CausalCanvas() {
         onUnpack={handleUnpack}
         onTogglePerspective={handleTogglePerspective}
         onExpandKnowledgeGraph={handleExpandKnowledgeGraph}
+        onAddOntologyEntity={handleAddOntologyEntity}
       />
 
       {/* Hyperedge Context Menu */}

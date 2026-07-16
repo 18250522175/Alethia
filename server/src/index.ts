@@ -8,6 +8,7 @@ import { getErrorMessage } from './i18n/errors.zh-CN';
 import { bearerAuth, validateApiKeyOnStartup, getApiKeys } from './auth/bearer';
 import { rateLimiter } from './middleware/rate-limit';
 import { waitForDatabase, getPool } from './db/pool';
+import { runMigrations } from './db/migrate';
 import llmRoutes from './routes/llm';
 import settingsRoutes from './routes/settings';
 import healthRoutes from './routes/health';
@@ -19,6 +20,7 @@ import { budgetManager } from './evolution/budget';
 import { runHypergraphEvolution } from './evolution/hypergraph';
 import { runCausalDiscovery } from './causal/discovery';
 import { generateWeeklyReport } from './evolution/weekly';
+import { checkOntologyConsistency } from './causal/ontologyChecker';
 
 const VERSION = '5.0.0';
 
@@ -77,7 +79,7 @@ app.get('/health', async (c) => {
 
   const env = loadEnv();
   const adapters = ['BAILIAN', 'ZHIPU', 'MOONSHOT', 'ERNIE', 'SPARK', 'HUNYUAN', 'MINIMAX', 'DEEPSEEK', 'YI', 'BAICHUAN'];
-  const hasAnyLlm = adapters.some(a => ((env as Record<string, string>)[`${a}_API_KEY`] || '').trim().length > 0);
+  const hasAnyLlm = adapters.some(a => ((env as any)[`${a}_API_KEY`] || '').trim().length > 0);
   const llmStatus = hasAnyLlm ? 'configured' : 'none';
 
   const embeddingStatus = env.EMBEDDING_PROVIDER === 'local' ? 'local' :
@@ -127,6 +129,13 @@ app.post('/api/auth/login', async (c) => {
   }
 });
 
+// 全局错误处理中间件
+app.onError((err, c) => {
+  loggerInstance.error({ err }, '未捕获的 API 错误');
+  const message = err instanceof Error ? err.message : '内部服务器错误';
+  return c.json({ error: { code: 'INTERNAL_ERROR', message } }, 500);
+});
+
 app.route('/', llmRoutes);
 app.route('/', settingsRoutes);
 app.route('/', healthRoutes);
@@ -134,39 +143,12 @@ app.route('/', brainapiRoutes);
 app.route('/', causalRoutes);
 app.route('/', viewsRoutes);
 
-app.onError((err, c) => {
-  if (err instanceof HTTPException) {
-    const status = err.status;
-    let code = 'INTERNAL_ERROR';
-    if (status === 401) code = 'UNAUTHORIZED';
-    else if (status === 404) code = 'NOT_FOUND';
-    else if (status === 400) code = 'VALIDATION_ERROR';
-
-    return c.json({
-      error: {
-        code,
-        message: getErrorMessage(code)
-      }
-    }, status);
-  }
-
-  loggerInstance.error({ err }, '未捕获的服务端错误');
-  return c.json({
-    error: {
-      code: 'INTERNAL_ERROR',
-      message: getErrorMessage('INTERNAL_ERROR')
-    }
-  }, 500);
-});
-
+// 404 处理
 app.notFound((c) => {
-  return c.json({
-    error: {
-      code: 'NOT_FOUND',
-      message: getErrorMessage('NOT_FOUND')
-    }
-  }, 404);
+  return c.json({ error: { code: 'NOT_FOUND', message: `未找到路由: ${c.req.method} ${c.req.path}` } }, 404);
 });
+
+
 
 async function bootstrap() {
   const env = loadEnv();
@@ -176,6 +158,14 @@ async function bootstrap() {
   validateApiKeyOnStartup();
 
   await waitForDatabase();
+
+  // 执行数据库迁移
+  try {
+    await runMigrations();
+  } catch (err) {
+    loggerInstance.fatal({ err }, '数据库迁移失败，服务终止');
+    process.exit(1);
+  }
 
   // 启动时从数据库恢复预算计数
   try {
@@ -230,6 +220,42 @@ async function bootstrap() {
       loggerInstance.info('因果发现任务完成');
     } catch (err) {
       loggerInstance.warn({ err }, '因果发现任务失败');
+    }
+    try {
+      const issues = await checkOntologyConsistency();
+      if (issues.length > 0) {
+        loggerInstance.info({ issueCount: issues.length }, '本体一致性检查发现不符合项');
+        // 为每个问题创建 pending_diff
+        for (const issue of issues) {
+          try {
+            const { randomUUID } = await import('crypto');
+            const diffId = randomUUID();
+            await getPool().query(
+              `INSERT INTO pending_diffs (id, slug, type, payload, confidence, impact, tier, created_at, resolved)
+               VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, NOW(), false)
+               ON CONFLICT DO NOTHING`,
+              [
+                diffId,
+                issue.slug,
+                'ontology_violation',
+                JSON.stringify({
+                  field: 'ontology_consistency',
+                  message: issue.message,
+                  severity: issue.severity,
+                  source: 'nightly_check',
+                }),
+                0.7,
+                issue.severity === 'error' ? 'high' : 'medium',
+                issue.severity === 'error' ? 'red' : 'yellow',
+              ]
+            );
+          } catch (diffErr) {
+            loggerInstance.warn({ diffErr, issue }, '创建本体一致性 pending_diff 失败');
+          }
+        }
+      }
+    } catch (err) {
+      loggerInstance.warn({ err }, '本体一致性检查失败');
     }
   }, EVOLUTION_INTERVAL);
 

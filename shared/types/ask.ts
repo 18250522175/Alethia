@@ -26,6 +26,7 @@ export interface AskResponse {
   estimatedCost: number;
   observationTriggered?: boolean;
   compressedHistory?: boolean;
+  ontologyHints?: string[];
 }
 
 export interface ConversationMessage {

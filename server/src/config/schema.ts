@@ -118,6 +118,11 @@ export const SettingsSchema = z.object({
   appearance: AppearanceSettingsSchema,
   general: GeneralSettingsSchema,
   language: LanguageSchema,
+  llmConfig: z.object({
+    defaultTemperature: z.number(),
+    defaultMaxTokens: z.number(),
+    defaultTopP: z.number()
+  }),
   budget: BudgetSettingsSchema,
   security: SecuritySettingsSchema,
   privacy: PrivacySettingsSchema,

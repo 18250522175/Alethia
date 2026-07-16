@@ -13,10 +13,10 @@ app.post('/api/rebuild-struct', async (c) => {
     logger.error({ err }, '结构重建失败');
     return c.json({
       error: {
-        code: 'INTERNAL_ERROR',
-        message: getErrorMessage('INTERNAL_ERROR')
+        code: 'SERVICE_UNAVAILABLE',
+        message: getErrorMessage('SERVICE_UNAVAILABLE')
       }
-    }, 500);
+    }, 503);
   }
 });
 
@@ -28,10 +28,10 @@ app.post('/api/extract-pending', async (c) => {
     logger.error({ err }, '提取待处理文件失败');
     return c.json({
       error: {
-        code: 'INTERNAL_ERROR',
-        message: getErrorMessage('INTERNAL_ERROR')
+        code: 'SERVICE_UNAVAILABLE',
+        message: getErrorMessage('SERVICE_UNAVAILABLE')
       }
-    }, 500);
+    }, 503);
   }
 });
 
@@ -45,10 +45,10 @@ app.get('/api/health-dashboard', async (c) => {
     logger.error({ err }, '获取健康仪表盘数据失败');
     return c.json({
       error: {
-        code: 'INTERNAL_ERROR',
-        message: getErrorMessage('INTERNAL_ERROR')
+        code: 'SERVICE_UNAVAILABLE',
+        message: getErrorMessage('SERVICE_UNAVAILABLE')
       }
-    }, 500);
+    }, 503);
   }
 });
 

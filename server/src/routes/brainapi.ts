@@ -3,8 +3,10 @@ import { brainAPI } from '../brainapi';
 import loggerInstance from '../i18n/logger';
 import { getErrorMessage } from '../i18n/errors.zh-CN';
 import { getPool } from '../db/pool';
+import { validateHyperedge } from '../causal/ontologyValidator';
 import { storage } from '../storage/markdown';
 import { syncEngine } from '../storage/sync';
+import { extractFacts } from '../agents/observe';
 import { join } from 'path';
 import { existsSync, statSync, unlinkSync, mkdirSync, readFileSync, writeFileSync, readdirSync, renameSync } from 'fs';
 import matter from 'gray-matter';
@@ -210,6 +212,54 @@ app.post('/api/diffs/:id/reject', async (c) => {
       error: {
         code: 'INTERNAL_ERROR',
         message
+      }
+    }, 500);
+  }
+});
+
+// 本体论超边验证与提交
+app.post('/api/hyperedges/validate', async (c) => {
+  try {
+    const body = await c.req.json().catch(() => ({}));
+    const { type, sourceSlugs, targetSlugs, exception, exception_reason } = body;
+
+    if (!type || !Array.isArray(sourceSlugs) || !Array.isArray(targetSlugs)) {
+      return c.json({
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: '缺少 type, sourceSlugs, targetSlugs'
+        }
+      }, 400);
+    }
+
+    if (sourceSlugs.length === 0 || targetSlugs.length === 0) {
+      return c.json({
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'sourceSlugs 和 targetSlugs 不能为空'
+        }
+      }, 400);
+    }
+
+    // 如果有例外覆盖标记，跳过验证直接返回通过
+    if (exception === true) {
+      loggerInstance.info({ type, sourceSlugs, targetSlugs, exception_reason }, '超边验证例外：用户手动覆盖');
+      return c.json({
+        valid: true,
+        violations: [],
+        exceptionOverridden: true,
+        exceptionReason: exception_reason || ''
+      });
+    }
+
+    const report = await validateHyperedge({ type, sourceSlugs, targetSlugs });
+    return c.json(report);
+  } catch (err) {
+    loggerInstance.error({ err }, '超边验证失败');
+    return c.json({
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: getErrorMessage('INTERNAL_ERROR')
       }
     }, 500);
   }
@@ -1147,6 +1197,40 @@ app.get('/api/pages/:slug/backlinks', async (c) => {
   }
 });
 
+// Ontology classes list
+app.get('/api/ontology/classes', async (c) => {
+  try {
+    const pool = getPool();
+    const result = await pool.query('SELECT * FROM ontology_classes ORDER BY name');
+    const hierarchy = await pool.query(
+      'SELECT name, parent FROM ontology_classes WHERE parent IS NOT NULL'
+    );
+    return c.json({
+      classes: result.rows,
+      hierarchy: hierarchy.rows
+    });
+  } catch (err) {
+    loggerInstance.error({ err }, '获取本体类列表失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
+// Ontology entities by class
+app.get('/api/ontology/entities-by-class/:className', async (c) => {
+  try {
+    const className = c.req.param('className');
+    const pool = getPool();
+    const result = await pool.query(
+      'SELECT slug, title FROM pages WHERE type = $1 ORDER BY slug',
+      [className]
+    );
+    return c.json(result.rows);
+  } catch (err) {
+    loggerInstance.error({ err }, '获取本体类实体列表失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: getErrorMessage('INTERNAL_ERROR') } }, 500);
+  }
+});
+
 // Entity search autocomplete
 app.get('/api/entities/search', async (c) => {
   try {
@@ -1250,7 +1334,7 @@ app.get('/api/embed-proxy', async (c) => {
     const refresh = c.req.query('refresh') === 'true';
 
     const params: Record<string, string> = {};
-    for (const [key, value] of c.req.query.entries()) {
+    for (const [key, value] of Object.entries(c.req.query())) {
       if (key !== 'type' && key !== 'refresh') {
         params[key] = value;
       }
@@ -1397,7 +1481,12 @@ app.delete('/api/saved-searches/:name', async (c) => {
 app.get('/exports/*', async (c) => {
   try {
     const exportsDir = join(process.cwd(), 'exports');
-    const filePath = join(exportsDir, c.req.param('*'));
+    const paramStar = c.req.param('*');
+    if (!paramStar) return c.json({ error: { code: 'BAD_REQUEST', message: 'Missing path' } }, 400);
+    if (paramStar.includes('..')) {
+      return c.json({ error: { code: 'FORBIDDEN', message: '路径遍历不允许' } }, 403);
+    }
+    const filePath = join(exportsDir, paramStar);
     // 防止路径遍历
     if (!filePath.startsWith(exportsDir)) {
       return c.json({ error: { code: 'FORBIDDEN', message: 'Access denied' } }, 403);
@@ -1538,9 +1627,13 @@ app.post('/api/notes', async (c) => {
     if (!['inbox', 'drafts', 'ready-for-review'].includes(folder)) {
       return c.json({ error: { code: 'VALIDATION_ERROR', message: 'Invalid folder' } }, 400);
     }
+    const name = body.name;
+    if (name && (name.includes('/') || name.includes('\\'))) {
+      return c.json({ error: { code: 'BAD_REQUEST', message: '文件名不合法' } }, 400);
+    }
     ensureNotesDirs();
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-    const fileName = `note-${timestamp}.md`;
+    const fileName = name ? `${name}.md` : `note-${timestamp}.md`;
     const filePath = join(NOTES_PATH, folder, fileName);
     const content = `# 新笔记\n\n> 创建于 ${new Date().toLocaleString('zh-CN')}\n\n`;
     writeFileSync(filePath, content, 'utf-8');
@@ -1601,6 +1694,9 @@ app.put('/api/notes/:path/status', async (c) => {
     }
     const oldPath = join(NOTES_PATH, notePath);
     const fileName = notePath.split('/').pop() || '';
+    if (!fileName || fileName.includes('/') || fileName.includes('\\')) {
+      return c.json({ error: { code: 'BAD_REQUEST', message: '文件名不合法' } }, 400);
+    }
     const targetFolder = status === 'ready' ? 'ready-for-review' : 'drafts';
     const newPath = join(NOTES_PATH, targetFolder, fileName);
     if (existsSync(oldPath) && oldPath !== newPath) {
@@ -1652,7 +1748,7 @@ app.post('/api/notes/:path/extract', async (c) => {
       return c.json({ error: { code: 'NOT_FOUND', message: getErrorMessage('NOT_FOUND') } }, 404);
     }
     const content = readFileSync(fullPath, 'utf-8');
-    const result = await brainAPI.extractFacts(content, notePath);
+    const result = await extractFacts(notePath);
     // Move note to library after extraction
     const fileName = notePath.split('/').pop() || '';
     const libraryPath = join(NOTES_PATH, '..', 'library', 'objects', fileName);

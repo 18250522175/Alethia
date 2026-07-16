@@ -4,8 +4,8 @@ import { getPool } from '../src/db/pool';
 import logger from '../src/i18n/logger';
 
 // 兼容源码运行（scripts/migrate.ts）与打包后运行（dist/migrate.js）
-// 打包后 __dirname 会指向 dist/，故改用 process.cwd() 相对路径
-const MIGRATIONS_DIR = join(process.cwd(), 'src/db/migrations');
+// 使用 import.meta.dirname 解析相对于脚本文件的路径，不依赖 process.cwd()
+const MIGRATIONS_DIR = join(import.meta.dirname, '..', 'src/db/migrations');
 
 async function ensureMigrationsTable(client: any): Promise<void> {
   await client.query(`

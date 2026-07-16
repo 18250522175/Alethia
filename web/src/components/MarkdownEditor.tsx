@@ -25,6 +25,7 @@ interface MarkdownEditorProps {
 interface WikilinkSuggestion {
   slug: string;
   title: string;
+  type?: string;
 }
 
 function getCursorPixelPosition(textarea: HTMLTextAreaElement, pos: number) {
@@ -71,6 +72,16 @@ const ALLOWED_EXTENSIONS: string[] = [
   'md', 'txt', 'json'
 ];
 
+const ONTOLOGY_COLORS: Record<string, string> = {
+  '人': '#f59e0b',
+  '组织': '#3b82f6',
+  '事件': '#ef4444',
+  '指标': '#10b981',
+  '决策': '#8b5cf6',
+  '产品': '#ec4899',
+  'default': '#94a3b8'
+};
+
 export default function MarkdownEditor({ value, onChange }: MarkdownEditorProps) {
   const { t } = useTranslation();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -90,6 +101,7 @@ export default function MarkdownEditor({ value, onChange }: MarkdownEditorProps)
 
   const [isPaletteOpen, setIsPaletteOpen] = useState(false);
   const [paletteTriggerStart, setPaletteTriggerStart] = useState(-1);
+  const [ontologyFilter, setOntologyFilter] = useState<string | null>(null);
 
   const { data: pagesData, isFetching: isFetchingPages } = useQuery({
     queryKey: ['pages-list'],
@@ -98,13 +110,34 @@ export default function MarkdownEditor({ value, onChange }: MarkdownEditorProps)
     staleTime: 60_000
   });
 
+  const { data: ontologyData } = useQuery({
+    queryKey: ['ontology-classes'],
+    queryFn: () => api.getOntologyClasses(),
+    staleTime: 300_000
+  });
+
+  const ontologyClasses: string[] = (() => {
+    const classes = ontologyData?.classes?.map((c: any) => c.name) || [];
+    // Also collect unique types from pages
+    const pageTypes = new Set<string>();
+    (pagesData?.items || []).forEach((p: any) => {
+      if (p.type) pageTypes.add(p.type);
+    });
+    const merged = new Set([...classes, ...pageTypes]);
+    return Array.from(merged).sort();
+  })();
+
   const wikilinkSuggestions: WikilinkSuggestion[] = (() => {
     const pages = pagesData?.items ?? [];
-    if (!query) return pages.map(p => ({ slug: p.slug, title: p.title }));
-    const lowerQuery = query.toLowerCase();
-    return pages
-      .filter(p => p.slug.toLowerCase().includes(lowerQuery) || p.title.toLowerCase().includes(lowerQuery))
-      .map(p => ({ slug: p.slug, title: p.title }));
+    let items = pages.map(p => ({ slug: p.slug, title: p.title, type: p.type }));
+    if (query) {
+      const lowerQuery = query.toLowerCase();
+      items = items.filter(p => p.slug.toLowerCase().includes(lowerQuery) || p.title.toLowerCase().includes(lowerQuery));
+    }
+    if (ontologyFilter) {
+      items = items.filter(p => p.type === ontologyFilter);
+    }
+    return items;
   })();
 
   const calculateSHA256 = useCallback(async (file: File): Promise<string> => {
@@ -517,8 +550,45 @@ export default function MarkdownEditor({ value, onChange }: MarkdownEditorProps)
 
             {wikilinkSuggestions.length > 0 && (
               <ul className="max-h-64 overflow-auto py-1">
+                {/* Ontology class filter */}
+                {ontologyClasses.length > 0 && (
+                  <li className="px-2 py-1 border-b border-slate-100 dark:border-slate-700">
+                    <div className="flex flex-wrap gap-1">
+                      <button
+                        type="button"
+                        onMouseDown={e => { e.preventDefault(); setOntologyFilter(null); }}
+                        className={`px-1.5 py-0.5 text-xs rounded ${
+                          ontologyFilter === null
+                            ? 'bg-primary-100 text-primary-700 dark:bg-primary-800 dark:text-primary-200'
+                            : 'bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-400'
+                        }`}
+                      >
+                        全部
+                      </button>
+                      {ontologyClasses.map(cls => (
+                        <button
+                          key={cls}
+                          type="button"
+                          onMouseDown={e => { e.preventDefault(); setOntologyFilter(cls); }}
+                          className={`px-1.5 py-0.5 text-xs rounded ${
+                            ontologyFilter === cls
+                              ? 'ring-1 ring-offset-0'
+                              : 'opacity-60 hover:opacity-100'
+                          }`}
+                          style={{
+                            backgroundColor: (ONTOLOGY_COLORS[cls] || ONTOLOGY_COLORS.default) + '20',
+                            color: ONTOLOGY_COLORS[cls] || ONTOLOGY_COLORS.default,
+                          }}
+                        >
+                          {cls}
+                        </button>
+                      ))}
+                    </div>
+                  </li>
+                )}
                 {wikilinkSuggestions.map((item, idx) => {
                   const isSelected = idx === selectedIndex;
+                  const typeColor = ONTOLOGY_COLORS[item.type || ''] || ONTOLOGY_COLORS.default;
                   return (
                     <li key={item.slug}>
                       <button
@@ -536,6 +606,13 @@ export default function MarkdownEditor({ value, onChange }: MarkdownEditorProps)
                       >
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1.5">
+                            {item.type && (
+                              <span
+                                className="inline-block w-1.5 h-1.5 rounded-full flex-shrink-0"
+                                style={{ backgroundColor: typeColor }}
+                                title={item.type}
+                              />
+                            )}
                             <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">
                               <HighlightText text={item.title} keyword={query} />
                             </span>

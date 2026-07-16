@@ -938,6 +938,9 @@ export const api = {
     return request<{ success: boolean }>(`/hyperedge/${id}`, { method: 'DELETE' });
   },
 
+  getOntologyClasses: () => request<any>('/ontology/classes'),
+  getOntologyEntitiesByClass: (className: string) => request<any>(`/ontology/entities-by-class/${encodeURIComponent(className)}`),
+
   // Causal Cognitive Map
   getCausalGraph() {
     return request<{
@@ -1011,6 +1014,7 @@ export const api = {
         node?: string;
         action: string;
         confidence: number;
+        moduleType?: string;
       }>;
     }>('/causal/suggestions', {
       params: {

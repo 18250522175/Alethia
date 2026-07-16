@@ -21,6 +21,7 @@ import { join } from 'path';
 import { existsSync, unlinkSync, readdirSync } from 'fs';
 import { createHash } from 'crypto';
 import { getSyntaxHelp } from '../retrieval/syntaxParser';
+import { getAllInstancesOfClass, getInverseProperty } from '../causal/ontologyReasoner';
 import type {
   RebuildReport,
   ExtractReport,
@@ -114,8 +115,24 @@ class BrainAPI {
 
     const maxReflections = request.maxReflections || 3;
 
+    // Ontology: expand class-based queries to include subclasses
+    let expandedQuestion = request.question;
+    try {
+      const classPattern = /(?:类型为|属于|所有的|哪些)(\S+)/;
+      const classMatch = request.question.match(classPattern);
+      if (classMatch) {
+        const className = classMatch[1];
+        const instances = await getAllInstancesOfClass(className);
+        if (instances.length > 0) {
+          expandedQuestion = `${request.question} (相关实体: ${instances.join(', ')})`;
+        }
+      }
+    } catch (err) {
+      logger.warn({ err }, '本体类扩展失败，使用原始查询');
+    }
+
     for (let round = 0; round < maxReflections; round++) {
-      const planResult = await plan(request.question);
+      const planResult = await plan(expandedQuestion);
       const retrievalResult = await retrieve(planResult);
 
       if (round === 0) {
@@ -151,6 +168,19 @@ class BrainAPI {
 
     await this.saveConversation(conversationId, request.question, finalAnswer, totalTokens, totalCost);
 
+    // Ontology: check for inverse relations and add constraint hints
+    let ontologyHints: string[] = [];
+    try {
+      for (const entity of relatedEntities) {
+        const inverse = await getInverseProperty(entity.slug);
+        if (inverse) {
+          ontologyHints.push(`实体"${entity.title}"的属性"${entity.slug}"存在逆向属性"${inverse}"`);
+        }
+      }
+    } catch (err) {
+      logger.warn({ err }, '本体逆向属性查询失败');
+    }
+
     return {
       answer: finalAnswer,
       sources: evidence,
@@ -158,7 +188,8 @@ class BrainAPI {
       relatedEntities,
       conversationId,
       tokensUsed: totalTokens,
-      estimatedCost: totalCost
+      estimatedCost: totalCost,
+      ontologyHints
     };
   }
 
@@ -383,7 +414,15 @@ class BrainAPI {
       const result = await pool.query(
         'SELECT * FROM pending_diffs WHERE resolved = false ORDER BY created_at DESC'
       );
-      return result.rows;
+      // Annotate ontology-related diffs with special tags
+      return result.rows.map((diff: any) => {
+        if (diff.type === 'ontology_violation' || diff.source === 'ontology' || 
+            (diff.payload && diff.payload.source === 'nightly_check')) {
+          diff.priority = 'red';
+          diff.tags = [...(diff.tags || []), '本体'];
+        }
+        return diff;
+      });
     } catch (err) {
       logger.warn({ err }, '获取待审核变更失败');
       return [];
@@ -422,10 +461,26 @@ class BrainAPI {
       }
 
       const diff = diffResult.rows[0];
-      await client.query(
-        'UPDATE pending_diffs SET resolved = true, approved = $1, resolved_at = NOW() WHERE id = $2',
-        [approved, diffId]
-      );
+
+      // 本体论验证例外处理：如果 diff 包含 exception 标记，允许绕过验证
+      const payload = diff.payload || {};
+      if (diff.type === 'ontology_violation' && payload.exception === true) {
+        logger.info({ diffId, slug: diff.slug, exceptionReason: payload.exception_reason }, '本体论验证例外：用户手动覆盖');
+        // 更新 diff 置信度为覆盖标记
+        await client.query(
+          'UPDATE pending_diffs SET confidence = 0.5, tier = $1, resolved = true, approved = $2, resolved_at = NOW() WHERE id = $3',
+          ['red', approved, diffId]
+        );
+        if (!approved) {
+          await client.query('COMMIT');
+          return { diffId, applied: false, newVersion: 0, modifiedFiles: [] };
+        }
+      } else {
+        await client.query(
+          'UPDATE pending_diffs SET resolved = true, approved = $1, resolved_at = NOW() WHERE id = $2',
+          [approved, diffId]
+        );
+      }
 
       if (!approved) {
         await client.query('COMMIT');
@@ -443,6 +498,7 @@ class BrainAPI {
       const wikiPath = storage.getWikiPath();
       const targetFile = join(wikiPath, `${diff.slug}.md`);
       const modifiedFiles: string[] = [];
+      let nextVersion = 0;
 
       if (existsSync(targetFile)) {
         const currentContent = storage.readFile(targetFile);
@@ -458,7 +514,7 @@ class BrainAPI {
             `SELECT COALESCE(MAX(version), 0)::bigint as max_version FROM knowledge_versions WHERE slug = $1`,
             [diff.slug]
           );
-          const nextVersion = (maxVersionResult.rows[0]?.max_version || 0) + 1;
+          nextVersion = (maxVersionResult.rows[0]?.max_version || 0) + 1;
           // 防止 INTEGER 溢出（上限 2,147,483,647）
           if (nextVersion > 2147483647) {
             await client.query('ROLLBACK');
@@ -1863,7 +1919,7 @@ ${relationsBlock}
         case 'stock': {
           const symbol = params.symbol;
           const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`;
-          const response = await fetch(url, { timeout: 5000 });
+          const response = await fetch(url);
           const json = await response.json();
           const meta = json.chart?.result?.[0]?.meta || {};
           data = {
@@ -1883,7 +1939,7 @@ ${relationsBlock}
             break;
           }
           const url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&appid=${apiKey}&units=${params.units || 'metric'}`;
-          const response = await fetch(url, { timeout: 5000 });
+          const response = await fetch(url);
           const json = await response.json();
           data = {
             city: json.name,
@@ -1898,10 +1954,10 @@ ${relationsBlock}
         }
         case 'rss': {
           const url = params.url;
-          const response = await fetch(url, { timeout: 5000 });
+          const response = await fetch(url);
           const xml = await response.text();
           const parser = new (require('xml2js').Parser)({ trim: true, explicitArray: false });
-          const json = await new Promise((resolve) => parser.parseString(xml, (_, result) => resolve(result)));
+          const json: any = await new Promise((resolve) => parser.parseString(xml, (_: any, result: any) => resolve(result)));
           const items = json.rss?.channel?.item || [];
           const limit = parseInt(params.limit || '5');
           data = {
@@ -1917,7 +1973,7 @@ ${relationsBlock}
         case 'crypto': {
           const symbol = params.symbol;
           const url = `https://api.coingecko.com/api/v3/simple/price?ids=${symbol}&vs_currencies=usd`;
-          const response = await fetch(url, { timeout: 5000 });
+          const response = await fetch(url);
           const json = await response.json();
           data = {
             symbol,
@@ -1927,7 +1983,7 @@ ${relationsBlock}
         }
         case 'json': {
           const url = params.url;
-          const response = await fetch(url, { timeout: 5000 });
+          const response = await fetch(url);
           data = await response.json();
           break;
         }

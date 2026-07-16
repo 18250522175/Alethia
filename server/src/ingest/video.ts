@@ -41,7 +41,7 @@ export async function processVideo(filePath: string): Promise<VideoProcessResult
   if (!ffmpeg) {
     warnings.push('未找到 ffmpeg 可执行文件，无法提取音轨，视频转录已跳过');
     logger.warn({ filePath }, 'ffmpeg 不可用，视频转录已跳过');
-    return { text: '', segments: [], warnings };
+    return { text: '', segments: [], warnings, frames: [] };
   }
 
   const tmpDir = mkdtempSync(join(tmpdir(), 'alethia-video-'));
@@ -69,7 +69,7 @@ export async function processVideo(filePath: string): Promise<VideoProcessResult
     const msg = err instanceof Error ? err.message : String(err);
     warnings.push(`视频处理失败：${msg}`);
     logger.error({ err, filePath }, '视频处理失败');
-    return { text: '', segments: [], warnings };
+    return { text: '', segments: [], warnings, frames: [] };
   } finally {
     rmSync(tmpDir, { recursive: true, force: true });
   }

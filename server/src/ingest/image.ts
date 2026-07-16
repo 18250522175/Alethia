@@ -1,7 +1,8 @@
 import { llmRouter } from '../llm/router';
 import logger from '../i18n/logger';
 import { mkdtempSync, writeFileSync, rmSync } from 'fs';
-import { tmpdir, join } from 'os';
+import { tmpdir } from 'os';
+import { join } from 'path';
 
 export interface ImageProcessResult {
   text: string;

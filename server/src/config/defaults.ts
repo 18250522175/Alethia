@@ -10,6 +10,7 @@ export const defaultSettings: Settings = {
     timeFormat: '24h'
   },
   language: 'zh-CN',
+  llmConfig: { defaultTemperature: 0.7, defaultMaxTokens: 4096, defaultTopP: 0.9 },
   budget: {
     dailyBudget: 5,
     monthlyBudget: 50,

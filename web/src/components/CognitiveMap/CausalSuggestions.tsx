@@ -10,7 +10,7 @@ interface Suggestion {
   nodes?: string[];
   node?: string;
   action: string;
-  moduleType?: 'knowledge' | 'causal' | 'mixed';
+  moduleType?: string;
   confidence: number;
 }
 
