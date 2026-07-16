@@ -69,6 +69,10 @@ app.get('/api/causal/graph', async (c) => {
 // GET /api/causal/node/:slug — 返回单个节点的因果上下文
 app.get('/api/causal/node/:slug', async (c) => {
   const slug = c.req.param('slug');
+  if (!slug || !slug.trim()) {
+    return c.json({ error: { code: 'BAD_REQUEST', message: '缺少 slug 参数' } }, 400);
+  }
+
   const pool = getPool();
 
   const { rows: incoming } = await pool.query(
@@ -80,6 +84,10 @@ app.get('/api/causal/node/:slug', async (c) => {
   const { rows: cptRows } = await pool.query(
     'SELECT * FROM causal_cpt WHERE variable_slug = $1', [slug]
   );
+
+  if (incoming.length === 0 && outgoing.length === 0 && cptRows.length === 0) {
+    return c.json({ error: { code: 'NOT_FOUND', message: `节点 ${slug} 不存在` } }, 404);
+  }
 
   return c.json({
     slug,
@@ -93,7 +101,7 @@ app.get('/api/causal/node/:slug', async (c) => {
 app.post('/api/causal/nl-command', async (c) => {
   const body = await c.req.json().catch(() => null);
   if (!body || typeof body.command !== 'string' || !body.command.trim()) {
-    return c.json({ error: true, message: '请提供 command 字段' }, 400);
+    return c.json({ error: { code: 'VALIDATION_ERROR', message: '请提供 command 字段' } }, 400);
   }
 
   const { command, currentView } = body as {
@@ -114,8 +122,7 @@ app.post('/api/causal/nl-command', async (c) => {
   } catch (err: any) {
     logger.error({ err }, 'NL command 意图解析失败');
     return c.json({
-      error: true,
-      message: '自然语言命令处理失败: ' + (err.message || '未知错误')
+      error: { code: 'INTERNAL_ERROR', message: '自然语言命令处理失败: ' + (err.message || '未知错误') }
     }, 500);
   }
 });
@@ -233,7 +240,7 @@ app.post('/api/causal/precompute', async (c) => {
     });
   } catch (err) {
     logger.error({ err }, '预计算失败');
-    return c.json({ error: true, message: '预计算失败' }, 500);
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: '预计算失败' } }, 500);
   }
 });
 
@@ -1093,26 +1100,26 @@ app.post('/api/causal/alert/create', async (c) => {
   try {
     const body = await c.req.json().catch(() => null);
     if (!body || !body.edgeId || !body.threshold) {
-      return c.json({ error: true, message: '缺少 edgeId 或 threshold 参数' }, 400);
+      return c.json({ error: { code: 'VALIDATION_ERROR', message: '缺少 edgeId 或 threshold 参数' } }, 400);
     }
 
     const { edgeId, threshold, enabled = true } = body;
     const { condition, value } = threshold;
 
     if (!condition || value === undefined || value === null) {
-      return c.json({ error: true, message: 'threshold 必须包含 condition 和 value' }, 400);
+      return c.json({ error: { code: 'VALIDATION_ERROR', message: 'threshold 必须包含 condition 和 value' } }, 400);
     }
 
     const validConditions = ['gt', 'lt', 'gte', 'lte'];
     if (!validConditions.includes(condition)) {
-      return c.json({ error: true, message: `condition 必须是以下之一: ${validConditions.join(', ')}` }, 400);
+      return c.json({ error: { code: 'VALIDATION_ERROR', message: `condition 必须是以下之一: ${validConditions.join(', ')}` } }, 400);
     }
 
     const pool = getPool();
     // Verify edge exists
     const { rows: edgeCheck } = await pool.query('SELECT id FROM causal_edges WHERE id = $1', [edgeId]);
     if (edgeCheck.length === 0) {
-      return c.json({ error: true, message: '因果边不存在' }, 404);
+      return c.json({ error: { code: 'NOT_FOUND', message: '因果边不存在' } }, 404);
     }
 
     const { rows } = await pool.query(
@@ -1125,7 +1132,7 @@ app.post('/api/causal/alert/create', async (c) => {
     return c.json({ alert: rows[0] });
   } catch (err) {
     logger.error({ err }, '创建预警失败');
-    return c.json({ error: true, message: '创建预警失败' }, 500);
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: '创建预警失败' } }, 500);
   }
 });
 
@@ -1157,7 +1164,7 @@ app.get('/api/causal/alert/list', async (c) => {
     return c.json({ alerts });
   } catch (err) {
     logger.error({ err }, '获取预警列表失败');
-    return c.json({ error: true, message: '获取预警列表失败' }, 500);
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: '获取预警列表失败' } }, 500);
   }
 });
 
@@ -1166,18 +1173,18 @@ app.put('/api/causal/alert/:id', async (c) => {
   try {
     const id = parseInt(c.req.param('id'), 10);
     if (isNaN(id)) {
-      return c.json({ error: true, message: '无效的预警 ID' }, 400);
+      return c.json({ error: { code: 'VALIDATION_ERROR', message: '无效的预警 ID' } }, 400);
     }
 
     const body = await c.req.json().catch(() => null);
     if (!body) {
-      return c.json({ error: true, message: '请求体为空' }, 400);
+      return c.json({ error: { code: 'VALIDATION_ERROR', message: '请求体为空' } }, 400);
     }
 
     const pool = getPool();
     const { rows: existing } = await pool.query('SELECT id FROM causal_alerts WHERE id = $1', [id]);
     if (existing.length === 0) {
-      return c.json({ error: true, message: '预警不存在' }, 404);
+      return c.json({ error: { code: 'NOT_FOUND', message: '预警不存在' } }, 404);
     }
 
     const updates: string[] = [];
@@ -1198,7 +1205,7 @@ app.put('/api/causal/alert/:id', async (c) => {
     }
 
     if (updates.length === 0) {
-      return c.json({ error: true, message: '没有需要更新的字段' }, 400);
+      return c.json({ error: { code: 'VALIDATION_ERROR', message: '没有需要更新的字段' } }, 400);
     }
 
     values.push(id);
@@ -1211,7 +1218,7 @@ app.put('/api/causal/alert/:id', async (c) => {
     return c.json({ alert: rows[0] });
   } catch (err) {
     logger.error({ err }, '更新预警失败');
-    return c.json({ error: true, message: '更新预警失败' }, 500);
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: '更新预警失败' } }, 500);
   }
 });
 
@@ -1220,19 +1227,19 @@ app.delete('/api/causal/alert/:id', async (c) => {
   try {
     const id = parseInt(c.req.param('id'), 10);
     if (isNaN(id)) {
-      return c.json({ error: true, message: '无效的预警 ID' }, 400);
+      return c.json({ error: { code: 'VALIDATION_ERROR', message: '无效的预警 ID' } }, 400);
     }
 
     const pool = getPool();
     const { rowCount } = await pool.query('DELETE FROM causal_alerts WHERE id = $1', [id]);
     if (rowCount === 0) {
-      return c.json({ error: true, message: '预警不存在' }, 404);
+      return c.json({ error: { code: 'NOT_FOUND', message: '预警不存在' } }, 404);
     }
 
     return c.json({ success: true });
   } catch (err) {
     logger.error({ err }, '删除预警失败');
-    return c.json({ error: true, message: '删除预警失败' }, 500);
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: '删除预警失败' } }, 500);
   }
 });
 
@@ -1354,7 +1361,7 @@ app.post('/api/causal/alert/check', async (c) => {
     return c.json({ triggered });
   } catch (err) {
     logger.error({ err }, '预警检查失败');
-    return c.json({ error: true, message: '预警检查失败' }, 500);
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: '预警检查失败' } }, 500);
   }
 });
 
@@ -1398,7 +1405,7 @@ app.put('/api/hyperedge/:id', async (c) => {
   try {
     const id = parseInt(c.req.param('id'), 10);
     if (isNaN(id)) {
-      return c.json({ error: { code: 'VALIDATION_ERROR', message: '无效的超边 ID' } }, 400);
+      return c.json({ error: { code: 'BAD_REQUEST', message: '无效的超边 ID' } }, 400);
     }
 
     const body = await c.req.json().catch(() => null);
@@ -1457,7 +1464,7 @@ app.delete('/api/hyperedge/:id', async (c) => {
   try {
     const id = parseInt(c.req.param('id'), 10);
     if (isNaN(id)) {
-      return c.json({ error: { code: 'VALIDATION_ERROR', message: '无效的超边 ID' } }, 400);
+      return c.json({ error: { code: 'BAD_REQUEST', message: '无效的超边 ID' } }, 400);
     }
 
     const pool = getPool();
@@ -1477,129 +1484,145 @@ app.delete('/api/hyperedge/:id', async (c) => {
 
 // POST /api/causal/query — 综合因果推理
 app.post('/api/causal/query', async (c) => {
-  const pool = getPool();
-  const body = await c.req.json();
-  const { question, scopeSlugs, maxResults } = body;
-
-  if (!question) {
-    return c.json({ error: 'question is required' }, 400);
-  }
-
-  // 1. Check cache
-  const queryHash = crypto.createHash('sha256').update(question + JSON.stringify(scopeSlugs || [])).digest('hex').slice(0, 64);
-  const { rows: cachedRows } = await pool.query(
-    'SELECT result FROM causal_inference_cache WHERE query_hash = $1 AND expires_at > NOW()',
-    [queryHash]
-  );
-  if (cachedRows.length > 0) {
-    return c.json({ ...cachedRows[0].result, cached: true });
-  }
-
-  // 2. Build causal graph from DB
-  let edgeQuery = 'SELECT * FROM causal_edges';
-  let cptQuery = 'SELECT * FROM causal_cpt';
-  const params: any[] = [];
-
-  if (scopeSlugs && scopeSlugs.length > 0) {
-    edgeQuery = `SELECT * FROM causal_edges WHERE source_slug = ANY($1) OR target_slug = ANY($1)`;
-    cptQuery = `SELECT * FROM causal_cpt WHERE variable_slug = ANY($1)`;
-    params.push(scopeSlugs);
-  }
-
-  const { rows: edgeRows } = await pool.query(edgeQuery, params);
-  const { rows: cptRows } = await pool.query(cptQuery, params);
-
-  // Also fetch hyperedges
-  const { rows: hyperedgeRows } = await pool.query(
-    'SELECT h.*, ch.lag, ch.weight, ch.conf, ch.evidence_spans FROM hyperedges h LEFT JOIN causal_hyperedges ch ON h.id = ch.hyperedge_id WHERE h.type = $1',
-    [':jointlyCause']
-  );
-
-  const graph: CausalGraph = buildGraphFromDB(edgeRows, cptRows, hyperedgeRows);
-
-  // 3. Extract target variable and intervention intent from question
-  // Simple heuristic: look for "提高" or "降低" keywords
-  const targetMatch = question.match(/(\S+)\s*(?:变|成为|的|概率|怎么样|如何)/);
-  const interventionMatch = question.match(/(?:如果|把|将|让)\s*(\S+)\s*(?:从|提高|降低|变为|变成)\s*(\S+)/);
-
-  // 4. Find relevant nodes in graph
-  const allNodeSlugs = new Set<string>();
-  for (const e of edgeRows) {
-    allNodeSlugs.add(e.source_slug);
-    allNodeSlugs.add(e.target_slug);
-  }
-
-  let targetSlug = '';
-  let interventionSlug = '';
-  let toState = 'high';
-
-  // Try to match slugs from the question
-  for (const slug of allNodeSlugs) {
-    const readable = slug.replace(/_/g, '');
-    if (question.includes(readable) || question.includes(slug)) {
-      if (!targetSlug) {
-        targetSlug = slug;
-      } else if (!interventionSlug && slug !== targetSlug) {
-        interventionSlug = slug;
-      }
+  try {
+    const pool = getPool();
+    const body = await c.req.json().catch(() => null);
+    if (!body) {
+      return c.json({ error: { code: 'VALIDATION_ERROR', message: '请求体无效' } }, 400);
     }
-  }
+    const { question, scopeSlugs, maxResults } = body;
 
-  // 5. Run reasoning
-  let result;
-  if (interventionSlug && targetSlug) {
-    // Detect direction: "提高" means make it high, "降低" means make it low
-    if (question.includes('降低') || question.includes('减少') || question.includes('抑制')) {
-      toState = 'low';
+    if (!question) {
+      return c.json({ error: { code: 'VALIDATION_ERROR', message: 'question is required' } }, 400);
     }
 
-    // Check if there are hyperedges for joint inference
-    const relevantHyperedges = graph.hyperedges?.filter(he =>
-      he.targets.includes(targetSlug)
+    // 1. Check cache
+    const queryHash = crypto.createHash('sha256').update(question + JSON.stringify(scopeSlugs || [])).digest('hex').slice(0, 64);
+    const { rows: cachedRows } = await pool.query(
+      'SELECT result FROM causal_inference_cache WHERE query_hash = $1 AND expires_at > NOW()',
+      [queryHash]
+    );
+    if (cachedRows.length > 0) {
+      return c.json({ ...cachedRows[0].result, cached: true });
+    }
+
+    // 2. Build causal graph from DB
+    let edgeRows: any[];
+    let cptRows: any[];
+
+    if (scopeSlugs && scopeSlugs.length > 0) {
+      const edgeResult = await pool.query(
+        'SELECT * FROM causal_edges WHERE source_slug = ANY($1) OR target_slug = ANY($1)',
+        [scopeSlugs]
+      );
+      const cptResult = await pool.query(
+        'SELECT * FROM causal_cpt WHERE variable_slug = ANY($1)',
+        [scopeSlugs]
+      );
+      edgeRows = edgeResult.rows;
+      cptRows = cptResult.rows;
+    } else {
+      const edgeResult = await pool.query('SELECT * FROM causal_edges');
+      const cptResult = await pool.query('SELECT * FROM causal_cpt');
+      edgeRows = edgeResult.rows;
+      cptRows = cptResult.rows;
+    }
+
+    // Also fetch hyperedges
+    const { rows: hyperedgeRows } = await pool.query(
+      'SELECT h.*, ch.lag, ch.weight, ch.conf, ch.evidence_spans FROM hyperedges h LEFT JOIN causal_hyperedges ch ON h.id = ch.hyperedge_id WHERE h.type = $1',
+      [':jointlyCause']
     );
 
-    if (relevantHyperedges && relevantHyperedges.length > 0) {
-      const jointInterventions = relevantHyperedges[0].sources.map(s => ({
-        variable: s,
-        toState: toState,
-      }));
-      result = jointCausalInference(graph, {
-        target: targetSlug,
-        interventions: jointInterventions,
-        desiredState: toState,
-      });
-    } else {
-      result = doCalculusOnHypergraph(graph, {
-        target: targetSlug,
-        intervention: { variable: interventionSlug, fromState: 'low', toState },
-      });
+    const graph: CausalGraph = buildGraphFromDB(edgeRows, cptRows, hyperedgeRows);
+
+    // 3. Extract target variable and intervention intent from question
+    // Simple heuristic: look for "提高" or "降低" keywords
+    const targetMatch = question.match(/(\S+)\s*(?:变|成为|的|概率|怎么样|如何)/);
+    const interventionMatch = question.match(/(?:如果|把|将|让)\s*(\S+)\s*(?:从|提高|降低|变为|变成)\s*(\S+)/);
+
+    // 4. Find relevant nodes in graph
+    const allNodeSlugs = new Set<string>();
+    for (const e of edgeRows) {
+      allNodeSlugs.add(e.source_slug);
+      allNodeSlugs.add(e.target_slug);
     }
-  } else {
-    // No specific intervention found, return graph summary
-    result = {
-      baselineProbability: 0.5,
-      interventionProbability: 0.5,
-      delta: 0,
-      confidenceInterval: [0.3, 0.7] as [number, number],
-      method: 'heuristic' as const,
-      assumptions: ['未能从问题中提取明确的干预变量和目标变量'],
-      evidence: [],
-      explanation: `因果图包含 ${allNodeSlugs.size} 个变量，${edgeRows.length} 条因果边。请提供更具体的问题，例如："如果提高X，Y会如何变化？"`,
-    };
+
+    let targetSlug = '';
+    let interventionSlug = '';
+    let toState = 'high';
+
+    // Try to match slugs from the question
+    for (const slug of allNodeSlugs) {
+      const readable = slug.replace(/_/g, '');
+      if (question.includes(readable) || question.includes(slug)) {
+        if (!targetSlug) {
+          targetSlug = slug;
+        } else if (!interventionSlug && slug !== targetSlug) {
+          interventionSlug = slug;
+        }
+      }
+    }
+
+    // 5. Run reasoning
+    let result;
+    if (interventionSlug && targetSlug) {
+      // Detect direction: "提高" means make it high, "降低" means make it low
+      if (question.includes('降低') || question.includes('减少') || question.includes('抑制')) {
+        toState = 'low';
+      }
+
+      // Check if there are hyperedges for joint inference
+      const relevantHyperedges = graph.hyperedges?.filter(he =>
+        he.targets.includes(targetSlug)
+      );
+
+      if (relevantHyperedges && relevantHyperedges.length > 0) {
+        const jointInterventions = relevantHyperedges[0].sources.map(s => ({
+          variable: s,
+          toState: toState,
+        }));
+        result = jointCausalInference(graph, {
+          target: targetSlug,
+          interventions: jointInterventions,
+          desiredState: toState,
+        });
+      } else {
+        result = doCalculusOnHypergraph(graph, {
+          target: targetSlug,
+          intervention: { variable: interventionSlug, fromState: 'low', toState },
+        });
+      }
+    } else {
+      // No specific intervention found, return graph summary
+      result = {
+        baselineProbability: 0.5,
+        interventionProbability: 0.5,
+        delta: 0,
+        confidenceInterval: [0.3, 0.7] as [number, number],
+        method: 'heuristic' as const,
+        assumptions: ['未能从问题中提取明确的干预变量和目标变量'],
+        evidence: [],
+        explanation: `因果图包含 ${allNodeSlugs.size} 个变量，${edgeRows.length} 条因果边。请提供更具体的问题，例如："如果提高X，Y会如何变化？"`,
+      };
+    }
+
+    // 6. Build natural language report
+    const report = buildCausalReport(question, result, targetSlug, interventionSlug, toState);
+
+    // 7. Cache result
+    await pool.query(
+      `INSERT INTO causal_inference_cache (query_hash, result, expires_at)
+       VALUES ($1, $2, NOW() + INTERVAL '1 hour')
+       ON CONFLICT (query_hash) DO UPDATE SET result = $2, expires_at = NOW() + INTERVAL '1 hour'`,
+      [queryHash, JSON.stringify({ ...result, report })]
+    );
+
+    return c.json({ ...result, report, cached: false });
+  } catch (err) {
+    logger.error({ err }, '因果推理查询失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: '因果推理查询执行失败' } }, 500);
   }
-
-  // 6. Build natural language report
-  const report = buildCausalReport(question, result, targetSlug, interventionSlug, toState);
-
-  // 7. Cache result
-  await pool.query(
-    `INSERT INTO causal_inference_cache (query_hash, result, expires_at)
-     VALUES ($1, $2, NOW() + INTERVAL '1 hour')
-     ON CONFLICT (query_hash) DO UPDATE SET result = $2, expires_at = NOW() + INTERVAL '1 hour'`,
-    [queryHash, JSON.stringify({ ...result, report })]
-  );
-
-  return c.json({ ...result, report, cached: false });
 });
 
 // Helper: classify a connected component based on edge types
@@ -1682,15 +1705,23 @@ function buildCausalReport(
 
 // POST /api/causal/discovery — 运行因果发现
 app.post('/api/causal/discovery', async (c) => {
-  const result = await runCausalDiscovery();
-  return c.json(result);
+  try {
+    const result = await runCausalDiscovery();
+    return c.json(result);
+  } catch (err) {
+    logger.error({ err }, '因果发现失败');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: '因果发现执行失败' } }, 500);
+  }
 });
 
 // POST /api/causal/apply-diff — 人工确认超边/因果边，设置 conf=1.0
 app.post('/api/causal/apply-diff', async (c) => {
   try {
     const pool = getPool();
-    const body = await c.req.json();
+    const body = await c.req.json().catch(() => null);
+    if (!body) {
+      return c.json({ error: { code: 'VALIDATION_ERROR', message: '请求体无效' } }, 400);
+    }
     const { diffId, type } = body;
 
     // If the diff is for a causal hyperedge and is being confirmed by a human,
@@ -1706,7 +1737,7 @@ app.post('/api/causal/apply-diff', async (c) => {
     return c.json({ message: 'Diff applied successfully' });
   } catch (err) {
     logger.error({ err }, 'apply-diff 失败');
-    return c.json({ error: true, message: 'apply-diff 失败' }, 500);
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: 'apply-diff 失败' } }, 500);
   }
 });
 

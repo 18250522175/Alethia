@@ -23,7 +23,25 @@ app.get('/api/llm/adapters', (c) => {
 app.post('/api/llm/test', async (c) => {
   try {
     const body = await c.req.json();
+    if (!body || Object.keys(body).length === 0) {
+      return c.json({
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: getErrorMessage('VALIDATION_ERROR')
+        }
+      }, 400);
+    }
+
     const { adapterId } = body as { adapterId: string };
+
+    if (!adapterId) {
+      return c.json({
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: getErrorMessage('VALIDATION_ERROR')
+        }
+      }, 400);
+    }
 
     const adapter = llmRouter.getAdapter(adapterId);
     if (!adapter) {
@@ -84,12 +102,22 @@ app.post('/api/llm/test-connection', async (c) => {
     if (result.ok) {
       return c.json({ success: true, latency });
     } else {
-      return c.json({ success: false, error: result.error || '连接测试失败' });
+      return c.json({
+        error: {
+          code: 'LLM_UNAVAILABLE',
+          message: result.error || getErrorMessage('LLM_UNAVAILABLE')
+        }
+      }, 502);
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : '未知错误';
     logger.error({ err }, 'LLM 连接测试失败');
-    return c.json({ success: false, error: message });
+    return c.json({
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: getErrorMessage('INTERNAL_ERROR')
+      }
+    }, 500);
   }
 });
 

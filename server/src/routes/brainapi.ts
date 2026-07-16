@@ -1483,6 +1483,9 @@ app.get('/exports/*', async (c) => {
     const exportsDir = join(process.cwd(), 'exports');
     const paramStar = c.req.param('*');
     if (!paramStar) return c.json({ error: { code: 'BAD_REQUEST', message: 'Missing path' } }, 400);
+    if (paramStar.includes('..')) {
+      return c.json({ error: { code: 'FORBIDDEN', message: '路径遍历不允许' } }, 403);
+    }
     const filePath = join(exportsDir, paramStar);
     // 防止路径遍历
     if (!filePath.startsWith(exportsDir)) {
@@ -1624,9 +1627,13 @@ app.post('/api/notes', async (c) => {
     if (!['inbox', 'drafts', 'ready-for-review'].includes(folder)) {
       return c.json({ error: { code: 'VALIDATION_ERROR', message: 'Invalid folder' } }, 400);
     }
+    const name = body.name;
+    if (name && (name.includes('/') || name.includes('\\'))) {
+      return c.json({ error: { code: 'BAD_REQUEST', message: '文件名不合法' } }, 400);
+    }
     ensureNotesDirs();
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-    const fileName = `note-${timestamp}.md`;
+    const fileName = name ? `${name}.md` : `note-${timestamp}.md`;
     const filePath = join(NOTES_PATH, folder, fileName);
     const content = `# 新笔记\n\n> 创建于 ${new Date().toLocaleString('zh-CN')}\n\n`;
     writeFileSync(filePath, content, 'utf-8');
@@ -1687,6 +1694,9 @@ app.put('/api/notes/:path/status', async (c) => {
     }
     const oldPath = join(NOTES_PATH, notePath);
     const fileName = notePath.split('/').pop() || '';
+    if (!fileName || fileName.includes('/') || fileName.includes('\\')) {
+      return c.json({ error: { code: 'BAD_REQUEST', message: '文件名不合法' } }, 400);
+    }
     const targetFolder = status === 'ready' ? 'ready-for-review' : 'drafts';
     const newPath = join(NOTES_PATH, targetFolder, fileName);
     if (existsSync(oldPath) && oldPath !== newPath) {

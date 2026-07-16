@@ -129,6 +129,13 @@ app.post('/api/auth/login', async (c) => {
   }
 });
 
+// 全局错误处理中间件
+app.onError((err, c) => {
+  loggerInstance.error({ err }, '未捕获的 API 错误');
+  const message = err instanceof Error ? err.message : '内部服务器错误';
+  return c.json({ error: { code: 'INTERNAL_ERROR', message } }, 500);
+});
+
 app.route('/', llmRoutes);
 app.route('/', settingsRoutes);
 app.route('/', healthRoutes);
@@ -136,39 +143,12 @@ app.route('/', brainapiRoutes);
 app.route('/', causalRoutes);
 app.route('/', viewsRoutes);
 
-app.onError((err, c) => {
-  if (err instanceof HTTPException) {
-    const status = err.status;
-    let code = 'INTERNAL_ERROR';
-    if (status === 401) code = 'UNAUTHORIZED';
-    else if (status === 404) code = 'NOT_FOUND';
-    else if (status === 400) code = 'VALIDATION_ERROR';
-
-    return c.json({
-      error: {
-        code,
-        message: getErrorMessage(code)
-      }
-    }, status);
-  }
-
-  loggerInstance.error({ err }, '未捕获的服务端错误');
-  return c.json({
-    error: {
-      code: 'INTERNAL_ERROR',
-      message: getErrorMessage('INTERNAL_ERROR')
-    }
-  }, 500);
-});
-
+// 404 处理
 app.notFound((c) => {
-  return c.json({
-    error: {
-      code: 'NOT_FOUND',
-      message: getErrorMessage('NOT_FOUND')
-    }
-  }, 404);
+  return c.json({ error: { code: 'NOT_FOUND', message: `未找到路由: ${c.req.method} ${c.req.path}` } }, 404);
 });
+
+
 
 async function bootstrap() {
   const env = loadEnv();
