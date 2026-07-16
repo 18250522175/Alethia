@@ -28,3 +28,6 @@ Thumbs.db
 # 临时文件
 *.tmp
 *.bak
+
+# Bun 锁文件
+bun.lockb

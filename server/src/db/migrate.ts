@@ -9,7 +9,8 @@ import logger from '../i18n/logger';
  */
 export async function runMigrations(): Promise<void> {
   const pool = getPool();
-  const migrationsDir = join(__dirname, 'migrations');
+  const migrationsDir = join(import.meta.dirname, 'migrations');
+  const ADVISORY_LOCK_KEY = 7331;
 
   // 读取所有 .sql 文件并按文件名排序
   const files = readdirSync(migrationsDir)
@@ -21,40 +22,51 @@ export async function runMigrations(): Promise<void> {
     return;
   }
 
-  // 获取已应用的迁移列表
-  const { rows: applied } = await pool.query(
-    'SELECT name FROM _migrations ORDER BY name'
-  );
-  const appliedNames = new Set(applied.map((r: any) => r.name));
+  const client = await pool.connect();
+  logger.info('正在获取迁移 advisory lock...');
+  await client.query('SELECT pg_advisory_lock($1)', [ADVISORY_LOCK_KEY]);
+  logger.info('已获取 advisory lock');
 
-  let appliedCount = 0;
-  for (const file of files) {
-    if (appliedNames.has(file)) {
-      continue;
+  try {
+    // 获取已应用的迁移列表
+    const { rows: applied } = await client.query(
+      'SELECT name FROM _migrations ORDER BY name'
+    );
+    const appliedNames = new Set(applied.map((r: any) => r.name));
+
+    let appliedCount = 0;
+    for (const file of files) {
+      if (appliedNames.has(file)) {
+        continue;
+      }
+
+      const sql = readFileSync(join(migrationsDir, file), 'utf-8');
+      logger.info(`正在执行迁移: ${file}`);
+
+      try {
+        await client.query('BEGIN');
+        await client.query(sql);
+        await client.query(
+          'INSERT INTO _migrations (name) VALUES ($1)',
+          [file]
+        );
+        await client.query('COMMIT');
+        appliedCount++;
+        logger.info(`迁移完成: ${file}`);
+      } catch (err) {
+        await client.query('ROLLBACK').catch(() => {});
+        logger.error({ err, file }, `迁移失败: ${file}`);
+        throw err;
+      }
     }
 
-    const sql = readFileSync(join(migrationsDir, file), 'utf-8');
-    logger.info(`正在执行迁移: ${file}`);
-
-    const client = await pool.connect();
+    logger.info(`迁移执行完毕，新应用 ${appliedCount} 个迁移`);
+  } finally {
     try {
-      await client.query('BEGIN');
-      await client.query(sql);
-      await client.query(
-        'INSERT INTO _migrations (name) VALUES ($1)',
-        [file]
-      );
-      await client.query('COMMIT');
-      appliedCount++;
-      logger.info(`迁移完成: ${file}`);
+      await client.query('SELECT pg_advisory_unlock($1)', [ADVISORY_LOCK_KEY]);
     } catch (err) {
-      await client.query('ROLLBACK').catch(() => {});
-      logger.error({ err, file }, `迁移失败: ${file}`);
-      throw err;
-    } finally {
-      client.release();
+      logger.warn({ err }, '释放 advisory lock 失败（连接关闭时会自动释放）');
     }
+    client.release();
   }
-
-  logger.info(`迁移执行完毕，新应用 ${appliedCount} 个迁移`);
 }
