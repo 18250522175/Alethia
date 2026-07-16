@@ -1,13 +1,17 @@
 # Alethia AI 知识库 v5.0 · Docker Compose 编排
 # 一键启动：docker compose up -d
 # 首次使用前请复制 .env.example 为 .env 并设置强密码（POSTGRES_PASSWORD 必填）
+#
+# 国内网络加速：
+#   在 .env 中设置 DOCKER_REGISTRY_MIRROR=registry.cn-hangzhou.aliyuncs.com
+#   或先运行 bash scripts/docker-pull.sh 预拉取镜像
 
 name: alethia
 
 services:
   # === PostgreSQL 数据库（含 pgvector 扩展） ===
   postgres:
-    image: pgvector/pgvector:pg16
+    image: ${DOCKER_REGISTRY_MIRROR:-}pgvector/pgvector:pg16
     container_name: alethia-postgres
     restart: unless-stopped
     command:
@@ -38,10 +42,11 @@ services:
     #   - "5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-alethia} -d ${POSTGRES_DB:-alethia}"]
-      interval: 15s
+      interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
+      start_interval: 2s
     logging:
       driver: "json-file"
       options:
@@ -134,7 +139,7 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 30s
+      start_period: 60s
     deploy:
       resources:
         limits:
@@ -206,7 +211,7 @@ services:
 
   # === PostgreSQL 定时备份 ===
   backup:
-    image: postgres:16-alpine
+    image: ${DOCKER_REGISTRY_MIRROR:-}postgres:16-alpine
     container_name: alethia-backup
     restart: unless-stopped
     depends_on:
